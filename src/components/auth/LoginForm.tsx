@@ -35,24 +35,34 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative">
+      {/* Background Image */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: 'url("https://images.unsplash.com/photo-1511381939415-e44015466834?ixlib=rb-1.2.1&auto=format&fit=crop&w=2072&q=80")',
+          filter: 'brightness(0.6)'
+        }}
+      />
+      
+      {/* Content */}
+      <div className="relative z-30 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-8">
-            <div className="w-40 h-40 bg-[#1e3a8a] rounded-full flex items-center justify-center p-8 shadow-xl transition-transform hover:scale-105">
-              <div className="text-white text-2xl font-serif leading-tight text-center">
+            <div className="w-40 h-40 bg-[#1e3a8a]/80 backdrop-blur-sm rounded-full flex items-center justify-center p-8 shadow-xl transition-transform hover:scale-105 border-2 border-yellow-500/50">
+              <div className="text-yellow-400 text-2xl font-serif leading-tight text-center">
                 CO<br/>KE<br/>LA<br/>TEH
               </div>
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-          <p className="text-gray-600">Sign in to your account</p>
+          <h1 className="text-3xl font-bold text-[#D4B88C] mb-2">Welcome Back</h1>
+          <p className="text-yellow-400">Sign in to your account</p>
         </div>
 
-        <div className="bg-white p-8 rounded-xl shadow-sm">
+        <div className="bg-black/50 backdrop-blur-sm p-8 rounded-xl shadow-xl border border-yellow-500/20">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="username" className="block text-sm font-medium text-yellow-400 mb-1">
                 Username
               </label>
               <input
@@ -61,13 +71,13 @@ export default function LoginForm() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                className="w-full px-4 py-2 bg-black/30 border border-yellow-500/30 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-white placeholder-gray-400"
                 placeholder="Enter your username"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="password" className="block text-sm font-medium text-yellow-400 mb-1">
                 Password
               </label>
               <div className="relative">
@@ -77,13 +87,13 @@ export default function LoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-4 py-2 bg-black/30 border border-yellow-500/30 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-white placeholder-gray-400"
                   placeholder="Enter your password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-yellow-500/70 hover:text-yellow-400"
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -95,7 +105,7 @@ export default function LoginForm() {
             </div>
 
             {error && (
-              <div className="p-4 bg-red-50 text-red-600 rounded-md text-sm">
+              <div className="p-4 bg-red-900/50 text-red-200 border border-red-500/50 rounded-md text-sm">
                 {error}
               </div>
             )}
@@ -103,7 +113,7 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 px-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50"
+              className="w-full py-2 px-4 bg-gradient-to-r from-yellow-600 to-yellow-800 text-white rounded-lg hover:from-yellow-700 hover:to-yellow-900 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 disabled:opacity-50 shadow-lg shadow-yellow-900/20"
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
