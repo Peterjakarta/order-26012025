@@ -9,18 +9,12 @@ interface UserFormProps {
     username: string;
     role: 'admin' | 'staff';
     permissions: string[];
-    email?: string;
-    phoneNumber?: string;
-    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   };
   onSubmit: (data: {
     username: string;
     password?: string;
     role: 'admin' | 'staff';
     permissions: string[];
-    email?: string;
-    phoneNumber?: string;
-    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -30,9 +24,6 @@ function UserForm({ initialData, onSubmit, onCancel }: UserFormProps) {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'staff'>(initialData?.role || 'staff');
   const [permissions, setPermissions] = useState<string[]>(initialData?.permissions || []);
-  const [email, setEmail] = useState(initialData?.email || '');
-  const [phoneNumber, setPhoneNumber] = useState(initialData?.phoneNumber || '');
-  const [twoFactorMethod, setTwoFactorMethod] = useState<'2fa_email' | '2fa_sms' | null>(initialData?.twoFactorMethod || null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,10 +40,7 @@ function UserForm({ initialData, onSubmit, onCancel }: UserFormProps) {
         username,
         password: password || undefined, // Only include password if set
         role,
-        permissions,
-        email,
-        phoneNumber,
-        twoFactorMethod
+        permissions
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save user');
@@ -130,48 +118,6 @@ function UserForm({ initialData, onSubmit, onCancel }: UserFormProps) {
             <option value="admin">Admin</option>
           </select>
         </div>
-
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-            Email
-          </label>
-          <input
-            type="email"
-            id="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
-            Phone Number
-          </label>
-          <input
-            type="tel"
-            id="phoneNumber"
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
-            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="twoFactorMethod" className="block text-sm font-medium text-gray-700 mb-1">
-            Two-Factor Authentication
-          </label>
-          <select
-            id="twoFactorMethod"
-            value={twoFactorMethod || ''}
-            onChange={(e) => setTwoFactorMethod(e.target.value as '2fa_email' | '2fa_sms' | null)}
-            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-          >
-            <option value="">Disabled</option>
-            <option value="2fa_email">Email</option>
-            <option value="2fa_sms">SMS</option>
-          </select>
-        </div>
       </div>
 
       <UserPermissions
@@ -205,18 +151,12 @@ export default function UserManagement() {
     username: string;
     role: 'admin' | 'staff';
     permissions: string[];
-    email?: string;
-    phoneNumber?: string;
-    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<Array<{
     username: string;
     role: 'admin' | 'staff';
     permissions: string[];
-    email?: string;
-    phoneNumber?: string;
-    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   }>>([]);
   const [loading, setLoading] = useState(true);
 
@@ -242,9 +182,6 @@ export default function UserManagement() {
     password?: string;
     role: 'admin' | 'staff';
     permissions: string[];
-    email?: string;
-    phoneNumber?: string;
-    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   }) => {
     try {
       if (!data.password) {
@@ -267,17 +204,11 @@ export default function UserManagement() {
     password?: string;
     role: 'admin' | 'staff';
     permissions: string[];
-    email?: string;
-    phoneNumber?: string;
-    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   }) => {
     try {
       await updateUser(data.username, {
         role: data.role,
-        permissions: data.permissions,
-        email: data.email,
-        phoneNumber: data.phoneNumber,
-        twoFactorMethod: data.twoFactorMethod
+        permissions: data.permissions
       });
       setEditingUser(null);
       
@@ -351,11 +282,7 @@ export default function UserManagement() {
             <div>
               <h3 className="font-medium">{user.username}</h3>
               <p className="text-sm text-gray-600">
-                Role: {user.role} {user.twoFactorMethod && (
-                  <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs">
-                    2FA: {user.twoFactorMethod === '2fa_email' ? 'Email' : 'SMS'}
-                  </span>
-                )}
+                Role: {user.role}
               </p>
               <div className="mt-1 flex flex-wrap gap-2">
                 {user.permissions.map(permission => {
@@ -378,10 +305,7 @@ export default function UserManagement() {
                 onClick={() => setEditingUser({
                   username: user.username,
                   role: user.role,
-                  permissions: user.permissions,
-                  email: user.email,
-                  phoneNumber: user.phoneNumber,
-                  twoFactorMethod: user.twoFactorMethod
+                  permissions: user.permissions
                 })}
                 className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
               >

@@ -1,0 +1,61 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin(userId) {
+      let user = get(/databases/$(database)/documents/users/$(userId)).data;
+      return user != null && user.role == 'admin';
+    }
+    
+    function hasPermission(userId, permission) {
+      let user = get(/databases/$(database)/documents/users/$(userId)).data;
+      return user != null && permission in user.permissions;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() || userId == 'admin';
+      allow create: if !exists(/databases/$(database)/documents/users/$(userId));
+      allow update: if isAuthenticated() && 
+        ((request.auth.uid == userId) || 
+         (isAdmin(request.auth.uid) && !(userId == 'admin' && !isAdmin(request.auth.uid))));
+      allow delete: if isAuthenticated() && isAdmin(request.auth.uid) && userId != 'admin';
+    }
+
+    // Categories collection
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+        (isAdmin(request.auth.uid) || hasPermission(request.auth.uid, 'manage_products'));
+    }
+
+    // Products collection
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+        (isAdmin(request.auth.uid) || hasPermission(request.auth.uid, 'manage_products'));
+    }
+
+    // Orders collection
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && 
+        (isAdmin(request.auth.uid) || hasPermission(request.auth.uid, 'manage_orders'));
+      allow create: if isAuthenticated() && 
+        (isAdmin(request.auth.uid) || hasPermission(request.auth.uid, 'create_orders'));
+      allow update, delete: if isAuthenticated() && 
+        (isAdmin(request.auth.uid) || hasPermission(request.auth.uid, 'manage_orders'));
+    }
+
+    // Default rule for other collections
+    match /{collection}/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+        (isAdmin(request.auth.uid) || hasPermission(request.auth.uid, 'manage_products'));
+    }
+  }
+}

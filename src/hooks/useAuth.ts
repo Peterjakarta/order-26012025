@@ -1,15 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import bcrypt from 'bcryptjs';
-import { db, auth } from '../lib/firebase';
-import { 
-  PhoneAuthProvider,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  sendEmailVerification,
-  updateProfile,
-  updatePhoneNumber,
-  signInWithEmailAndPassword
-} from 'firebase/auth';
+import { db } from '../lib/firebase';
 import { 
   collection,
   doc,
@@ -46,21 +37,25 @@ export function useAuth() {
     return { user: null, isAuthenticated: false };
   });
 
-  const [verificationId, setVerificationId] = useState<string | null>(null);
-
-
-  const login = useCallback(async (username: string, password: string, recaptchaVerifier: RecaptchaVerifier | null) => {
+  const login = useCallback(async (username: string, password: string) => {
     try {
       // Get user from Firestore by username
-      const usersRef = collection(db, COLLECTIONS.USERS);
-      const q = query(usersRef, where('username', '==', username));
-      const snapshot = await getDocs(q);
+      const usersRef = collection(db, 'users');
+      let userDoc;
 
-      if (snapshot.empty) {
-        return false;
+      if (username === 'admin') {
+        // For admin, directly get the document
+        userDoc = await getDoc(doc(usersRef, 'admin'));
+      } else {
+        // For other users, query by username
+        const q = query(usersRef, where('username', '==', username));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) return false;
+        userDoc = snapshot.docs[0];
       }
 
-      const userDoc = snapshot.docs[0];
+      if (!userDoc.exists()) return false;
+
       const userData = userDoc.data();
 
       // Verify password
@@ -69,50 +64,17 @@ export function useAuth() {
         return false;
       }
 
-      // Check if 2FA is enabled
-      if (userData.twoFactorMethod) {
-        if (userData.twoFactorMethod === '2fa_sms' && userData.phoneNumber) {
-          // Ensure we have a reCAPTCHA verifier
-          if (!recaptchaVerifier) {
-            throw new Error('reCAPTCHA not initialized');
-          }
-
-          // Send SMS verification code using Firebase Phone Auth
-          const phoneProvider = new PhoneAuthProvider(auth);
-          const verId = await phoneProvider.verifyPhoneNumber(userData.phoneNumber, recaptchaVerifier);
-          setVerificationId(verId);
-          return 'sms_verification_needed';
-        } else if (userData.twoFactorMethod === '2fa_email' && userData.email) {
-          try {
-            // Create a temporary user session
-            const userCredential = await signInWithEmailAndPassword(auth, userData.email, password);
-            
-            // Send email verification code
-            await sendEmailVerification(userCredential.user, {
-              url: window.location.origin + '/verify-email',
-            });
-            
-            return 'email_verification_needed';
-          } catch (error) {
-            console.error('Error sending email verification:', error);
-            throw error;
-          }
-        }
-      }
       // Set auth state
       const user = {
         id: userDoc.id,
         username: userData.username,
         role: userData.role,
-        permissions: userData.permissions,
-        email: userData.email,
-        phoneNumber: userData.phoneNumber,
-        twoFactorMethod: userData.twoFactorMethod
+        permissions: userData.permissions
       };
 
       setAuthState({
         user,
-        isAuthenticated: true,
+        isAuthenticated: true
       });
 
       // Store auth state
@@ -128,76 +90,6 @@ export function useAuth() {
     }
   }, []);
 
-  const verifyCode = useCallback(async (code: string) => {
-    try {
-      if (!verificationId) {
-        throw new Error('No verification ID found');
-      }
-
-      const credential = PhoneAuthProvider.credential(
-        verificationId!,
-        code
-      );
-
-      await auth.signInWithCredential(credential);
-      
-      // Clear verification ID and complete authentication
-      setVerificationId(null);
-      setAuthState(prev => ({ ...prev, isAuthenticated: true }));
-      localStorage.setItem('auth', JSON.stringify({ user: authState.user, isAuthenticated: true }));
-
-      return true;
-    } catch (error) {
-      console.error('Verification error:', error);
-      return false;
-    }
-  }, [verificationId]);
-
-  const updateUserTwoFactor = useCallback(async (
-    username: string,
-    method: '2fa_email' | '2fa_sms' | null,
-    email?: string,
-    phoneNumber?: string
-  ) => {
-    try {
-      // Find user by username
-      const usersRef = collection(db, COLLECTIONS.USERS);
-      const q = query(usersRef, where('username', '==', username));
-      const snapshot = await getDocs(q);
-
-      if (snapshot.empty) {
-        throw new Error('User not found');
-      }
-
-      const userDoc = snapshot.docs[0];
-
-      // Update user in Firestore
-      await updateDoc(userDoc.ref, {
-        twoFactorMethod: method,
-        ...(email && { email }),
-        ...(phoneNumber && { phoneNumber }),
-        updated_at: serverTimestamp()
-      });
-
-      // Update auth state if this is the current user
-      if (authState.user?.username === username) {
-        setAuthState(prev => ({
-          ...prev,
-          user: {
-            ...prev.user!,
-            twoFactorMethod: method,
-            ...(email && { email }),
-            ...(phoneNumber && { phoneNumber })
-          }
-        }));
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Update 2FA error:', error);
-      throw error;
-    }
-  }, [authState.user]);
   const logout = useCallback(() => {
     setAuthState({
       user: null,
@@ -311,20 +203,35 @@ export function useAuth() {
     try {
       // Find user by username
       const usersRef = collection(db, COLLECTIONS.USERS);
-      const q = query(usersRef, where('username', '==', username));
-      const snapshot = await getDocs(q);
-
-      if (snapshot.empty) {
-        return false;
+      let userDoc;
+      
+      if (username === 'admin') {
+        // For admin user, get document directly by ID
+        userDoc = await getDoc(doc(usersRef, 'admin'));
+        if (!userDoc.exists()) {
+          return false;
+        }
+      } else {
+        // For other users, query by username
+        const q = query(usersRef, where('username', '==', username));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+          return false;
+        }
+        userDoc = snapshot.docs[0];
       }
-
-      const userDoc = snapshot.docs[0];
+      
       const userData = userDoc.data();
 
       // Verify current password
       const isValid = await bcrypt.compare(currentPassword, userData.password_hash);
       if (!isValid) {
         return false;
+      }
+
+      // Additional validation for admin password
+      if (username === 'admin' && newPassword.length < 12) {
+        throw new Error('Admin password must be at least 12 characters long');
       }
 
       // Hash new password
@@ -373,8 +280,6 @@ export function useAuth() {
     addUser,
     updateUser,
     removeUser,
-    getUsers,
-    verifyCode,
-    updateUserTwoFactor
+    getUsers
   };
 }

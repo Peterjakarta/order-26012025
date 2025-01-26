@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { KeyRound, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
+import { collection, query, where, getDocs, updateDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../../lib/firebase';
+import bcrypt from 'bcryptjs';
 
 export default function PasswordChange() {
   const { user, changePassword } = useAuth();
@@ -32,11 +35,47 @@ export default function PasswordChange() {
         throw new Error('New password must be at least 8 characters long');
       }
 
-      // Update password
-      const success = await changePassword(user.username, currentPassword, newPassword);
-      if (!success) {
+      // Get user document
+      const usersRef = collection(db, 'users');
+      let userDoc;
+      
+      if (user.username === 'admin') {
+        // For admin user, get document directly by ID
+        userDoc = await getDoc(doc(usersRef, 'admin'));
+        if (!userDoc.exists()) {
+          throw new Error('Admin user not found');
+        }
+      } else {
+        // For other users, query by username
+        const q = query(usersRef, where('username', '==', user.username));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+          throw new Error('User not found');
+        }
+        userDoc = snapshot.docs[0];
+      }
+      
+      const userData = userDoc.data();
+
+      // Verify current password
+      const isValid = await bcrypt.compare(currentPassword, userData.password_hash);
+      if (!isValid) {
         throw new Error('Current password is incorrect');
       }
+
+      // Additional validation for admin password
+      if (user.username === 'admin' && newPassword.length < 12) {
+        throw new Error('Admin password must be at least 12 characters long');
+      }
+
+      // Hash new password
+      const newHash = await bcrypt.hash(newPassword, 10);
+
+      // Update password in Firestore
+      await updateDoc(userDoc.ref, {
+        password_hash: newHash,
+        updated_at: serverTimestamp()
+      });
 
       setSuccess(true);
       setCurrentPassword('');

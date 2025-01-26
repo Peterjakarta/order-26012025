@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, enableIndexedDbPersistence, collection, doc, setDoc, getDoc } from 'firebase/firestore';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { getFirestore, enableIndexedDbPersistence, collection, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
 
 const firebaseConfig = {
@@ -21,40 +21,36 @@ const db = getFirestore(app);
 // Initialize Auth
 const auth = getAuth(app);
 
-// Collection names
-export const COLLECTIONS = {
+// Define collection names
+export const COLLECTIONS = Object.freeze({
+  USERS: 'users',
   CATEGORIES: 'categories',
   PRODUCTS: 'products',
   ORDERS: 'orders',
   ORDER_ITEMS: 'orderItems',
   BRANCHES: 'branches',
   INGREDIENTS: 'ingredients',
-  RECIPES: 'recipes',
-  USERS: 'users'
-} as const;
+  RECIPES: 'recipes'
+});
 
 // Create default admin user if it doesn't exist
 async function createDefaultAdmin() {
   try {
-    // Check if admin user exists in Firestore
     const usersRef = collection(db, COLLECTIONS.USERS);
-    const adminDoc = await getDoc(doc(usersRef, 'admin'));
-    
-    if (!adminDoc.exists()) {
-      // Hash password for Firestore
-      const hashedPassword = await bcrypt.hash('stafcokelateh', 10);
+    const adminDocRef = doc(usersRef, 'admin');
+    const adminDoc = await getDoc(adminDocRef);
 
-      // Create admin user in Firestore
-      await setDoc(doc(usersRef, 'admin'), {
+    if (!adminDoc.exists()) {
+      const hashedPassword = await bcrypt.hash('stafcokelateh', 10);
+      await setDoc(adminDocRef, {
         username: 'admin',
         password_hash: hashedPassword,
         role: 'admin',
         permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders'],
-        created_at: new Date(),
-        updated_at: new Date()
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp()
       });
-
-      console.log('Default admin user created');
+      console.log('Default admin user created successfully');
     }
   } catch (error) {
     console.error('Error creating default admin:', error);

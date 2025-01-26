@@ -4,9 +4,6 @@ export interface User {
   username: string;
   role: 'admin' | 'staff';
   permissions: string[];
-  email?: string;
-  phoneNumber?: string;
-  twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
 }
 
 export interface AuthState {
