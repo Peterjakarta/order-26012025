@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 1cm;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:min-h-\[150px\] {
+    min-height: 150px !important;
+  }
+
+  .print\:hover\:bg-transparent:hover {
+    background-color: transparent !important;
+  }
+}
