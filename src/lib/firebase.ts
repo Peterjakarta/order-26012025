@@ -1,7 +1,8 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, enableIndexedDbPersistence, collection, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, enableIndexedDbPersistence, collection, doc, setDoc, getDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
+import type { LogEntry } from '../types/types';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAFc0V_u1m2AbrW7tkR525Wj-tUwlUEOBw",
@@ -22,7 +23,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // Define collection names
-export const COLLECTIONS = Object.freeze({
+export const COLLECTIONS = {
   USERS: 'users',
   CATEGORIES: 'categories',
   PRODUCTS: 'products',
@@ -30,8 +31,22 @@ export const COLLECTIONS = Object.freeze({
   ORDER_ITEMS: 'orderItems',
   BRANCHES: 'branches',
   INGREDIENTS: 'ingredients',
-  RECIPES: 'recipes'
-});
+  RECIPES: 'recipes',
+  LOGS: 'logs'
+};
+
+// Helper function to create log entries
+export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) {
+  try {
+    const logsRef = collection(db, COLLECTIONS.LOGS);
+    await addDoc(logsRef, {
+      ...entry,
+      timestamp: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error creating log entry:', error);
+  }
+}
 
 // Create default admin user if it doesn't exist
 async function createDefaultAdmin() {

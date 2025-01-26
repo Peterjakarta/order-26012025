@@ -9,24 +9,30 @@ export default function Settings() {
   const canManageUsers = hasPermission('manage_users');
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-semibold">Settings</h2>
+    <div className="space-y-6 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Settings</h2>
+      </div>
 
       <Tabs defaultValue="password" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="password">Password</TabsTrigger>
+          <TabsTrigger value="password">Change Password</TabsTrigger>
           {canManageUsers && (
-            <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="users">User Management</TabsTrigger>
           )}
         </TabsList>
 
         <TabsContent value="password">
+          <div className="bg-white p-6 rounded-lg shadow-sm">
           <PasswordChange />
+          </div>
         </TabsContent>
 
         {canManageUsers && (
           <TabsContent value="users">
+            <div className="bg-white p-6 rounded-lg shadow-sm">
             <UserManagement />
+            </div>
           </TabsContent>
         )}
       </Tabs>

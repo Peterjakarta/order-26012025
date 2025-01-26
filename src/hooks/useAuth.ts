@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import bcrypt from 'bcryptjs';
-import { db } from '../lib/firebase';
+import { db, createLogEntry } from '../lib/firebase';
 import { 
   collection,
   doc,
@@ -40,7 +40,7 @@ export function useAuth() {
   const login = useCallback(async (username: string, password: string) => {
     try {
       // Get user from Firestore by username
-      const usersRef = collection(db, 'users');
+      const usersRef = collection(db, COLLECTIONS.USERS);
       let userDoc;
 
       if (username === 'admin') {
@@ -83,6 +83,14 @@ export function useAuth() {
         isAuthenticated: true
       }));
 
+      // Create login log entry
+      await createLogEntry({
+        userId: user.id,
+        username: user.username,
+        action: 'User Login',
+        category: 'auth'
+      });
+
       return true;
     } catch (error) {
       console.error('Login error:', error);
@@ -91,6 +99,16 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(() => {
+    // Create logout log entry if user exists
+    if (authState.user) {
+      createLogEntry({
+        userId: authState.user.id,
+        username: authState.user.username,
+        action: 'User Logout',
+        category: 'auth'
+      });
+    }
+
     setAuthState({
       user: null,
       isAuthenticated: false

@@ -10,3 +10,13 @@ export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
 }
+
+export interface LogEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  username: string;
+  action: string;
+  details?: string;
+  category: 'auth' | 'feature' | 'system';
+}

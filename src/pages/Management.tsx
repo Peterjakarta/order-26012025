@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { Package2, CheckCircle2, Calendar, Building2, Calculator, Settings } from 'lucide-react';
+import { Package2, CheckCircle2, Calendar, Building2, Calculator, Settings, ClipboardList } from 'lucide-react';
 import OrderList from '../components/management/OrderList';
 import ProductManagement from '../components/management/ProductManagement';
 import CategoryManagement from '../components/management/CategoryManagement';
@@ -10,6 +10,7 @@ import BranchManagement from '../components/management/branch/BranchManagement';
 import IngredientManagement from '../components/management/pricing/IngredientManagement';
 import RecipeManagement from '../components/management/pricing/RecipeManagement';
 import SettingsPage from '../components/management/settings/Settings';
+import Logbook from '../components/management/logbook/Logbook';
 import { useAuth } from '../hooks/useAuth';
 
 interface MenuItem {
@@ -73,10 +74,17 @@ export default function Management() {
       element: <PricingDashboard />
     },
     {
+      path: "/management/logbook",
+      label: "Logbook",
+      icon: <ClipboardList className="w-4 h-4" />,
+      requiredPermissions: ['manage_users'],
+      element: <Logbook />
+    },
+    {
       path: "/management/settings",
       label: "Settings",
       icon: <Settings className="w-4 h-4" />,
-      requiredPermissions: ['manage_users'],
+      requiredPermissions: [], // Empty array means all authenticated users can access
       element: <SettingsPage />
     }
   ];

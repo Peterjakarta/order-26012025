@@ -89,16 +89,18 @@ export default function PasswordChange() {
   };
 
   return (
-    <div className="max-w-md mx-auto">
-      <div className="bg-white p-6 rounded-lg shadow-sm">
+    <div className="max-w-md mx-auto space-y-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 bg-purple-100 rounded-lg">
             <KeyRound className="w-6 h-6 text-purple-600" />
           </div>
           <div>
             <h2 className="text-lg font-semibold">Change Password</h2>
-            <p className="text-sm text-gray-600">
-              Update your login password
+            <p className="text-sm text-gray-600 mt-1">
+              {user?.role === 'admin' ? 
+                'Admin password must be at least 12 characters long' :
+                'Password must be at least 8 characters long'
+              }
             </p>
           </div>
         </div>
@@ -182,6 +184,5 @@ export default function PasswordChange() {
           </button>
         </form>
       </div>
-    </div>
   );
 }
