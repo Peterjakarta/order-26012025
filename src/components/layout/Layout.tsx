@@ -1,10 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function Layout() {
   const { isAuthenticated } = useAuth();
+  
+  // Add any layout-specific effects here
+  useEffect(() => {
+    // This ensures hooks are called in the same order
+    // You can add layout-specific side effects here if needed
+  }, []);
 
   // Don't show header for non-authenticated users
   if (!isAuthenticated) {

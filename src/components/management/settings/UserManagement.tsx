@@ -2,18 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, AlertCircle, Edit2 } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 import UserPermissions, { AVAILABLE_PERMISSIONS } from './UserPermissions';
+import type { User } from '../../../types/types';
 
 interface UserFormProps {
   initialData?: {
     username: string;
     role: 'admin' | 'staff';
     permissions: string[];
+    email?: string;
+    phoneNumber?: string;
+    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   };
   onSubmit: (data: {
     username: string;
     password?: string;
     role: 'admin' | 'staff';
     permissions: string[];
+    email?: string;
+    phoneNumber?: string;
+    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -23,6 +30,9 @@ function UserForm({ initialData, onSubmit, onCancel }: UserFormProps) {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'staff'>(initialData?.role || 'staff');
   const [permissions, setPermissions] = useState<string[]>(initialData?.permissions || []);
+  const [email, setEmail] = useState(initialData?.email || '');
+  const [phoneNumber, setPhoneNumber] = useState(initialData?.phoneNumber || '');
+  const [twoFactorMethod, setTwoFactorMethod] = useState<'2fa_email' | '2fa_sms' | null>(initialData?.twoFactorMethod || null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,7 +49,10 @@ function UserForm({ initialData, onSubmit, onCancel }: UserFormProps) {
         username,
         password: password || undefined, // Only include password if set
         role,
-        permissions
+        permissions,
+        email,
+        phoneNumber,
+        twoFactorMethod
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save user');
@@ -117,6 +130,48 @@ function UserForm({ initialData, onSubmit, onCancel }: UserFormProps) {
             <option value="admin">Admin</option>
           </select>
         </div>
+
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            Email
+          </label>
+          <input
+            type="email"
+            id="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
+            Phone Number
+          </label>
+          <input
+            type="tel"
+            id="phoneNumber"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="twoFactorMethod" className="block text-sm font-medium text-gray-700 mb-1">
+            Two-Factor Authentication
+          </label>
+          <select
+            id="twoFactorMethod"
+            value={twoFactorMethod || ''}
+            onChange={(e) => setTwoFactorMethod(e.target.value as '2fa_email' | '2fa_sms' | null)}
+            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+          >
+            <option value="">Disabled</option>
+            <option value="2fa_email">Email</option>
+            <option value="2fa_sms">SMS</option>
+          </select>
+        </div>
       </div>
 
       <UserPermissions
@@ -144,18 +199,24 @@ function UserForm({ initialData, onSubmit, onCancel }: UserFormProps) {
 }
 
 export default function UserManagement() {
-  const { getUsers, addUser, updateUser, removeUser } = useAuth();
+  const { user: currentUser, getUsers, addUser, updateUser, removeUser } = useAuth();
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [editingUser, setEditingUser] = useState<{
     username: string;
     role: 'admin' | 'staff';
     permissions: string[];
+    email?: string;
+    phoneNumber?: string;
+    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<Array<{
     username: string;
     role: 'admin' | 'staff';
     permissions: string[];
+    email?: string;
+    phoneNumber?: string;
+    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   }>>([]);
   const [loading, setLoading] = useState(true);
 
@@ -181,6 +242,9 @@ export default function UserManagement() {
     password?: string;
     role: 'admin' | 'staff';
     permissions: string[];
+    email?: string;
+    phoneNumber?: string;
+    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   }) => {
     try {
       if (!data.password) {
@@ -203,11 +267,17 @@ export default function UserManagement() {
     password?: string;
     role: 'admin' | 'staff';
     permissions: string[];
+    email?: string;
+    phoneNumber?: string;
+    twoFactorMethod?: '2fa_email' | '2fa_sms' | null;
   }) => {
     try {
       await updateUser(data.username, {
         role: data.role,
-        permissions: data.permissions
+        permissions: data.permissions,
+        email: data.email,
+        phoneNumber: data.phoneNumber,
+        twoFactorMethod: data.twoFactorMethod
       });
       setEditingUser(null);
       
@@ -281,7 +351,11 @@ export default function UserManagement() {
             <div>
               <h3 className="font-medium">{user.username}</h3>
               <p className="text-sm text-gray-600">
-                Role: {user.role}
+                Role: {user.role} {user.twoFactorMethod && (
+                  <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs">
+                    2FA: {user.twoFactorMethod === '2fa_email' ? 'Email' : 'SMS'}
+                  </span>
+                )}
               </p>
               <div className="mt-1 flex flex-wrap gap-2">
                 {user.permissions.map(permission => {
@@ -298,27 +372,31 @@ export default function UserManagement() {
               </div>
             </div>
             <div className="flex gap-2">
+              {/* Only show edit button for admin user if current user is admin */}
+              {(user.username !== 'admin' || currentUser?.role === 'admin') && (
+              <button
+                onClick={() => setEditingUser({
+                  username: user.username,
+                  role: user.role,
+                  permissions: user.permissions,
+                  email: user.email,
+                  phoneNumber: user.phoneNumber,
+                  twoFactorMethod: user.twoFactorMethod
+                })}
+                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+              >
+                <Edit2 className="w-4 h-4" />
+                Edit
+              </button>
+              )}
               {user.username !== 'admin' && (
-                <>
-                  <button
-                    onClick={() => setEditingUser({
-                      username: user.username,
-                      role: user.role,
-                      permissions: user.permissions
-                    })}
-                    className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleRemoveUser(user.username)}
-                    className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Remove
-                  </button>
-                </>
+                <button
+                  onClick={() => handleRemoveUser(user.username)}
+                  className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Remove
+                </button>
               )}
             </div>
           </div>

@@ -33,12 +33,14 @@ const AVAILABLE_PERMISSIONS: Permission[] = [
 interface UserPermissionsProps {
   selectedPermissions: string[];
   onChange: (permissions: string[]) => void;
+  disabled?: boolean;
   error?: string | null;
 }
 
 export default function UserPermissions({ 
   selectedPermissions, 
   onChange,
+  disabled = false,
   error 
 }: UserPermissionsProps) {
   const handleTogglePermission = (permissionId: string) => {
@@ -76,6 +78,7 @@ export default function UserPermissions({
               type="checkbox"
               checked={selectedPermissions.includes(permission.id)}
               onChange={() => handleTogglePermission(permission.id)}
+              disabled={disabled}
               className="mt-1 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
             />
             <div>
