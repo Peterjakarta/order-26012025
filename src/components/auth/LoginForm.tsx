@@ -107,11 +107,6 @@ export default function LoginForm() {
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
-
-            <div className="text-sm text-gray-600 text-center">
-              <p>Default credentials:</p>
-              <p>Admin: admin / stafcokelateh</p>
-            </div>
           </form>
         </div>
       </div>
