@@ -5,30 +5,93 @@ interface Permission {
   id: string;
   label: string;
   description: string;
+  page: string;
 }
 
 const AVAILABLE_PERMISSIONS: Permission[] = [
-  { 
-    id: 'manage_users', 
-    label: 'Manage Users', 
-    description: 'Can add, edit, and remove users' 
-  },
-  { 
-    id: 'manage_orders', 
-    label: 'Manage Orders', 
-    description: 'Can view and manage all orders' 
-  },
-  { 
-    id: 'manage_products', 
-    label: 'Manage Products', 
-    description: 'Can manage products and categories' 
-  },
+  // Order Form Page
   { 
     id: 'create_orders', 
-    label: 'Create Orders', 
-    description: 'Can create new orders' 
+    label: 'Order Form', 
+    description: 'Can access order form and submit new orders',
+    page: 'Order Form'
+  },
+  
+  // Management - Orders Page
+  { 
+    id: 'manage_orders', 
+    label: 'Orders Management', 
+    description: 'Can view active orders, edit orders, and remove orders',
+    page: 'Management - Orders'
+  },
+  
+  // Management - Completed Orders Page
+  { 
+    id: 'manage_completed_orders', 
+    label: 'Completed Orders', 
+    description: 'Can view completed orders, download reports, and calculate ingredients',
+    page: 'Management - Completed Orders'
+  },
+  
+  // Management - Production Page
+  { 
+    id: 'manage_production', 
+    label: 'Production Schedule', 
+    description: 'Can schedule production, view calendar, and mark orders as completed',
+    page: 'Management - Production'
+  },
+  {
+    id: 'manage_products',
+    label: 'Products',
+    description: 'Can add, edit, and remove products',
+    page: 'Management - Products'
+  },
+  {
+    id: 'manage_categories',
+    label: 'Categories',
+    description: 'Can manage product categories and bulk import products',
+    page: 'Management - Categories'
+  },
+  {
+    id: 'manage_branches',
+    label: 'Branches',
+    description: 'Can add, edit, and remove branch locations',
+    page: 'Management - Branches'
+  },
+  
+  // Management - Pricing Page
+  {
+    id: 'manage_pricing',
+    label: 'Pricing',
+    description: 'Can manage ingredients, recipes, and cost calculations',
+    page: 'Management - Pricing'
+  },
+  
+  // Management - Logbook Page
+  {
+    id: 'view_logbook',
+    label: 'Logbook',
+    description: 'Can view system logs and activity history',
+    page: 'Management - Logbook'
+  },
+  
+  // Management - Settings Page
+  {
+    id: 'manage_users',
+    label: 'User Management',
+    description: 'Can manage users, roles, and permissions in settings',
+    page: 'Management - Settings'
   }
 ];
+
+// Group permissions by page
+const groupedPermissions = AVAILABLE_PERMISSIONS.reduce((acc, permission) => {
+  if (!acc[permission.page]) {
+    acc[permission.page] = [];
+  }
+  acc[permission.page].push(permission);
+  return acc;
+}, {} as Record<string, Permission[]>);
 
 interface UserPermissionsProps {
   selectedPermissions: string[];
@@ -69,23 +132,32 @@ export default function UserPermissions({
       )}
 
       <div className="space-y-3">
-        {AVAILABLE_PERMISSIONS.map(permission => (
-          <label 
-            key={permission.id}
-            className="flex items-start gap-3 p-3 rounded-lg border hover:bg-gray-50 cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              checked={selectedPermissions.includes(permission.id)}
-              onChange={() => handleTogglePermission(permission.id)}
-              disabled={disabled}
-              className="mt-1 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-            />
-            <div>
-              <div className="font-medium">{permission.label}</div>
-              <div className="text-sm text-gray-600">{permission.description}</div>
+        {Object.entries(groupedPermissions).map(([page, permissions]) => (
+          <div key={page} className="space-y-2">
+            <div className="text-sm font-semibold text-gray-900 bg-gray-50 p-2 rounded">
+              {page}
             </div>
-          </label>
+            <div className="space-y-2 ml-2">
+              {permissions.map(permission => (
+                <label 
+                  key={permission.id}
+                  className="flex items-start gap-3 p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedPermissions.includes(permission.id)}
+                    onChange={() => handleTogglePermission(permission.id)}
+                    disabled={disabled}
+                    className="mt-1 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                  />
+                  <div>
+                    <div className="font-medium">{permission.label}</div>
+                    <div className="text-sm text-gray-600">{permission.description}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </div>

@@ -5,6 +5,7 @@ import { useStore } from '../../store/StoreContext';
 import { useBranches } from '../../hooks/useBranches';
 import OrderItem from './order/OrderItem';
 import { generateOrderExcel, saveWorkbook } from '../../utils/excelGenerator';
+import { generateOrderPDF } from '../../utils/pdfGenerator';
 import ConfirmDialog from '../common/ConfirmDialog';
 import IngredientUsageCalculator from './order/IngredientUsageCalculator';
 
@@ -36,6 +37,11 @@ export default function CompletedOrders() {
   const handleDownloadExcel = (order: Order) => {
     const wb = generateOrderExcel(order, products, poNumber);
     saveWorkbook(wb, `order-${order.orderNumber || order.id.slice(0, 8)}.xlsx`);
+  };
+
+  const handleDownloadPDF = (order: Order) => {
+    const doc = generateOrderPDF(order, products, poNumber);
+    doc.save(`order-${order.orderNumber || order.id.slice(0, 8)}.pdf`);
   };
 
   const handleReopenOrder = async (orderId: string) => {
@@ -130,7 +136,7 @@ export default function CompletedOrders() {
                         Excel
                       </button>
                       <button
-                        onClick={() => handleDownloadExcel(order)}
+                        onClick={() => handleDownloadPDF(order)}
                         className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
                         title="Download PDF"
                       >

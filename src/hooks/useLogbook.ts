@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { collection, query, orderBy, limit, onSnapshot, where, startAfter, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, where, startAfter, getDocs, writeBatch } from 'firebase/firestore';
 import { db, COLLECTIONS } from '../lib/firebase';
 import type { LogEntry } from '../types/types';
 
@@ -11,6 +11,7 @@ export function useLogbook() {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [lastEntry, setLastEntry] = useState<any>(null);
+  const [clearingLogs, setClearingLogs] = useState(false);
 
   // Subscribe to latest log entries
   useEffect(() => {
@@ -90,6 +91,50 @@ export function useLogbook() {
     }
   }, [lastEntry, hasMore]);
 
+  const clearEntries = useCallback(async () => {
+    if (clearingLogs) return;
+    
+    try {
+      setClearingLogs(true);
+      setError(null);
+
+      // Get all log entries
+      const snapshot = await getDocs(collection(db, COLLECTIONS.LOGS));
+      
+      // Delete in batches of 500 (Firestore limit)
+      const batchSize = 500;
+      const batches = [];
+      let batch = writeBatch(db);
+      let operationCount = 0;
+
+      snapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+        operationCount++;
+
+        if (operationCount === batchSize) {
+          batches.push(batch.commit());
+          batch = writeBatch(db);
+          operationCount = 0;
+        }
+      });
+
+      // Commit any remaining operations
+      if (operationCount > 0) {
+        batches.push(batch.commit());
+      }
+
+      // Wait for all batches to complete
+      await Promise.all(batches);
+
+    } catch (err) {
+      console.error('Error clearing logs:', err);
+      setError('Failed to clear logs');
+      throw err;
+    } finally {
+      setClearingLogs(false);
+    }
+  }, [clearingLogs]);
+
   const filterEntries = useCallback(async (
     category?: 'auth' | 'feature' | 'system',
     username?: string,
@@ -153,6 +198,7 @@ export function useLogbook() {
     error,
     hasMore,
     loadMore,
-    filterEntries
+    filterEntries,
+    clearEntries
   };
 }

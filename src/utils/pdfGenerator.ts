@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { Order, Product, Recipe, Ingredient } from '../types/types';
+import type { Order, Product, Recipe, Ingredient, LogEntry } from '../types/types';
 import { getBranchName } from '../data/branches';
 import { calculateMouldCount } from './mouldCalculations';
 import { calculateExpiryDate } from './dateUtils';
@@ -336,6 +336,52 @@ export function generateIngredientUsagePDF(data: IngredientUsagePDFData) {
       fillColor: [249, 250, 251],
       textColor: [0, 0, 0],
       fontStyle: 'bold'
+    }
+  });
+
+  return doc;
+}
+
+export function generateLogbookPDF(entries: LogEntry[]) {
+  // Create PDF document
+  const doc = new jsPDF();
+  
+  // Header
+  doc.setFontSize(20);
+  doc.text('System Logbook', 14, 15);
+
+  doc.setFontSize(10);
+  doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 25);
+
+  // Add entries table
+  const tableData = entries.map(entry => [
+    new Date(entry.timestamp).toLocaleString(),
+    entry.username,
+    entry.category,
+    entry.action,
+    entry.details || ''
+  ]);
+
+  autoTable(doc, {
+    startY: 35,
+    head: [['Timestamp', 'User', 'Category', 'Action', 'Details']],
+    body: tableData,
+    theme: 'striped',
+    headStyles: {
+      fillColor: [236, 72, 153],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold'
+    },
+    styles: {
+      fontSize: 8,
+      cellPadding: 2
+    },
+    columnStyles: {
+      0: { cellWidth: 35 },  // Timestamp
+      1: { cellWidth: 25 },  // User
+      2: { cellWidth: 25 },  // Category
+      3: { cellWidth: 35 },  // Action
+      4: { cellWidth: 70 }   // Details
     }
   });
 
