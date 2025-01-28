@@ -13,6 +13,22 @@ export const branches: Branch[] = [
   {
     id: 'external',
     name: 'External'
+  },
+  {
+    id: 'trail',
+    name: 'Cokelateh Trail'
+  },
+  {
+    id: 'production',
+    name: 'Cokelateh Production'
+  },
+  {
+    id: 'btob',
+    name: 'BtoB'
+  },
+  {
+    id: 'events',
+    name: 'Events'
   }
 ];
 

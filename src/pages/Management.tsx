@@ -1,12 +1,11 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { Package2, CheckCircle2, Calendar, Building2, Calculator, Settings, ClipboardList } from 'lucide-react';
+import { Package2, CheckCircle2, Calendar, Calculator, Settings, ClipboardList } from 'lucide-react';
 import OrderList from '../components/management/OrderList';
 import ProductManagement from '../components/management/ProductManagement';
 import CategoryManagement from '../components/management/CategoryManagement';
 import CompletedOrders from '../components/management/CompletedOrders';
 import ProductionSchedule from '../components/management/production/ProductionSchedule';
-import BranchManagement from '../components/management/branch/BranchManagement';
 import IngredientManagement from '../components/management/pricing/IngredientManagement';
 import RecipeManagement from '../components/management/pricing/RecipeManagement';
 import SettingsPage from '../components/management/settings/Settings';
@@ -58,13 +57,6 @@ export default function Management() {
       label: "Categories",
       requiredPermissions: ['manage_products'],
       element: <CategoryManagement />
-    },
-    {
-      path: "/management/branches",
-      label: "Branches",
-      icon: <Building2 className="w-4 h-4" />,
-      requiredPermissions: ['manage_products'],
-      element: <BranchManagement />
     },
     {
       path: "/management/pricing",

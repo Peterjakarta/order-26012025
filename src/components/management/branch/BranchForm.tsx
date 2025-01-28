@@ -13,9 +13,7 @@ export default function BranchForm({ branch, onSubmit, onCancel }: BranchFormPro
     const formData = new FormData(e.currentTarget);
     
     onSubmit({
-      name: formData.get('name') as string,
-      address: formData.get('address') as string,
-      phone: formData.get('phone') as string
+      name: formData.get('name') as string
     });
   };
 
@@ -32,35 +30,7 @@ export default function BranchForm({ branch, onSubmit, onCancel }: BranchFormPro
           defaultValue={branch?.name}
           required
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
-          placeholder="e.g. Main Store"
-        />
-      </div>
-
-      <div>
-        <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-          Address
-        </label>
-        <textarea
-          id="address"
-          name="address"
-          defaultValue={branch?.address}
-          rows={2}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
-          placeholder="Enter branch address"
-        />
-      </div>
-
-      <div>
-        <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-          Phone Number
-        </label>
-        <input
-          type="tel"
-          id="phone"
-          name="phone"
-          defaultValue={branch?.phone}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
-          placeholder="Enter phone number"
+          placeholder="e.g. Cokelateh Trail"
         />
       </div>
 

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { 
   collection, 
-  addDoc, 
+  setDoc,
   deleteDoc, 
   doc, 
   onSnapshot, 
@@ -9,8 +9,7 @@ import {
   orderBy,
   updateDoc,
   serverTimestamp,
-  where,
-  getDocs
+  where
 } from 'firebase/firestore';
 import { db, COLLECTIONS } from '../lib/firebase';
 import { generateOrderNumber } from '../utils/orderUtils';
@@ -22,58 +21,94 @@ export function useOrders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Subscribe to orders from Firebase with error handling
   useEffect(() => {
     setLoading(true);
     setError(null);
+    let unsubscribe: (() => void) | undefined;
 
-    const q = query(
-      collection(db, COLLECTIONS.ORDERS),
-      orderBy('createdAt', 'desc')
-    );
+    try {
+      // Create a more robust query with proper ordering
+      const q = query(
+        collection(db, COLLECTIONS.ORDERS),
+        orderBy('createdAt', 'desc')
+      );
 
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const ordersData: Order[] = [];
-        snapshot.forEach((doc) => {
-          ordersData.push({ 
-            id: doc.id, 
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-            updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-            completedAt: doc.data().completedAt?.toDate?.()?.toISOString(),
-          } as Order);
-        });
-        setOrders(ordersData);
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
-        console.error('Error fetching orders:', err);
-        setError('Failed to load orders. Please check your connection and try again.');
-        setLoading(false);
+      unsubscribe = onSnapshot(q, 
+        (snapshot) => {
+          const ordersData: Order[] = [];
+          let parseErrors = 0;
+
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            try {
+              // Ensure all required fields are present
+              if (!data.branchId || !data.orderedBy || !data.orderDate) {
+                console.warn('Skipping malformed order:', doc.id);
+                return;
+              }
+
+              // Parse timestamps properly
+              const createdAt = data.createdAt?.toDate?.() || new Date();
+              const updatedAt = data.updatedAt?.toDate?.() || createdAt;
+              const completedAt = data.completedAt?.toDate?.();
+
+              ordersData.push({ 
+                id: doc.id, 
+                branchId: data.branchId,
+                orderedBy: data.orderedBy,
+                orderDate: data.orderDate,
+                deliveryDate: data.deliveryDate,
+                poNumber: data.poNumber,
+                products: data.products || [],
+                notes: data.notes,
+                status: data.status || 'pending',
+                orderNumber: data.orderNumber,
+                createdAt: createdAt.toISOString(),
+                updatedAt: updatedAt.toISOString(),
+                completedAt: completedAt?.toISOString(),
+                productionStartDate: data.productionStartDate,
+                productionEndDate: data.productionEndDate
+              } as Order);
+            } catch (err) {
+              console.error('Error parsing order:', doc.id, err);
+              parseErrors++;
+            }
+          });
+
+        // Log detailed information about the sync
+        console.log(`Orders sync complete:
+          - Total orders: ${ordersData.length}
+          - Parse errors: ${parseErrors}
+          - Timestamp: ${new Date().toISOString()}`
+        );
+
+          // Sort orders by date for consistent display
+          ordersData.sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+
+          setOrders(ordersData);
+          setLoading(false);
+          setError(null);
+        },
+        (err) => {
+          console.error('Error fetching orders:', err);
+          setError('Failed to load orders. Please refresh the page or check your connection.');
+          setLoading(false);
+        }
+      );
+    } catch (err) {
+      console.error('Error setting up orders subscription:', err);
+      setError('Failed to connect to database. Please refresh the page.');
+      setLoading(false);
+    }
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
       }
-    );
-
-    return () => unsubscribe();
+    };
   }, []);
-
-  const getNextSequenceNumber = async (branchId: string, orderDate: string) => {
-    const date = new Date(orderDate);
-    const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
-
-    // Query orders for this branch and date
-    const q = query(
-      collection(db, COLLECTIONS.ORDERS),
-      where('branchId', '==', branchId),
-      where('orderDate', '>=', startOfDay.toISOString()),
-      where('orderDate', '<', endOfDay.toISOString())
-    );
-
-    const snapshot = await getDocs(q);
-    return snapshot.size + 1;
-  };
 
   const addOrder = useCallback(async (orderData: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>) => {
     try {
@@ -103,25 +138,29 @@ export function useOrders() {
       // Generate order number
       const orderNumber = generateOrderNumber(orderData.branchId, orderData.orderDate);
 
+      // Generate a unique ID for the order
+      const orderId = `${orderData.branchId}-${Date.now()}`;
+
       // Prepare order data with proper timestamps
+      const now = serverTimestamp();
       const order = {
         ...orderData,
         orderNumber,
         status: 'pending' as const,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: now,
+        updatedAt: now,
         orderDate: new Date(orderData.orderDate).toISOString(),
         products: orderData.products.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
-          producedQuantity: 0
+          producedQuantity: item.producedQuantity || 0
         }))
       };
 
-      const docRef = await addDoc(collection(db, COLLECTIONS.ORDERS), order);
+      await setDoc(doc(db, COLLECTIONS.ORDERS, orderId), order);
       
       return {
-        id: docRef.id,
+        id: orderId,
         ...orderData,
         orderNumber,
         status: 'pending' as const,
@@ -136,9 +175,12 @@ export function useOrders() {
   const updateOrder = useCallback(async (orderId: string, orderData: Partial<Order>) => {
     try {
       const orderRef = doc(db, COLLECTIONS.ORDERS, orderId);
+      const now = serverTimestamp();
+      
       await updateDoc(orderRef, {
         ...orderData,
-        updatedAt: serverTimestamp()
+        updatedAt: now,
+        status: orderData.status || 'pending'
       });
     } catch (error) {
       console.error('Error updating order:', error);
@@ -167,6 +209,7 @@ export function useOrders() {
       const orderRef = doc(db, COLLECTIONS.ORDERS, orderId);
       const orderDoc = orders.find(o => o.id === orderId);
       if (!orderDoc) throw new Error('Order not found');
+      console.log('Updating order status:', orderId, status);
 
       const updateData: any = {
         updatedAt: serverTimestamp()
@@ -214,9 +257,9 @@ export function useOrders() {
       const orderRef = doc(db, COLLECTIONS.ORDERS, orderId);
       await updateDoc(orderRef, {
         status: 'processing',
+        updatedAt: serverTimestamp(),
         productionStartDate: startDate,
         productionEndDate: endDate,
-        updatedAt: serverTimestamp()
       });
     } catch (error) {
       console.error('Error updating order production:', error);

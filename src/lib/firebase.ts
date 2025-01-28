@@ -1,5 +1,15 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, enableIndexedDbPersistence, collection, doc, setDoc, getDoc, serverTimestamp, addDoc } from 'firebase/firestore';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  serverTimestamp, 
+  addDoc,
+  getFirestore,
+  CACHE_SIZE_UNLIMITED,
+  initializeFirestore
+} from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
 import type { LogEntry } from '../types/types';
@@ -16,8 +26,11 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore
-const db = getFirestore(app);
+// Initialize Firestore with memory-only cache to avoid persistence issues
+const db = initializeFirestore(app, {
+  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+  experimentalForceLongPolling: true // Use long polling for more stable connection
+});
 
 // Initialize Auth
 const auth = getAuth(app);
@@ -71,16 +84,6 @@ async function createDefaultAdmin() {
     console.error('Error creating default admin:', error);
   }
 }
-
-// Enable offline persistence
-enableIndexedDbPersistence(db)
-  .catch((err) => {
-    if (err.code === 'failed-precondition') {
-      console.warn('Multiple tabs open, offline persistence disabled');
-    } else if (err.code === 'unimplemented') {
-      console.warn('Current browser doesn\'t support offline persistence');
-    }
-  });
 
 // Create default admin user
 createDefaultAdmin();

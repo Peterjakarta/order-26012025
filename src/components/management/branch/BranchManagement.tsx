@@ -4,6 +4,7 @@ import { useBranches } from '../../../hooks/useBranches';
 import BranchForm from './BranchForm';
 import ConfirmDialog from '../../common/ConfirmDialog';
 import type { Branch } from '../../../types/types';
+import { getBranchStyles } from '../../../utils/branchStyles';
 
 export default function BranchManagement() {
   const { branches, addBranch, updateBranch, deleteBranch } = useBranches();
@@ -66,35 +67,38 @@ export default function BranchManagement() {
       )}
 
       <div className="bg-white shadow-sm rounded-lg divide-y">
-        {branches.map(branch => (
-          <div key={branch.id} className="p-4 flex justify-between items-center">
-            <div>
-              <h3 className="font-medium">{branch.name}</h3>
-              {branch.address && (
-                <p className="text-sm text-gray-600">{branch.address}</p>
-              )}
-              {branch.phone && (
-                <p className="text-sm text-gray-600">{branch.phone}</p>
-              )}
+        {branches.map(branch => {
+          const styles = getBranchStyles(branch.id);
+          
+          return (
+            <div key={branch.id} className="p-4 flex justify-between items-center">
+              <div>
+                <h3 className="font-medium">{branch.name}</h3>
+                <div className="mt-1">
+                  <span className={`inline-block px-2 py-0.5 rounded-md text-sm ${styles.base}`}>
+                    {branch.id}
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditingBranch(branch)}
+                  className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Edit
+                </button>
+                <button
+                  onClick={() => setDeletingBranch(branch)}
+                  className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setEditingBranch(branch)}
-                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-              >
-                <Edit2 className="w-4 h-4" />
-                Edit
-              </button>
-              <button
-                onClick={() => setDeletingBranch(branch)}
-                className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <ConfirmDialog
