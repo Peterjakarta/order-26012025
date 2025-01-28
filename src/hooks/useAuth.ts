@@ -1,7 +1,19 @@
 import { useState, useCallback, useEffect } from 'react';
 import bcrypt from 'bcryptjs';
 import { db, createLogEntry } from '../lib/firebase';
-import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, getDocs, where, serverTimestamp } from 'firebase/firestore';
+import { 
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  getDocs,
+  where,
+  serverTimestamp
+} from 'firebase/firestore';
 import type { User } from '../types/types';
 
 const COLLECTIONS = {
@@ -27,52 +39,28 @@ export function useAuth() {
 
   const login = useCallback(async (username: string, password: string) => {
     try {
+      // Get user from Firestore by username
       const usersRef = collection(db, COLLECTIONS.USERS);
-      let userDoc, userData;
+      let userDoc;
 
       if (username === 'admin') {
+        // For admin, directly get the document
         userDoc = await getDoc(doc(usersRef, 'admin'));
-        if (!userDoc.exists()) {
-          // Create admin user if it doesn't exist
-          const hashedPassword = await bcrypt.hash('stafcokelateh', 10);
-          await setDoc(doc(usersRef, 'admin'), {
-            username: 'admin',
-            password_hash: hashedPassword,
-            role: 'admin',
-            permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders'],
-            created_at: serverTimestamp(),
-            updated_at: serverTimestamp()
-          });
-          userDoc = await getDoc(doc(usersRef, 'admin'));
-        }
-        userData = userDoc.data();
       } else {
+        // For other users, query by username
         const q = query(usersRef, where('username', '==', username));
         const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-          console.error('User not found');
-          return false;
-        }
+        if (snapshot.empty) return false;
         userDoc = snapshot.docs[0];
-        userData = userDoc.data();
       }
 
-      if (!userData) {
-        console.error('User data not found');
-        return false;
-      }
+      if (!userDoc.exists()) return false;
+
+      const userData = userDoc.data();
 
       // Verify password
-      let isValid = false;
-      try {
-        isValid = await bcrypt.compare(password, userData.password_hash);
-      } catch (err) {
-        console.error('Password comparison error:', err);
-        return false;
-      }
-      
+      const isValid = await bcrypt.compare(password, userData.password_hash);
       if (!isValid) {
-        console.error('Invalid password');
         return false;
       }
 

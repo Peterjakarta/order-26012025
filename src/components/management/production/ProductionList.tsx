@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Calendar, FileDown, CheckCircle2, Edit2, X } from 'lucide-react';
-import type { Order, Product } from '../../../types/types';
+import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight } from 'lucide-react';
+import type { Order } from '../../../types/types';
 import { useBranches } from '../../../hooks/useBranches';
+import { useStore } from '../../../store/StoreContext';
 import { calculateMouldCount } from '../../../utils/mouldCalculations';
 import { isBonBonCategory, isPralinesCategory } from '../../../utils/quantityUtils';
 import { getBranchStyles } from '../../../utils/branchStyles';
@@ -38,6 +39,7 @@ export default function ProductionList({
   const [error, setError] = useState<string | null>(null);
   const [completingOrder, setCompletingOrder] = useState<Order | null>(null);
   const [editingDates, setEditingDates] = useState<string | null>(null);
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
   // Separate orders into scheduled and unscheduled
   const scheduledOrders = orders.filter(order => order.productionStartDate && order.productionEndDate);
@@ -131,6 +133,18 @@ export default function ProductionList({
     doc.save(`production-${order.id.slice(0, 8)}.pdf`);
   };
 
+  const toggleOrderExpanded = (orderId: string) => {
+    setExpandedOrders(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
   if (orders.length === 0) {
     return (
       <div className="p-6 text-center text-gray-500">
@@ -156,30 +170,42 @@ export default function ProductionList({
               const branch = branches.find(b => b.id === order.branchId);
               const dates = orderDates[order.id];
               const styles = getBranchStyles(order.branchId);
+              const isExpanded = expandedOrders.has(order.id);
               
               return (
                 <div key={order.id} className="bg-white border rounded-lg p-4 space-y-4">
                   <div className="flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center gap-3 mb-1">
-                        <span className={`px-2 py-0.5 rounded-md text-sm ${styles.base}`}>
-                          {branch?.name}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          #{order.id.slice(0, 8)}
-                        </span>
+                    <button
+                      onClick={() => toggleOrderExpanded(order.id)}
+                      className="flex items-center gap-3 hover:bg-gray-50 p-2 rounded-md -ml-2 transition-colors"
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-gray-500" />
+                      )}
+                      <div>
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className={`px-2 py-0.5 rounded-md text-sm ${styles.base}`}>
+                            {branch?.name}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            #{order.id.slice(0, 8)}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600 text-left">
+                          <p>Ordered by: {order.orderedBy}</p>
+                          <p>Order Date: {new Date(order.orderDate).toLocaleDateString()}</p>
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-600">
-                        Ordered by: {order.orderedBy}
-                      </p>
-                    </div>
+                    </button>
                     <div className="text-sm text-gray-600">
                       Delivery: {new Date(order.deliveryDate).toLocaleDateString()}
                     </div>
                   </div>
 
                   {/* Date Selection */}
-                  <div className="grid sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                  {isExpanded && <div className="grid sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Start Date
@@ -204,10 +230,10 @@ export default function ProductionList({
                         min={dates?.start || new Date().toISOString().split('T')[0]}
                       />
                     </div>
-                  </div>
+                  </div>}
 
                   {/* Products */}
-                  <div className="space-y-2">
+                  {isExpanded && <div className="space-y-2">
                     {order.products.map(item => {
                       const product = products.find(p => p.id === item.productId);
                       if (!product) return null;
@@ -233,7 +259,7 @@ export default function ProductionList({
                         </div>
                       );
                     })}
-                  </div>
+                  </div>}
 
                   <div className="flex justify-end">
                     <button
@@ -262,23 +288,35 @@ export default function ProductionList({
               const isEditing = editingDates === order.id;
               const dates = orderDates[order.id];
               const styles = getBranchStyles(order.branchId);
+              const isExpanded = expandedOrders.has(order.id);
               
               return (
                 <div key={order.id} className="bg-gray-50 rounded-lg p-4 space-y-4">
                   <div className="flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center gap-3 mb-1">
-                        <span className={`px-2 py-0.5 rounded-md text-sm ${styles.base}`}>
-                          {branch?.name}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          #{order.id.slice(0, 8)}
-                        </span>
+                    <button
+                      onClick={() => toggleOrderExpanded(order.id)}
+                      className="flex items-center gap-3 hover:bg-white/50 p-2 rounded-md -ml-2 transition-colors"
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-gray-500" />
+                      )}
+                      <div>
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className={`px-2 py-0.5 rounded-md text-sm ${styles.base}`}>
+                            {branch?.name}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            #{order.id.slice(0, 8)}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600 text-left">
+                          <p>Ordered by: {order.orderedBy}</p>
+                          <p>Order Date: {new Date(order.orderDate).toLocaleDateString()}</p>
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-600">
-                        Ordered by: {order.orderedBy}
-                      </p>
-                    </div>
+                    </button>
                     <div className="flex items-center gap-4">
                       {onRemove && (
                         <button
@@ -307,7 +345,7 @@ export default function ProductionList({
                       )}
                       <div className="text-sm">
                         {isEditing ? (
-                          <div className="grid sm:grid-cols-2 gap-4 bg-white p-4 rounded-lg">
+                          <div className={`grid sm:grid-cols-2 gap-4 bg-white p-4 rounded-lg ${isExpanded ? '' : 'hidden'}`}>
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Start Date
@@ -375,7 +413,8 @@ export default function ProductionList({
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  {/* Products */}
+                  {isExpanded && <div className="space-y-2">
                     {order.products.map(item => {
                       const product = products.find(p => p.id === item.productId);
                       if (!product) return null;
@@ -401,7 +440,7 @@ export default function ProductionList({
                         </div>
                       );
                     })}
-                  </div>
+                  </div>}
                 </div>
               );
             })}

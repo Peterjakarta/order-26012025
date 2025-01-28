@@ -5,91 +5,66 @@ interface Permission {
   id: string;
   label: string;
   description: string;
-  page: string;
+  group: string;
 }
 
 const AVAILABLE_PERMISSIONS: Permission[] = [
-  // Order Form Page
   { 
-    id: 'create_orders', 
-    label: 'Order Form', 
-    description: 'Can access order form and submit new orders',
-    page: 'Order Form'
+    id: 'manage_users', 
+    label: 'Manage Users', 
+    description: 'Can add, edit, and remove users, manage roles and permissions',
+    group: 'Administration'
   },
-  
-  // Management - Orders Page
   { 
     id: 'manage_orders', 
-    label: 'Orders Management', 
-    description: 'Can view active orders, edit orders, and remove orders',
-    page: 'Management - Orders'
+    label: 'Manage Orders', 
+    description: 'Can view, edit, and delete orders, manage production schedule',
+    group: 'Orders'
   },
-  
-  // Management - Completed Orders Page
   { 
-    id: 'manage_completed_orders', 
-    label: 'Completed Orders', 
-    description: 'Can view completed orders, download reports, and calculate ingredients',
-    page: 'Management - Completed Orders'
+    id: 'manage_products', 
+    label: 'Manage Products', 
+    description: 'Can manage products, categories, recipes, and ingredients',
+    group: 'Products'
   },
-  
-  // Management - Production Page
   { 
-    id: 'manage_production', 
-    label: 'Production Schedule', 
-    description: 'Can schedule production, view calendar, and mark orders as completed',
-    page: 'Management - Production'
+    id: 'create_orders', 
+    label: 'Create Orders', 
+    description: 'Can create and submit new orders',
+    group: 'Orders'
   },
   {
-    id: 'manage_products',
-    label: 'Products',
-    description: 'Can add, edit, and remove products',
-    page: 'Management - Products'
+    id: 'manage_production',
+    label: 'Manage Production',
+    description: 'Can schedule production, mark orders as completed, calculate ingredients',
+    group: 'Production'
   },
   {
-    id: 'manage_categories',
-    label: 'Categories',
-    description: 'Can manage product categories and bulk import products',
-    page: 'Management - Categories'
+    id: 'manage_recipes',
+    label: 'Manage Recipes',
+    description: 'Can create and edit recipes, manage ingredient costs and usage',
+    group: 'Products'
+  },
+  {
+    id: 'view_reports',
+    label: 'View Reports',
+    description: 'Can view production reports, ingredient usage, and order history',
+    group: 'Reports'
   },
   {
     id: 'manage_branches',
-    label: 'Branches',
+    label: 'Manage Branches',
     description: 'Can add, edit, and remove branch locations',
-    page: 'Management - Branches'
-  },
-  
-  // Management - Pricing Page
-  {
-    id: 'manage_pricing',
-    label: 'Pricing',
-    description: 'Can manage ingredients, recipes, and cost calculations',
-    page: 'Management - Pricing'
-  },
-  
-  // Management - Logbook Page
-  {
-    id: 'view_logbook',
-    label: 'Logbook',
-    description: 'Can view system logs and activity history',
-    page: 'Management - Logbook'
-  },
-  
-  // Management - Settings Page
-  {
-    id: 'manage_users',
-    label: 'User Management',
-    description: 'Can manage users, roles, and permissions in settings',
-    page: 'Management - Settings'
+    group: 'Administration'
   }
 ];
 
-// Group permissions by page
+// Group permissions by category
 const groupedPermissions = AVAILABLE_PERMISSIONS.reduce((acc, permission) => {
-  if (!acc[permission.page]) {
-    acc[permission.page] = [];
+  if (!acc[permission.group]) {
+    acc[permission.group] = [];
   }
-  acc[permission.page].push(permission);
+  acc[permission.group].push(permission);
   return acc;
 }, {} as Record<string, Permission[]>);
 
@@ -132,10 +107,10 @@ export default function UserPermissions({
       )}
 
       <div className="space-y-3">
-        {Object.entries(groupedPermissions).map(([page, permissions]) => (
-          <div key={page} className="space-y-2">
+        {Object.entries(groupedPermissions).map(([group, permissions]) => (
+          <div key={group} className="space-y-2">
             <div className="text-sm font-semibold text-gray-900 bg-gray-50 p-2 rounded">
-              {page}
+              {group}
             </div>
             <div className="space-y-2 ml-2">
               {permissions.map(permission => (

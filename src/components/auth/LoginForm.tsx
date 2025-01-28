@@ -16,22 +16,18 @@ export default function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!username || !password) {
-      setError('Please enter both username and password');
-      return;
-    }
     setLoading(true);
 
     try {
       const success = await login(username, password);
       if (success) {
+        // Navigate to the originally requested URL or default page
         const from = location.state?.from?.pathname || '/';
         navigate(from, { replace: true });
       } else {
         setError('Invalid username or password');
       }
     } catch (err) {
-      console.error('Login error:', err);
       setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
