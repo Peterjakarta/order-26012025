@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight, ClipboardCheck } from 'lucide-react';
 import type { Order } from '../../../types/types';
 import { useBranches } from '../../../hooks/useBranches';
 import { useStore } from '../../../store/StoreContext';
 import { calculateMouldCount } from '../../../utils/mouldCalculations';
 import { isBonBonCategory, isPralinesCategory } from '../../../utils/quantityUtils';
 import { getBranchStyles } from '../../../utils/branchStyles';
-import { generateOrderPDF } from '../../../utils/pdfGenerator';
+import { generateOrderPDF, generateProductionChecklistPDF } from '../../../utils/pdfGenerator';
 import OrderCompletion from '../order/OrderCompletion';
 
 interface ProductionListProps {
@@ -131,6 +131,11 @@ export default function ProductionList({
   const handleDownloadPDF = (order: Order) => {
     const doc = generateOrderPDF(order, products);
     doc.save(`production-${order.id.slice(0, 8)}.pdf`);
+  };
+
+  const handleDownloadChecklist = (order: Order) => {
+    const doc = generateProductionChecklistPDF(order, products);
+    doc.save(`production-checklist-${order.id.slice(0, 8)}.pdf`);
   };
 
   const toggleOrderExpanded = (orderId: string) => {
@@ -333,6 +338,14 @@ export default function ProductionList({
                       >
                         <FileDown className="w-4 h-4" />
                         PDF
+                      </button>
+                      <button
+                        onClick={() => handleDownloadChecklist(order)}
+                        className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                        title="Download Production Checklist"
+                      >
+                        <ClipboardCheck className="w-4 h-4" />
+                        Checklist
                       </button>
                       {onComplete && (
                         <button

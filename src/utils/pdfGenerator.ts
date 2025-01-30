@@ -6,6 +6,83 @@ import { calculateMouldCount } from './mouldCalculations';
 import { calculateExpiryDate } from './dateUtils';
 import { isBonBonCategory, isPralinesCategory } from './quantityUtils';
 import { formatIDR } from './currencyFormatter';
+
+export function generateProductionChecklistPDF(order: Order, products: Product[]) {
+  // Create PDF document
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+  
+  // Get branch name
+  const branchName = getBranchName(order.branchId);
+
+  // Header
+  doc.setFontSize(16);
+  doc.text('Production Checklist', 14, 15);
+
+  doc.setFontSize(9);
+  doc.text(`Order #: ${order.id.slice(0, 8)}`, 14, 25);
+  doc.text(`Branch: ${branchName}`, 14, 30);
+  doc.text(`Production Date: ${new Date().toLocaleDateString()}`, 14, 35);
+
+  // Create table
+  const tableData = order.products.map(item => {
+    const product = products.find(p => p.id === item.productId);
+    if (!product) return [];
+
+    const mouldInfo = calculateMouldCount(product.category, item.quantity);
+    const showMould = isBonBonCategory(product.category) || isPralinesCategory(product.category);
+
+    return [
+      product.name,
+      `${item.quantity} ${product.unit || ''}`,
+      showMould ? mouldInfo : '-',
+      '', // Spray
+      '', // Ready
+      '', // Shell
+      '', // Ganache
+      ''  // Closed
+    ];
+  });
+
+  autoTable(doc, {
+    startY: 45,
+    head: [['Product', 'Ordered', 'Mould', 'Spray', 'Ready', 'Shell', 'Ganache', 'Closed']],
+    body: tableData,
+    theme: 'striped',
+    headStyles: {
+      fillColor: [236, 72, 153],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 9,
+      cellPadding: 4
+    },
+    columnStyles: {
+      0: { cellWidth: 50 },  // Product
+      1: { cellWidth: 25 },  // Ordered
+      2: { cellWidth: 25 },  // Mould
+      3: { cellWidth: 15 },  // Spray
+      4: { cellWidth: 15 },  // Ready
+      5: { cellWidth: 15 },  // Shell
+      6: { cellWidth: 15 },  // Ganache
+      7: { cellWidth: 15 }   // Closed
+    },
+    styles: {
+      fontSize: 9,
+      cellPadding: 3
+    },
+    bodyStyles: {
+      lineWidth: 0.1,
+      lineColor: [0, 0, 0],
+      minCellHeight: 6
+    },
+    margin: { left: 10, right: 10 }
+  });
+
+  return doc;
+}
 import { calculateRecipeCost } from './recipeCalculations';
 
 export function generateRecipePDF(recipe: Recipe, ingredients: Ingredient[], quantity: number) {
