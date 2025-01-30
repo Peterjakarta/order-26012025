@@ -124,9 +124,20 @@ export default function OrderList() {
                     selected={selectedOrders.has(order.id)}
                     extraActions={
                       <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded-md text-sm ${branchStyles}`}>
-                          {branch?.name}
-                        </span>
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className={`px-2 py-0.5 rounded-md text-sm ${branchStyles}`}>
+                            {branch?.name} • {new Date(order.orderDate).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </span>
+                          {order.poNumber && (
+                            <span className="text-sm text-gray-500">
+                              PO: {order.poNumber}
+                            </span>
+                          )}
+                        </div>
                         <button
                           onClick={() => downloadPDF(order)}
                           className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"

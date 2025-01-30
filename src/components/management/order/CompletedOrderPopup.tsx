@@ -71,6 +71,14 @@ export default function CompletedOrderPopup({
           <div className="bg-gray-50 p-4 rounded-lg space-y-2">
             <p><span className="font-medium">Branch:</span> {branch?.name}</p>
             <p><span className="font-medium">Ordered By:</span> {order.orderedBy}</p>
+            <p><span className="font-medium">Order Date:</span> {new Date(order.orderDate).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            })}</p>
+            {order.poNumber && (
+              <p><span className="font-medium">PO Number:</span> {order.poNumber}</p>
+            )}
             <p><span className="font-medium">Order Date:</span> {formatDate(order.orderDate)}</p>
             {order.deliveryDate && (
               <p><span className="font-medium">Delivery Date:</span> {formatDate(order.deliveryDate)}</p>
