@@ -8,6 +8,7 @@ import CompletedOrders from '../components/management/CompletedOrders';
 import ProductionSchedule from '../components/management/production/ProductionSchedule';
 import IngredientManagement from '../components/management/pricing/IngredientManagement';
 import RecipeManagement from '../components/management/pricing/RecipeManagement';
+import IngredientStock from '../components/management/pricing/IngredientStock';
 import SettingsPage from '../components/management/settings/Settings';
 import Logbook from '../components/management/logbook/Logbook';
 import { useAuth } from '../hooks/useAuth';
@@ -132,6 +133,7 @@ export default function Management() {
           {hasPermission('manage_products') && (
             <>
               <Route path="pricing/ingredients" element={<IngredientManagement />} />
+              <Route path="pricing/stock" element={<IngredientStock />} />
               <Route path="pricing/recipes" element={<RecipeManagement />} />
             </>
           )}
@@ -149,7 +151,7 @@ export default function Management() {
 function PricingDashboard() {
   return (
     <div className="space-y-8">
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-3">
         <Link 
           to="/management/pricing/ingredients"
           className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
@@ -157,6 +159,16 @@ function PricingDashboard() {
           <h3 className="text-lg font-semibold mb-2">Ingredients</h3>
           <p className="text-gray-600">
             Manage ingredients, their costs, and packaging information
+          </p>
+        </Link>
+
+        <Link 
+          to="/management/pricing/stock"
+          className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
+        >
+          <h3 className="text-lg font-semibold mb-2">Stock Management</h3>
+          <p className="text-gray-600">
+            Track and update ingredient stock levels
           </p>
         </Link>
 

@@ -259,6 +259,7 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
                     onChange={(e) => updateIngredient(index, 'amount', e.target.value)}
                     required
                     min="0"
+                    step="1"
                     step="0.01"
                     className="block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
                     placeholder="Amount"
@@ -333,6 +334,7 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
           name="notes"
           defaultValue={recipe?.notes}
           rows={3}
+          step="1"
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
           placeholder="Additional notes or instructions"
         />

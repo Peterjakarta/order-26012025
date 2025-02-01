@@ -6,6 +6,24 @@ export interface User {
   permissions: string[];
 }
 
+export interface StockLevel {
+  quantity: number;
+  minStock?: number;
+  updatedAt: string;
+}
+
+export interface StockHistory {
+  id: string;
+  ingredientId: string;
+  orderId: string;
+  previousQuantity: number;
+  newQuantity: number;
+  changeAmount: number;
+  changeType: 'reduction' | 'reversion' | 'manual';
+  timestamp: string;
+  userId: string;
+}
+
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;

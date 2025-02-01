@@ -80,13 +80,13 @@ export default function IngredientUsageCalculator({
         const ingredientData = ingredients.find(i => i.id === ingredient.ingredientId);
         if (!ingredientData) return;
 
-        const amount = ingredient.amount * scale;
+        const amount = Math.ceil(ingredient.amount * scale);
         if (!acc[ingredient.ingredientId]) {
           acc[ingredient.ingredientId] = { amount: 0, cost: 0 };
         }
         
         // Calculate cost based on unit price and amount used
-        const unitPrice = ingredientData.price / ingredientData.packageSize;
+        const unitPrice = Math.ceil(ingredientData.price / ingredientData.packageSize);
         const cost = unitPrice * amount;
         
         acc[ingredient.ingredientId].amount += amount;
@@ -156,7 +156,7 @@ export default function IngredientUsageCalculator({
           const unitPrice = ingredient.price / ingredient.packageSize;
           return [
             ingredient.name,
-            usage.amount.toFixed(2),
+            Math.ceil(usage.amount),
             ingredient.unit,
             formatIDR(unitPrice),
             formatIDR(usage.cost)
@@ -343,7 +343,7 @@ export default function IngredientUsageCalculator({
                               <span className="font-medium">{ingredient.name}</span>
                             </td>
                             <td className="text-right py-3 px-4 whitespace-nowrap">
-                              {usage.amount.toFixed(2)}
+                              {Math.ceil(usage.amount)}
                             </td>
                             <td className="text-left py-3 px-4 whitespace-nowrap">
                               {ingredient.unit}
@@ -364,7 +364,7 @@ export default function IngredientUsageCalculator({
                             Total {unit}:
                           </td>
                           <td className="py-3 px-4 text-right">
-                            {total.toFixed(2)}
+                            {Math.ceil(total)}
                           </td>
                           <td className="py-3 px-4">
                             {unit}

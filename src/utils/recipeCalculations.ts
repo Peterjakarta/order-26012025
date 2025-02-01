@@ -5,9 +5,9 @@ export function calculateRecipeCost(recipe: Recipe, ingredients: Ingredient[]): 
     const ingredient = ingredients.find(i => i.id === item.ingredientId);
     if (!ingredient) return total;
 
-    // Calculate cost based on the amount used (unit price * amount)
-    const unitPrice = ingredient.price / ingredient.packageSize;
-    return total + (unitPrice * item.amount);
+    // Calculate cost based on the amount used (unit price * amount), rounding up
+    const unitPrice = Math.ceil(ingredient.price / ingredient.packageSize);
+    return total + (unitPrice * Math.ceil(item.amount));
   }, 0);
 }
 
@@ -18,7 +18,7 @@ export function calculateIngredientUsage(recipes: Recipe[], quantity: number): R
     const scale = quantity / recipe.yield;
     
     recipe.ingredients.forEach(item => {
-      const amount = item.amount * scale;
+      const amount = Math.ceil(item.amount * scale);
       usage[item.ingredientId] = (usage[item.ingredientId] || 0) + amount;
     });
   });

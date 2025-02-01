@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, FileDown, RotateCcw, FileSpreadsheet, Calculator } from 'lucide-react';
+import { CheckCircle2, FileDown, RotateCcw, FileSpreadsheet, Calculator, Package2, History } from 'lucide-react';
 import { useOrders } from '../../hooks/useOrders';
 import { useStore } from '../../store/StoreContext';
 import { useBranches } from '../../hooks/useBranches';
@@ -11,12 +11,217 @@ import IngredientUsageCalculator from './order/IngredientUsageCalculator';
 
 export default function CompletedOrders() {
   const { orders, removeOrder, updateOrderStatus } = useOrders();
-  const { products } = useStore();
+  const { products, recipes, ingredients, stockLevels, updateStockLevel, stockHistory } = useStore();
   const { branches } = useBranches();
   const [poNumber, setPoNumber] = useState<string>('');
   const [reopeningOrder, setReopeningOrder] = useState<string | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [showIngredientCalculator, setShowIngredientCalculator] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [loadingStockReduction, setLoadingStockReduction] = useState<Record<string, boolean>>({});
+  
+  // Create a lookup map of order IDs that have been reduced
+  const stockReductionHistory = React.useMemo(() => {
+    return stockHistory.reduce((acc, entry) => {
+      if (entry.orderId && entry.changeType === 'reduction') {
+        acc[entry.orderId] = true;
+      }
+      return acc;
+    }, {} as Record<string, boolean>);
+  }, [stockHistory]);
+
+  const handleReduceStock = async (order: Order) => {
+    try {
+      setError(null);
+      setSuccess(null);
+      setLoadingStockReduction(prev => ({ ...prev, [order.id]: true }));
+      
+      // Validate order exists and has products
+      if (!order || !order.products?.length) {
+        setError('Invalid order data');
+        return;
+      }
+
+      // Validate all ingredients exist before starting any updates
+      const ingredientUpdates: { ingredientId: string; newQuantity: number }[] = [];
+
+      // Validate order has products and recipes exist
+      const invalidProducts = order.products.filter(item => {
+        const recipe = recipes.find(r => r.productId === item.productId);
+        return !recipe;
+      });
+
+      if (invalidProducts.length > 0) {
+        const productNames = invalidProducts
+          .map(item => products.find(p => p.id === item.productId)?.name || item.productId)
+          .join(', ');
+        setError(`Missing recipes for: ${productNames}. Stock reduction not possible.`);
+        return;
+      }
+
+      // Calculate ingredient usage for each product
+      for (const item of order.products) {
+        const recipe = recipes.find(r => r.productId === item.productId);
+        if (!recipe) continue; // Already validated above
+
+        // Calculate scaling factor based on produced quantity and round up
+        const scale = Math.ceil((item.producedQuantity || item.quantity) / recipe.yield);
+
+        // Calculate stock reduction for each ingredient
+        for (const ingredient of recipe.ingredients) {
+          // Validate ingredient exists
+          if (!ingredient.ingredientId) {
+            console.error('Invalid ingredient data:', ingredient);
+            continue;
+          }
+
+          const stockData = stockLevels[ingredient.ingredientId] || { quantity: 0 };
+          const amountToReduce = Math.ceil(ingredient.amount * scale); // Round up to whole number
+          const newQuantity = Math.max(0, stockData.quantity - amountToReduce);
+
+          // Add to updates array
+          ingredientUpdates.push({
+            ingredientId: ingredient.ingredientId,
+            newQuantity
+          });
+        }
+      }
+
+      // Validate all ingredients exist
+      const missingIngredients = ingredientUpdates.filter(update => 
+        !ingredients.find(i => i.id === update.ingredientId)
+      );
+
+      if (missingIngredients.length > 0) {
+        throw new Error('Some ingredients are missing from the database');
+      }
+
+      // Process all stock updates
+      for (const update of ingredientUpdates) {
+        const stockData = stockLevels[update.ingredientId] || { quantity: 0 };
+        try {
+          await updateStockLevel(update.ingredientId, {
+            quantity: update.newQuantity,
+            minStock: stockData.minStock,
+            orderId: order.id,
+            changeType: 'reduction' as const
+          });
+        } catch (err) {
+          const ingredientName = ingredients.find(i => i.id === update.ingredientId)?.name || update.ingredientId;
+          throw new Error(`Failed to update stock for ${ingredientName}`);
+        }
+      }
+
+      setError(null);
+      setSuccess('Stock levels have been successfully reduced');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Error reducing stock:', err);
+      setError(err instanceof Error ? err.message : 'Failed to reduce stock levels');
+    } finally {
+      setLoadingStockReduction(prev => ({ ...prev, [order.id]: false }));
+    }
+  };
+
+  const handleRevertStockReduction = async (order: Order) => {
+    try {
+      setError(null);
+      setSuccess(null);
+      setLoadingStockReduction(prev => ({ ...prev, [order.id]: true }));
+      const ingredientUpdates: { ingredientId: string; newQuantity: number }[] = [];
+      
+      // Validate order exists and has products
+      if (!order || !order.products?.length) {
+        setError('Invalid order data');
+        return;
+      }
+
+      // Validate order has products and recipes exist
+      const invalidProducts = order.products.filter(item => {
+        const recipe = recipes.find(r => r.productId === item.productId);
+        return !recipe;
+      });
+
+      if (invalidProducts.length > 0) {
+        const productNames = invalidProducts
+          .map(item => products.find(p => p.id === item.productId)?.name || item.productId)
+          .join(', ');
+        setError(`Missing recipes for: ${productNames}. Stock reversion not possible.`);
+        return;
+      }
+
+      // Calculate ingredient usage for each product
+      for (const item of order.products) {
+        const recipe = recipes.find(r => r.productId === item.productId);
+        if (!recipe) continue; // Already validated above
+
+        // Calculate scaling factor based on produced quantity
+        const scale = (item.producedQuantity || item.quantity) / recipe.yield;
+
+        // Add back stock for each ingredient
+        for (const ingredient of recipe.ingredients) {
+          // Validate ingredient exists
+          if (!ingredient.ingredientId) {
+            console.error('Invalid ingredient data:', ingredient);
+            continue;
+          }
+
+          const stockData = stockLevels[ingredient.ingredientId] || { quantity: 0 };
+          const amountToAdd = Math.ceil(ingredient.amount * scale); // Round up to whole number
+          const newQuantity = stockData.quantity + amountToAdd;
+
+          ingredientUpdates.push({
+            ingredientId: ingredient.ingredientId,
+            newQuantity
+          });
+        }
+      }
+
+      // Validate all ingredients exist
+      const missingIngredients = ingredientUpdates.filter(update => 
+        !ingredients.find(i => i.id === update.ingredientId)
+      );
+
+      if (missingIngredients.length > 0) {
+        throw new Error('Some ingredients are missing from the database');
+      }
+
+      // Process all stock updates
+      for (const update of ingredientUpdates) {
+        const stockData = stockLevels[update.ingredientId] || { quantity: 0 };
+        try {
+          await updateStockLevel(update.ingredientId, {
+            quantity: update.newQuantity,
+            minStock: stockData.minStock,
+            orderId: order.id,
+            changeType: 'reversion' as const
+          });
+        } catch (err) {
+          const ingredientName = ingredients.find(i => i.id === update.ingredientId)?.name || update.ingredientId;
+          throw new Error(`Failed to update stock for ${ingredientName}`);
+        }
+      }
+
+      setSuccess('Stock levels have been successfully reverted');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 3000);
+
+      setError(null);
+    } catch (err) {
+      console.error('Error reverting stock reduction:', err);
+      setError(err instanceof Error ? err.message : 'Failed to revert stock levels');
+    } finally {
+      setLoadingStockReduction(prev => ({ ...prev, [order.id]: false }));
+    }
+  };
   
   // Filter only completed orders and sort by completion date
   const completedOrders = orders
@@ -76,6 +281,20 @@ export default function CompletedOrders() {
         <div className="flex items-center gap-2">
           <CheckCircle2 className="w-6 h-6 text-green-600" />
           <h2 className="text-xl font-semibold">Completed Orders</h2>
+        </div>
+        <div className="flex flex-col gap-2">
+          {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <p>{error}</p>
+            </div>
+          )}
+          {success && (
+            <div className="bg-green-50 text-green-600 p-4 rounded-lg flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+              <p>{success}</p>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-4">
           {selectedOrders.size > 0 && (
@@ -143,6 +362,35 @@ export default function CompletedOrders() {
                         <FileDown className="w-4 h-4" />
                         PDF
                       </button>
+                      {!stockReductionHistory[order.id] ? (
+                        <button
+                          onClick={() => handleReduceStock(order)}
+                          disabled={loadingStockReduction[order.id]}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors
+                            ${loadingStockReduction[order.id]
+                              ? 'bg-green-100 text-green-400 cursor-wait'
+                              : 'text-green-600 hover:bg-green-50'
+                            }`}
+                          title="Reduce ingredient stock"
+                        >
+                          <Package2 className="w-4 h-4" />
+                          {loadingStockReduction[order.id] ? 'Reducing...' : 'Reduce Stock'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleRevertStockReduction(order)}
+                          disabled={loadingStockReduction[order.id]}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors
+                            ${loadingStockReduction[order.id]
+                              ? 'bg-blue-100 text-blue-400 cursor-wait'
+                              : 'text-blue-600 hover:bg-blue-50'
+                            }`}
+                          title="Revert stock reduction"
+                        >
+                          <History className="w-4 h-4" />
+                          {loadingStockReduction[order.id] ? 'Reverting...' : 'Revert Stock'}
+                        </button>
+                      )}
                       <button
                         onClick={() => setReopeningOrder(order.id)}
                         className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-md"

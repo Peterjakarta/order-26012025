@@ -7,7 +7,7 @@ import { formatIDR } from '../../../utils/currencyFormatter';
 import { generateExcelData, saveWorkbook } from '../../../utils/excelGenerator';
 import { generateRecipePDF } from '../../../utils/pdfGenerator';
 
-interface RecipeCalculatorProps {
+export interface RecipeCalculatorProps {
   recipe: Recipe;
   onClose: () => void;
 }
@@ -100,8 +100,8 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-4xl w-full">
-        <div className="p-6 border-b flex justify-between items-center">
+      <div className="bg-white rounded-lg max-w-4xl w-full flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b flex justify-between items-center flex-shrink-0">
           <div>
             <h2 className="text-xl font-semibold">{recipe.name}</h2>
             <p className="text-sm text-gray-600">Cost Calculator</p>
@@ -114,7 +114,7 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Production Quantity ({recipe.yieldUnit})
@@ -149,7 +149,7 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
                         <span className="font-medium">{usage.ingredient.name}</span>
                       </td>
                       <td className="py-2 text-right">
-                        {usage.amount.toFixed(2)}
+                        {Math.ceil(usage.amount)}
                       </td>
                       <td className="py-2 text-left pl-4">
                         {usage.ingredient.unit}
@@ -168,7 +168,7 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
                         Total Weight:
                       </td>
                       <td colSpan={3} className="py-2 text-left pl-4">
-                        {totalWeight.toFixed(2)} {commonUnit}
+                        {Math.ceil(totalWeight)} {commonUnit}
                       </td>
                     </tr>
                   )}
@@ -201,7 +201,7 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
+        <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 flex-shrink-0">
           <button
             onClick={handleDownloadExcel}
             className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"

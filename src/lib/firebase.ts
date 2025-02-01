@@ -45,6 +45,8 @@ export const COLLECTIONS = {
   BRANCHES: 'branches',
   INGREDIENTS: 'ingredients',
   RECIPES: 'recipes',
+  STOCK: 'stock',
+  STOCK_HISTORY: 'stock_history',
   LOGS: 'logs'
 };
 

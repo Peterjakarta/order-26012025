@@ -1,16 +1,16 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { StoreProvider } from './store/StoreContext';
 import Layout from './components/layout/Layout';
 import OrderForm from './components/OrderForm';
 import Management from './pages/Management';
 import LoginForm from './components/auth/LoginForm';
 import RequireAuth from './components/auth/RequireAuth';
+import { StoreProvider } from './store/StoreContext';
 
 export default function App() {
   return (
-    <StoreProvider>
-      <BrowserRouter>
+    <BrowserRouter>
+      <StoreProvider>
         <Routes>
           <Route path="/login" element={<LoginForm />} />
           <Route element={<Layout />}>
@@ -32,7 +32,7 @@ export default function App() {
             />
           </Route>
         </Routes>
-      </BrowserRouter>
-    </StoreProvider>
+      </StoreProvider>
+    </BrowserRouter>
   );
 }
