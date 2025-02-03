@@ -7,8 +7,10 @@ import {
   serverTimestamp, 
   addDoc,
   getFirestore,
-  CACHE_SIZE_UNLIMITED,
-  initializeFirestore
+  initializeFirestore,
+  enableIndexedDbPersistence,
+  disableNetwork,
+  enableNetwork
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
@@ -26,11 +28,41 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with memory-only cache to avoid persistence issues
+// Initialize Firestore with persistence
 const db = initializeFirestore(app, {
-  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
-  experimentalForceLongPolling: true // Use long polling for more stable connection
+  experimentalForceLongPolling: true,
+  cacheSizeBytes: 40 * 1024 * 1024 // 40 MB cache size
 });
+
+// Enable offline persistence
+enableIndexedDbPersistence(db).catch((err) => {
+  console.error('Error enabling persistence:', err);
+  if (err.code === 'failed-precondition') {
+    // Multiple tabs open, persistence can only be enabled in one tab at a time
+    console.warn('Persistence unavailable - multiple tabs may be open');
+  } else if (err.code === 'unimplemented') {
+    // The current browser doesn't support persistence
+    console.warn('Persistence not supported in this browser');
+  }
+});
+
+// Network status management
+let isOnline = true;
+
+window.addEventListener('online', () => {
+  console.log('Reconnecting to Firestore...');
+  isOnline = true;
+  enableNetwork(db);
+});
+
+window.addEventListener('offline', () => {
+  console.log('Disconnecting from Firestore due to offline...');
+  isOnline = false;
+  disableNetwork(db);
+});
+
+// Export network status checker
+export const getNetworkStatus = () => isOnline;
 
 // Initialize Auth
 const auth = getAuth(app);
@@ -53,6 +85,11 @@ export const COLLECTIONS = {
 // Helper function to create log entries
 export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) {
   try {
+    if (!isOnline) {
+      console.warn('Skipping log entry creation - offline mode');
+      return;
+    }
+
     const logsRef = collection(db, COLLECTIONS.LOGS);
     await addDoc(logsRef, {
       ...entry,

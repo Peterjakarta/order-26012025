@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Package2, Plus, Edit2, AlertCircle, Save, X, History, FileSpreadsheet } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
+import { useDebounce } from '../../../hooks/useDebounce';
+import { getNetworkStatus } from '../../../lib/firebase';
 import { formatIDR } from '../../../utils/currencyFormatter';
 import { generateExcelData, saveWorkbook } from '../../../utils/excelGenerator';
 import StockHistory from './StockHistory';
@@ -18,6 +20,76 @@ export default function IngredientStock() {
   const [minStockInput, setMinStockInput] = useState<string>('');
   const [showHistory, setShowHistory] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
+  const [localStockLevels, setLocalStockLevels] = useState<Record<string, number>>({});
+  const [pendingUpdates, setPendingUpdates] = useState<Set<string>>(new Set());
+
+  // Initialize local stock levels from Firestore data
+  useEffect(() => {
+    const initialLevels: Record<string, number> = {};
+    Object.entries(stockLevels).forEach(([id, data]) => {
+      initialLevels[id] = data.quantity;
+    });
+    setLocalStockLevels(initialLevels);
+  }, [stockLevels]);
+
+  const debouncedUpdate = useDebounce(async (
+    ingredientId: string,
+    quantity: number,
+    minStock?: number,
+    retryCount = 0
+  ) => {
+    try {
+      if (!getNetworkStatus()) {
+        throw new Error('No network connection');
+      }
+
+      // Validate ingredient exists
+      const ingredient = ingredients.find(i => i.id === ingredientId);
+      if (!ingredient) {
+        throw new Error('Ingredient not found');
+      }
+
+      await updateStockLevel(ingredientId, {
+        quantity: Math.max(0, quantity),
+        minStock,
+        changeType: 'manual'
+      });
+
+      setPendingUpdates(prev => {
+        const next = new Set(prev);
+        next.delete(ingredientId);
+        return next;
+      });
+      
+      // Clear any existing error
+      setError(null);
+
+    } catch (err) {
+      const isNetworkError = err instanceof Error && 
+        (err.message.includes('network') || err.message.includes('offline'));
+
+      if (isNetworkError && retryCount < 3) {
+        // Retry after delay for network errors
+        setTimeout(() => {
+          debouncedUpdate(ingredientId, quantity, minStock, retryCount + 1);
+        }, 2000 * Math.pow(2, retryCount)); // Exponential backoff
+        
+        setError('Network error - retrying update...');
+      } else {
+        console.error('Error updating stock:', {
+          ingredientId,
+          quantity,
+          error: err instanceof Error ? err.message : 'Unknown error'
+        });
+        
+        setError(
+          isNetworkError
+            ? 'Network error - changes will sync when online'
+            : 'Failed to update stock level. Please try again.'
+        );
+      }
+    }
+  }, 1000);
 
   const handleDownloadExcel = () => {
     try {
@@ -52,17 +124,36 @@ export default function IngredientStock() {
     }
   };
 
-  const handleUpdateStock = async (ingredientId: string, quantity: number, minStock?: number) => {
-    try {
-      const stockData = stockLevels[ingredientId] || {};
-      await updateStockLevel(ingredientId, {
-        quantity: Math.max(0, quantity),
-        minStock: minStock ?? stockData.minStock // Preserve existing minStock if not provided
-      });
-    } catch (err) {
-      setError('Failed to update stock level. Please try again.');
-      console.error('Error updating stock:', err);
+  const handleUpdateStock = (ingredientId: string, quantity: number) => {
+    // Input validation with better error messages
+    if (!Number.isFinite(quantity)) {
+      setError('Please enter a valid number');
+      return;
     }
+    
+    if (quantity < 0) {
+      setError('Quantity cannot be negative');
+      return;
+    }
+
+    // Update local state immediately
+    setLocalStockLevels(prev => ({
+      ...prev,
+      [ingredientId]: quantity
+    }));
+
+    // Mark as pending
+    setPendingUpdates(prev => {
+      const next = new Set(prev);
+      next.add(ingredientId);
+      return next;
+    });
+
+    // Clear any existing error
+    setError(null);
+
+    // Trigger debounced update
+    debouncedUpdate(ingredientId, quantity, stockLevels[ingredientId]?.minStock);
   };
 
   const handleMinStockSubmit = async (ingredientId: string) => {
@@ -170,20 +261,26 @@ export default function IngredientStock() {
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
-                          value={currentStock || ''}
+                          value={(localStockLevels[ingredient.id] ?? currentStock) || ''}
                           onChange={(e) => {
                             const value = parseInt(e.target.value);
                             if (!isNaN(value)) {
-                              handleUpdateStock(ingredient.id, value, minStock);
-                              setError(null);
+                              handleUpdateStock(ingredient.id, value);
+                              setError(null); // Clear error on valid input
                             }
                           }}
                           min="0"
                           step="0.01"
-                          className={`w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500
-                            ${warning ? 'border-red-300 bg-red-50' : ''}`}
+                          className={`w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
+                            warning ? 'border-red-300 bg-red-50' : ''
+                          } ${
+                            pendingUpdates.has(ingredient.id) ? 'bg-yellow-50 border-yellow-300' : ''
+                          }`} title="Enter stock quantity"
                         />
                         <span className="text-gray-500">{ingredient.unit}</span>
+                        {pendingUpdates.has(ingredient.id) && (
+                          <span className="text-yellow-600 text-sm">Saving...</span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-4">
@@ -194,7 +291,7 @@ export default function IngredientStock() {
                             value={minStockInput}
                             onChange={(e) => setMinStockInput(e.target.value)}
                             min="0"
-                            className="w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                            className="w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500" title="Enter minimum stock level"
                             placeholder="Enter min"
                           />
                           <button

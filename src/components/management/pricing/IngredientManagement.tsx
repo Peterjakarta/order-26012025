@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Upload, Copy, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, Upload, Copy, Check, Package2 } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
 import type { Ingredient } from '../../../types/types';
 import IngredientForm from './IngredientForm';
 import BulkIngredientImport from './BulkIngredientImport';
+import ProductToIngredient from './ProductToIngredient';
 import { formatIDR } from '../../../utils/currencyFormatter';
 
 export default function IngredientManagement() {
@@ -11,6 +12,7 @@ export default function IngredientManagement() {
   const [isAddingIngredient, setIsAddingIngredient] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showProductImport, setShowProductImport] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleSubmit = async (data: Omit<Ingredient, 'id'>) => {
@@ -64,6 +66,13 @@ export default function IngredientManagement() {
         <h2 className="text-xl font-semibold">Ingredients</h2>
         <div className="flex gap-2">
           <button
+            onClick={() => setShowProductImport(true)}
+            className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            <Package2 className="w-4 h-4" />
+            Import from Products
+          </button>
+          <button
             onClick={() => setShowBulkImport(true)}
             className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
           >
@@ -84,6 +93,13 @@ export default function IngredientManagement() {
         <BulkIngredientImport
           onImport={handleBulkImport}
           onClose={() => setShowBulkImport(false)}
+        />
+      )}
+
+      {showProductImport && (
+        <ProductToIngredient
+          onImport={handleBulkImport}
+          onClose={() => setShowProductImport(false)}
         />
       )}
 

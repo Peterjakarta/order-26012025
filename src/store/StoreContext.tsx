@@ -156,20 +156,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     changeType?: 'reduction' | 'reversion' | 'manual';
   }) => {
     try {
+      // Validate input data
+      if (typeof data.quantity !== 'number' || !Number.isFinite(data.quantity)) {
+        throw new Error('Invalid quantity value');
+      }
+
+      if (data.minStock !== undefined && 
+          (typeof data.minStock !== 'number' || !Number.isFinite(data.minStock))) {
+        throw new Error('Invalid minimum stock value');
+      }
+
       // Validate ingredient exists first
       const ingredientRef = doc(db, COLLECTIONS.INGREDIENTS, ingredientId);
       const ingredientDoc = await getDoc(ingredientRef);
       if (!ingredientDoc.exists()) {
         throw new Error('Ingredient not found');
-      }
-
-      // Validate data before proceeding
-      if (typeof data.quantity !== 'number') {
-        throw new Error('Quantity must be a number');
-      }
-
-      if (data.minStock !== undefined && typeof data.minStock !== 'number') {
-        throw new Error('Minimum stock must be a number');
       }
 
       // Get current stock level first
@@ -181,10 +182,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const newQuantity = Math.ceil(Math.max(0, Number(data.quantity)));
       const minStock = data.minStock === undefined ? undefined : Math.ceil(Math.max(0, Number(data.minStock)));
       
-      // Validate the change amount is reasonable (prevent large unexpected changes)
+      // Validate the change amount (allow larger changes but prevent unreasonable ones)
       const changeAmount = Math.abs(newQuantity - currentStock);
-      if (changeAmount > 10000) { // Arbitrary limit, adjust as needed
-        throw new Error('Stock change amount exceeds reasonable limits');
+      if (changeAmount > 100000) { // Increased limit for bulk operations
+        throw new Error('Stock change amount exceeds system limits (max 100,000). For larger changes, please contact support.');
       }
 
       // Create batch for atomic updates
@@ -223,7 +224,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       
       await batch.commit();
     } catch (error) {
-      console.error('Error updating stock level:', error);
+      // Log detailed error information
+      console.error('Error updating stock level:', {
+        ingredientId,
+        data,
+        error: error instanceof Error ? {
+          message: error.message,
+          stack: error.stack
+        } : 'Unknown error'
+      });
       throw error;
     }
   }, [state.stockLevels]);
