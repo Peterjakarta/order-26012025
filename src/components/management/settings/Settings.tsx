@@ -2,6 +2,7 @@ import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
 import PasswordChange from './PasswordChange';
 import UserManagement from './UserManagement';
+import BackupRestore from './BackupRestore';
 import { useAuth } from '../../../hooks/useAuth';
 
 export default function Settings() {
@@ -17,6 +18,7 @@ export default function Settings() {
       <Tabs defaultValue="password" className="space-y-6">
         <TabsList>
           <TabsTrigger value="password">Change Password</TabsTrigger>
+          <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
           {canManageUsers && (
             <TabsTrigger value="users">User Management</TabsTrigger>
           )}
@@ -25,6 +27,12 @@ export default function Settings() {
         <TabsContent value="password">
           <div className="bg-white p-6 rounded-lg shadow-sm">
           <PasswordChange />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="backup">
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            <BackupRestore />
           </div>
         </TabsContent>
 
