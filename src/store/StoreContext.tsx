@@ -16,7 +16,7 @@ import {
   limit,
   getDoc
 } from 'firebase/firestore';
-import { db, COLLECTIONS } from '../lib/firebase';
+import { db, COLLECTIONS, getBatch, commitBatchIfNeeded, getNetworkStatus } from '../lib/firebase';
 import { categories as initialCategories } from '../data/categories';
 import type { Product, ProductCategory, CategoryData, Ingredient, Recipe, StockLevel, StockHistory } from '../types/types';
 import { auth } from '../lib/firebase';
@@ -156,6 +156,43 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     changeType?: 'reduction' | 'reversion' | 'manual';
   }) => {
     try {
+      // Skip update if offline
+      if (!getNetworkStatus()) {
+        throw new Error('Cannot update stock while offline');
+      }
+
+      // Performance optimization: Skip validation for manual updates
+      if (data.changeType === 'manual') {
+        const stockRef = doc(db, COLLECTIONS.STOCK, ingredientId);
+        const currentStock = state.stockLevels[ingredientId]?.quantity || 0;
+        const batch = getBatch();
+        
+        // Round values before saving
+        const newQuantity = Math.ceil(Math.max(0, Number(data.quantity)));
+        const minStock = data.minStock === undefined ? undefined : Math.ceil(Math.max(0, Number(data.minStock)));
+
+        batch.set(stockRef, {
+          quantity: newQuantity,
+          ...(minStock !== undefined && { minStock }),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        // Add history entry
+        const historyRef = doc(collection(db, COLLECTIONS.STOCK_HISTORY));
+        batch.set(historyRef, {
+          ingredientId,
+          previousQuantity: currentStock,
+          newQuantity,
+          changeAmount: newQuantity - currentStock,
+          changeType: 'manual',
+          timestamp: serverTimestamp(),
+          userId: auth.currentUser?.uid || 'system'
+        });
+
+        await commitBatchIfNeeded();
+        return;
+      }
+
       // Validate input data
       if (typeof data.quantity !== 'number' || !Number.isFinite(data.quantity)) {
         throw new Error('Invalid quantity value');
@@ -182,14 +219,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const newQuantity = Math.ceil(Math.max(0, Number(data.quantity)));
       const minStock = data.minStock === undefined ? undefined : Math.ceil(Math.max(0, Number(data.minStock)));
       
-      // Validate the change amount (allow larger changes but prevent unreasonable ones)
-      const changeAmount = Math.abs(newQuantity - currentStock);
-      if (changeAmount > 100000) { // Increased limit for bulk operations
-        throw new Error('Stock change amount exceeds system limits (max 100,000). For larger changes, please contact support.');
+      // Validate the change amount (increased limit for large operations)
+      if (data.changeType !== 'manual') {
+        const changeAmount = Math.abs(newQuantity - currentStock);
+        if (changeAmount > 9999999) { // Allow up to 7 digits
+          throw new Error('Stock change amount exceeds system limits (max 9,999,999). For larger changes, please contact support.');
+        }
       }
 
       // Create batch for atomic updates
-      const batch = writeBatch(db);
+      const batch = getBatch();
       
       // Update stock level
       const stockData = {
@@ -222,7 +261,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         batch.set(historyRef, historyData);
       }
       
-      await batch.commit();
+      await commitBatchIfNeeded();
     } catch (error) {
       // Log detailed error information
       console.error('Error updating stock level:', {

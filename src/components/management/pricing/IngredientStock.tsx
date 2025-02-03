@@ -21,7 +21,10 @@ export default function IngredientStock() {
   const [showHistory, setShowHistory] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
   const [localStockLevels, setLocalStockLevels] = useState<Record<string, number>>({});
-  const [pendingUpdates, setPendingUpdates] = useState<Set<string>>(new Set());
+  const [editingStock, setEditingStock] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState<Set<string>>(new Set());
+  const [pendingUpdates, setPendingUpdates] = useState<Record<string, number>>({});
+  const [lastSaveTime, setLastSaveTime] = useState<Record<string, number>>({});
 
   // Initialize local stock levels from Firestore data
   useEffect(() => {
@@ -55,7 +58,7 @@ export default function IngredientStock() {
         changeType: 'manual'
       });
 
-      setPendingUpdates(prev => {
+      setSaving(prev => {
         const next = new Set(prev);
         next.delete(ingredientId);
         return next;
@@ -125,14 +128,15 @@ export default function IngredientStock() {
   };
 
   const handleUpdateStock = (ingredientId: string, quantity: number) => {
-    // Input validation with better error messages
-    if (!Number.isFinite(quantity)) {
-      setError('Please enter a valid number');
-      return;
-    }
-    
-    if (quantity < 0) {
-      setError('Quantity cannot be negative');
+    const now = Date.now();
+    const lastSave = lastSaveTime[ingredientId] || 0;
+    const timeSinceLastSave = now - lastSave;
+    const currentStock = stockLevels[ingredientId]?.quantity || 0;
+    const MAX_QUANTITY = 9999999; // Add maximum quantity limit
+
+    // Validate quantity
+    if (quantity > MAX_QUANTITY) {
+      setError(`Maximum quantity allowed is ${MAX_QUANTITY}`);
       return;
     }
 
@@ -142,18 +146,107 @@ export default function IngredientStock() {
       [ingredientId]: quantity
     }));
 
-    // Mark as pending
-    setPendingUpdates(prev => {
-      const next = new Set(prev);
-      next.add(ingredientId);
-      return next;
-    });
+    // Skip update if value hasn't changed or is invalid
+    if (quantity === currentStock || quantity < 0 || !Number.isFinite(quantity)) {
+      return;
+    }
 
-    // Clear any existing error
-    setError(null);
+    // Add to pending updates
+    setPendingUpdates(prev => ({
+      ...prev,
+      [ingredientId]: quantity
+    }));
 
-    // Trigger debounced update
-    debouncedUpdate(ingredientId, quantity, stockLevels[ingredientId]?.minStock);
+    // Only show editing UI if we haven't saved recently
+    if (timeSinceLastSave > 1000) { // Reduced debounce time
+      setEditingStock(prev => {
+        const next = new Set(prev);
+        next.add(ingredientId);
+        return next;
+      });
+    }
+  };
+
+  const handleSaveStock = async (ingredientId: string) => {
+    try {
+      // Check network status
+      if (!getNetworkStatus()) {
+        setError('Cannot save while offline. Changes will sync when online.');
+        return;
+      }
+
+      const quantity = pendingUpdates[ingredientId] ?? localStockLevels[ingredientId];
+      const currentStock = stockLevels[ingredientId]?.quantity || 0;
+      
+      // Skip if no change
+      if (quantity === currentStock) {
+        setEditingStock(prev => {
+          const next = new Set(prev);
+          next.delete(ingredientId);
+          return next;
+        });
+        return;
+      }
+      
+      // Input validation with better error messages
+      if (!Number.isFinite(quantity)) {
+        setError('Please enter a valid number');
+        return;
+      }
+      
+      if (quantity < 0) {
+        setError('Quantity cannot be negative');
+        return;
+      }
+
+      // Mark as saving
+      setSaving(prev => {
+        const next = new Set(prev);
+        next.add(ingredientId);
+        return next;
+      });
+
+      // Clear editing state
+      setEditingStock(prev => {
+        const next = new Set(prev);
+        next.delete(ingredientId);
+        return next;
+      });
+
+      // Update last save time
+      setLastSaveTime(prev => ({
+        ...prev,
+        [ingredientId]: Date.now()
+      }));
+
+      // Remove from pending updates
+      setPendingUpdates(prev => {
+        const next = { ...prev };
+        delete next[ingredientId];
+        return next;
+      });
+
+      // Clear any existing error
+      setError(null);
+
+      // Update stock level
+      await updateStockLevel(ingredientId, {
+        quantity,
+        minStock: stockLevels[ingredientId]?.minStock,
+        changeType: 'manual'
+      });
+
+    } catch (err) {
+      console.error('Error saving stock:', err);
+      setError('Failed to save stock level. Please try again.');
+      
+      // Remove from saving state on error
+      setSaving(prev => {
+        const next = new Set(prev);
+        next.delete(ingredientId);
+        return next;
+      });
+    }
   };
 
   const handleMinStockSubmit = async (ingredientId: string) => {
@@ -264,21 +357,31 @@ export default function IngredientStock() {
                           value={(localStockLevels[ingredient.id] ?? currentStock) || ''}
                           onChange={(e) => {
                             const value = parseInt(e.target.value);
-                            if (!isNaN(value)) {
+                            if (!isNaN(value) && value >= 0) {
                               handleUpdateStock(ingredient.id, value);
-                              setError(null); // Clear error on valid input
                             }
                           }}
                           min="0"
-                          step="0.01"
-                          className={`w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
+                          step="1"
+                          className={`w-32 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
                             warning ? 'border-red-300 bg-red-50' : ''
-                          } ${
-                            pendingUpdates.has(ingredient.id) ? 'bg-yellow-50 border-yellow-300' : ''
-                          }`} title="Enter stock quantity"
+                          }`}
+                          title="Enter stock quantity"
+                          maxLength={10}
+                          style={{ appearance: 'textfield' }}
                         />
                         <span className="text-gray-500">{ingredient.unit}</span>
-                        {pendingUpdates.has(ingredient.id) && (
+                        {editingStock.has(ingredient.id) && (
+                          <button
+                            onClick={() => handleSaveStock(ingredient.id)}
+                            disabled={saving.has(ingredient.id)}
+                            className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300 flex items-center gap-1"
+                          >
+                            <Save className="w-4 h-4" />
+                            {saving.has(ingredient.id) ? 'Saving...' : 'Save'}
+                          </button>
+                        )}
+                        {saving.has(ingredient.id) && !editingStock.has(ingredient.id) && (
                           <span className="text-yellow-600 text-sm">Saving...</span>
                         )}
                       </div>

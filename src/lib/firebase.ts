@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { 
   collection, 
   doc, 
+  writeBatch,
   setDoc, 
   getDoc, 
   serverTimestamp, 
@@ -30,12 +31,19 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with persistence
 const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-  cacheSizeBytes: 40 * 1024 * 1024 // 40 MB cache size
+  cacheSizeBytes: 50 * 1024 * 1024, // Reduced to 50MB for better performance
+  experimentalForceLongPolling: true, // Force long polling for more reliable connections
+  ignoreUndefinedProperties: true
 });
 
+// Configure persistence settings
+const PERSISTENCE_SETTINGS = {
+  synchronizeTabs: true,
+  experimentalTabSynchronization: true
+};
+
 // Enable offline persistence
-enableIndexedDbPersistence(db).catch((err) => {
+enableIndexedDbPersistence(db, PERSISTENCE_SETTINGS).catch((err) => {
   console.error('Error enabling persistence:', err);
   if (err.code === 'failed-precondition') {
     // Multiple tabs open, persistence can only be enabled in one tab at a time
@@ -49,6 +57,9 @@ enableIndexedDbPersistence(db).catch((err) => {
 // Network status management
 let isOnline = true;
 
+// Export network status checker
+export const getNetworkStatus = () => isOnline;
+
 window.addEventListener('online', () => {
   console.log('Reconnecting to Firestore...');
   isOnline = true;
@@ -61,9 +72,48 @@ window.addEventListener('offline', () => {
   disableNetwork(db);
 });
 
-// Export network status checker
-export const getNetworkStatus = () => isOnline;
+// Batch operations helper (single implementation)
+let currentBatch: ReturnType<typeof writeBatch> | null = null;
+let batchOperations = 0;
+const MAX_BATCH_OPERATIONS = 250; // Reduced for better reliability
+const BATCH_TIMEOUT = 1000; // Reduced to 1 second
+let batchTimeout: NodeJS.Timeout | null = null;
 
+export function getBatch() {
+  if (!currentBatch || batchOperations >= MAX_BATCH_OPERATIONS) {
+    if (currentBatch) {
+      // Commit existing batch before creating new one
+      const existingBatch = currentBatch;
+      currentBatch = null;
+      existingBatch.commit().catch(console.error);
+    }
+    currentBatch = writeBatch(db);
+    batchOperations = 0;
+    
+    // Set timeout to auto-commit if no new operations
+    if (batchTimeout) {
+      clearTimeout(batchTimeout);
+    }
+    batchTimeout = setTimeout(() => {
+      commitBatchIfNeeded().catch(console.error);
+    }, BATCH_TIMEOUT);
+  }
+  batchOperations++;
+  return currentBatch;
+}
+
+export async function commitBatchIfNeeded() {
+  if (currentBatch && batchOperations > 0) {
+    const batch = currentBatch;
+    currentBatch = null;
+    batchOperations = 0;
+    if (batchTimeout) {
+      clearTimeout(batchTimeout);
+      batchTimeout = null;
+    }
+    await batch.commit();
+  }
+}
 // Initialize Auth
 const auth = getAuth(app);
 
