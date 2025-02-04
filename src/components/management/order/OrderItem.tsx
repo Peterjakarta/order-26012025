@@ -81,13 +81,15 @@ export default function OrderItem({
                 Schedule
               </button>
             )}
-            <button
-              onClick={() => setShowEditDialog(true)}
-              className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-            >
-              <Edit className="w-4 h-4" />
-              Edit
-            </button>
+            {order.status !== 'completed' && (
+              <button
+                onClick={() => setShowEditDialog(true)}
+                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+              >
+                <Edit className="w-4 h-4" />
+                Edit
+              </button>
+            )}
             <OrderStatus 
               order={order}
               onUpdateStatus={handleUpdateStatus}

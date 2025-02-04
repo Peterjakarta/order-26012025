@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Printer, FileDown, Mail, X } from 'lucide-react';
+import { X, Printer, Mail, FileDown, AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { Order } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
 import { useOrderActions } from '../../../hooks/useOrderActions';
 import { useBranches } from '../../../hooks/useBranches';
+import { calculateMouldCount } from '../../../utils/mouldCalculations';
+import { isBonBonCategory, isPralinesCategory } from '../../../utils/quantityUtils';
 
 interface OrderCompletionProps {
   order: Order;
@@ -48,6 +50,7 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
   const [error, setError] = useState<string>('');
 
   const branch = branches.find(b => b.id === order.branchId);
+  const isEditing = order.status === 'completed';
 
   // Add ESC key handler
   useEffect(() => {
@@ -90,6 +93,20 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
   const handleSubmit = async () => {
     try {
       setError('');
+      
+      // Validate quantities
+      for (const item of order.products) {
+        const produced = producedQuantities[item.productId] || 0;
+        const stock = stockQuantities[item.productId] || 0;
+        const reject = rejectQuantities[item.productId] || 0;
+        
+        // Total produced must match or exceed ordered quantity
+        if (produced + stock + reject < item.quantity) {
+          setError(`Total quantities must match or exceed ordered amount for all products`);
+          return;
+        }
+      }
+
       await onComplete(producedQuantities, stockQuantities, rejectQuantities, rejectNotes);
       if (onClose) {
         onClose();
@@ -123,78 +140,12 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
     downloadPDF(tempOrder, poNumber);
   };
 
-  if (order.status === 'completed') {
-    return (
-      <div className="bg-white p-6 rounded-lg shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-green-600">
-            <CheckCircle2 className="w-5 h-5" />
-            <span className="text-sm font-medium">Order Completed</span>
-          </div>
-        </div>
-
-        <div className="bg-gray-50 p-4 rounded-lg mb-4">
-          <p className="font-medium text-gray-700">Branch: {branch?.name}</p>
-          <p className="text-sm text-gray-600 mt-1">Order #{order.id.slice(0, 8)}</p>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px] text-sm">
-            <thead className="text-gray-600">
-              <tr>
-                <th className="text-left py-2">Product</th>
-                <th className="text-right py-2">Ordered</th>
-                <th className="text-right py-2">Produced</th>
-                <th className="text-right py-2">Stock</th>
-                <th className="text-right py-2">Reject</th>
-                <th className="text-left py-2">Reject Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {order.products.map(item => {
-                const product = products.find(p => p.id === item.productId);
-                if (!product) return null;
-
-                return (
-                  <tr key={item.productId}>
-                    <td className="py-3">
-                      <span className="font-medium">{product.name}</span>
-                    </td>
-                    <td className="text-right py-3">
-                      {item.quantity} {product.unit}
-                    </td>
-                    <td className={`text-right py-3 font-medium ${
-                      (item.producedQuantity || 0) < item.quantity 
-                        ? 'text-yellow-600' 
-                        : 'text-green-600'
-                    }`}>
-                      {item.producedQuantity || 0} {product.unit}
-                    </td>
-                    <td className="text-right py-3 text-gray-600">
-                      {item.stockQuantity || 0} {product.unit}
-                    </td>
-                    <td className="text-right py-3 text-red-600">
-                      {item.rejectQuantity || 0} {product.unit}
-                    </td>
-                    <td className="py-3 text-gray-600">
-                      {item.rejectNotes || '-'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h4 className="font-medium text-lg">
-            {order.status === 'completed' ? 'Edit Completed Order' : 'Complete Order'}
+            {isEditing ? 'Edit Completed Order' : 'Complete Order'}
           </h4>
           <p className="text-sm text-gray-600 mt-1">Branch: {branch?.name}</p>
         </div>
@@ -241,6 +192,9 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
               const product = products.find(p => p.id === item.productId);
               if (!product) return null;
 
+              const mouldInfo = calculateMouldCount(product.category, item.quantity);
+              const showMould = isBonBonCategory(product.category) || isPralinesCategory(product.category);
+
               return (
                 <tr key={item.productId}>
                   <td className="py-4 px-4">
@@ -248,6 +202,13 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
                       <p className="font-medium">{product.name}</p>
                       <p className="text-sm text-gray-500">
                         Ordered: {item.quantity} {product.unit}
+                        {showMould && (
+                          <span className={`ml-2 ${
+                            isBonBonCategory(product.category) ? 'text-pink-600' : 'text-blue-600'
+                          }`}>
+                            {mouldInfo}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </td>
@@ -346,7 +307,7 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
             onClick={handleSubmit}
             className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
           >
-            {order.status === 'completed' ? 'Update Quantities' : 'Mark as Completed'}
+            {isEditing ? 'Update Quantities' : 'Mark as Completed'}
           </button>
         </div>
       </div>

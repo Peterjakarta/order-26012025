@@ -227,8 +227,7 @@ export default function CompletedOrders() {
   const completedOrders = orders
     .filter(order => order.status === 'completed')
     .sort((a, b) => {
-      if (!a.completedAt || !b.completedAt) return 0;
-      return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
 
   const handleUpdateStatus = async (

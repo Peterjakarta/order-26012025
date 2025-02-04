@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { 
   collection, 
   setDoc,
@@ -19,22 +19,28 @@ import type { Order } from '../types/types';
 export function useOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); 
+
+  // Add subscription cleanup flag
+  const subscriptionRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    let unsubscribe: (() => void) | undefined;
+    let isMounted = true;
 
     try {
       // Create a more robust query with proper ordering
       const q = query(
         collection(db, COLLECTIONS.ORDERS),
-        orderBy('createdAt', 'desc')
+        orderBy('updatedAt', 'desc')
       );
 
-      unsubscribe = onSnapshot(q, 
+      // Set up new subscription
+      subscriptionRef.current = onSnapshot(q, 
         (snapshot) => {
+          if (!isMounted) return;
+
           const ordersData: Order[] = [];
           let parseErrors = 0;
 
@@ -84,14 +90,17 @@ export function useOrders() {
 
           // Sort orders by date for consistent display
           ordersData.sort((a, b) => 
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
           );
 
-          setOrders(ordersData);
-          setLoading(false);
-          setError(null);
+          if (isMounted) {
+            setOrders(ordersData);
+            setLoading(false);
+            setError(null);
+          }
         },
         (err) => {
+          if (!isMounted) return;
           console.error('Error fetching orders:', err);
           setError('Failed to load orders. Please refresh the page or check your connection.');
           setLoading(false);
@@ -104,11 +113,14 @@ export function useOrders() {
     }
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
+      isMounted = false;
+      if (subscriptionRef.current) {
+        subscriptionRef.current();
+        subscriptionRef.current = null;
       }
     };
-  }, []);
+
+  }, []); // Add empty dependency array
 
   const addOrder = useCallback(async (orderData: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>) => {
     try {

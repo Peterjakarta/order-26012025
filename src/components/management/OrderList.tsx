@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Package2, AlertCircle, Calendar, FileDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../../hooks/useOrders';
@@ -13,17 +13,32 @@ export default function OrderList() {
   const navigate = useNavigate();
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
 
+  // Reset selected orders when orders change
+  useEffect(() => {
+    setSelectedOrders(new Set());
+  }, [orders]);
+
   // Filter out completed orders and sort by order date
   const pendingOrders = orders
     .filter(order => order.status !== 'completed')
-    .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+    .sort((a, b) => {
+      // Sort by updatedAt timestamp for most recent changes
+      const timeA = new Date(b.updatedAt).getTime();
+      const timeB = new Date(a.updatedAt).getTime();
+      return timeA - timeB;
+    });
 
   const handleUpdateStatus = async (
     orderId: string, 
     status: Order['status'], 
     producedQuantities?: Record<string, number>
   ) => {
-    await updateOrderStatus(orderId, status, producedQuantities);
+    try {
+      await updateOrderStatus(orderId, status, producedQuantities);
+    } catch (err) {
+      console.error('Error updating order status:', err);
+      // Let the error be handled by the useOrders hook
+    }
   };
 
   const handleToggleSelect = (orderId: string) => {
