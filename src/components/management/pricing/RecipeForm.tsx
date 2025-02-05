@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Copy } from 'lucide-react';
 import type { Recipe, RecipeIngredient } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
 import { formatIDR } from '../../../utils/currencyFormatter';
@@ -16,9 +16,11 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(
     recipe?.ingredients || []
   );
+  const [pastedIngredients, setPastedIngredients] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(recipe?.category || '');
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [showPasteModal, setShowPasteModal] = useState(false);
 
   // Update products when category changes
   useEffect(() => {
@@ -38,6 +40,32 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
       setSelectedProduct(null);
     }
   }, [selectedCategory, getProductsByCategory, recipe]);
+
+  const handlePasteIngredients = () => {
+    try {
+      // Parse pasted ingredients
+      const lines = pastedIngredients.trim().split('\n');
+      const newIngredients: RecipeIngredient[] = [];
+
+      lines.forEach(line => {
+        const [ingredientId, amount] = line.split('|');
+        if (ingredientId && amount) {
+          newIngredients.push({
+            ingredientId,
+            amount: parseFloat(amount)
+          });
+        }
+      });
+
+      // Update ingredients
+      setRecipeIngredients(prev => [...prev, ...newIngredients]);
+      setPastedIngredients('');
+      setShowPasteModal(false);
+    } catch (err) {
+      console.error('Error parsing ingredients:', err);
+      alert('Invalid ingredient format. Please try again.');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -221,14 +249,24 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
           <label className="block text-sm font-medium text-gray-700">
             Ingredients <span className="text-red-500">*</span>
           </label>
-          <button
-            type="button"
-            onClick={addIngredient}
-            className="flex items-center gap-2 px-3 py-1 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700"
-          >
-            <Plus className="w-4 h-4" />
-            Add Ingredient
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPasteModal(true)}
+              className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+            >
+              <Copy className="w-4 h-4" />
+              Paste Ingredients
+            </button>
+            <button
+              type="button"
+              onClick={addIngredient}
+              className="flex items-center gap-2 px-3 py-1 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700"
+            >
+              <Plus className="w-4 h-4" />
+              Add Ingredient
+            </button>
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -355,6 +393,40 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
           {isEditing ? 'Update' : 'Add'} Recipe
         </button>
       </div>
+
+      {/* Paste Ingredients Modal */}
+      {showPasteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4">
+            <h3 className="text-lg font-medium">Paste Ingredients</h3>
+            <p className="text-sm text-gray-600">
+              Paste the copied ingredients here. Each line should be in the format: ingredientId|amount
+            </p>
+            <textarea
+              value={pastedIngredients}
+              onChange={(e) => setPastedIngredients(e.target.value)}
+              className="w-full h-40 p-2 border rounded-md font-mono text-sm"
+              placeholder="ingredientId|amount"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPasteModal(false)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePasteIngredients}
+                className="px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
+              >
+                Add Ingredients
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

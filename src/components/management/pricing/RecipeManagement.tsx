@@ -13,6 +13,7 @@ export default function RecipeManagement() {
   const [calculatingRecipe, setCalculatingRecipe] = useState<Recipe | null>(null);
   const [copyingRecipe, setCopyingRecipe] = useState<Recipe | null>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [expandedRecipes, setExpandedRecipes] = useState<Set<string>>(new Set());
 
   const handleSubmit = async (data: Omit<Recipe, 'id'>) => {
     try {
@@ -54,6 +55,18 @@ export default function RecipeManagement() {
     return acc;
   }, {} as Record<string, { name: string; recipes: Recipe[] }>);
 
+  const handleToggleRecipe = (recipeId: string) => {
+    setExpandedRecipes(prev => {
+      const next = new Set(prev);
+      if (next.has(recipeId)) {
+        next.delete(recipeId);
+      } else {
+        next.add(recipeId);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -90,9 +103,10 @@ export default function RecipeManagement() {
       <div className="space-y-2">
         {Object.entries(recipesByCategory).map(([categoryId, { name, recipes }]) => {
           const isExpanded = expandedCategory === categoryId;
+          const categoryKey = `category-${categoryId}`;
           
           return (
-            <div key={categoryId} className="bg-white shadow-sm rounded-lg overflow-hidden">
+            <div key={categoryKey} className="bg-white shadow-sm rounded-lg overflow-hidden">
               <button
                 onClick={() => setExpandedCategory(isExpanded ? null : categoryId)}
                 className="w-full px-4 py-3 bg-white flex items-center justify-between hover:bg-gray-50 transition-colors"
@@ -113,7 +127,7 @@ export default function RecipeManagement() {
               {isExpanded && (
                 <div className="border-t divide-y">
                   {recipes.map(recipe => (
-                    <div key={recipe.id} className="p-4">
+                    <div key={`recipe-${recipe.id}`} className="p-4">
                       <div className="flex justify-between items-center">
                         <div>
                           <h4 className="font-medium">{recipe.name}</h4>

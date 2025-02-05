@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, FileDown, FileSpreadsheet } from 'lucide-react';
+import { X, FileDown, FileSpreadsheet, Copy, Check } from 'lucide-react';
 import type { Recipe } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
 import { calculateRecipeCost } from '../../../utils/recipeCalculations';
@@ -15,6 +15,7 @@ export interface RecipeCalculatorProps {
 export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorProps) {
   const { ingredients } = useStore();
   const [quantity, setQuantity] = useState(recipe.yield);
+  const [copied, setCopied] = useState(false);
   
   const baseCost = calculateRecipeCost(recipe, ingredients);
   const scaledCost = (baseCost / recipe.yield) * quantity;
@@ -98,6 +99,26 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
     doc.save(`recipe-${recipe.name.toLowerCase().replace(/\s+/g, '-')}.pdf`);
   };
 
+  const handleCopyIngredients = () => {
+    try {
+      // Format ingredients for copying
+      const ingredientText = recipe.ingredients.map(item => {
+        const ingredient = ingredients.find(i => i.id === item.ingredientId);
+        if (!ingredient) return null;
+        return `${ingredient.id}|${item.amount}`;
+      }).filter(Boolean).join('\n');
+
+      // Copy to clipboard
+      navigator.clipboard.writeText(ingredientText);
+      
+      // Show success state
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Error copying ingredients:', err);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-4xl w-full flex flex-col max-h-[90vh]">
@@ -143,35 +164,47 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {ingredientUsage.map(usage => usage && (
-                    <tr key={usage.ingredient.id}>
-                      <td className="py-2">
+                  {ingredientUsage.map((usage, index) => usage && (
+                    <tr key={`${recipe.id}-ingredient-${usage.ingredient.id}-${index}`}>
+                      <td className="py-3 px-4">
                         <span className="font-medium">{usage.ingredient.name}</span>
                       </td>
-                      <td className="py-2 text-right">
+                      <td className="text-right py-3 px-4 whitespace-nowrap">
                         {Math.ceil(usage.amount)}
                       </td>
-                      <td className="py-2 text-left pl-4">
+                      <td className="text-left py-3 px-4 whitespace-nowrap">
                         {usage.ingredient.unit}
                       </td>
-                      <td className="py-2 text-right">
+                      <td className="text-right py-3 px-4 whitespace-nowrap">
                         {formatIDR(usage.unitPrice)}/{usage.ingredient.unit}
                       </td>
-                      <td className="py-2 text-right">
+                      <td className="text-right py-3 px-4 font-medium">
                         {formatIDR(usage.cost)}
                       </td>
                     </tr>
                   ))}
                   {commonUnit && (
-                    <tr className="font-medium bg-gray-50">
-                      <td colSpan={2} className="py-2 text-right">
-                        Total Weight:
+                    <tr key={`${recipe.id}-unit-total-${commonUnit}`} className="bg-gray-50 font-medium">
+                      <td className="py-3 px-4 text-right">
+                        Total {commonUnit}:
                       </td>
-                      <td colSpan={3} className="py-2 text-left pl-4">
-                        {Math.ceil(totalWeight)} {commonUnit}
+                      <td className="py-3 px-4 text-right">
+                        {Math.ceil(totalWeight)}
                       </td>
+                      <td className="py-3 px-4">
+                        {commonUnit}
+                      </td>
+                      <td colSpan={2} />
                     </tr>
                   )}
+                  <tr key={`${recipe.id}-final-total-cost`} className="bg-gray-50 font-medium">
+                    <td colSpan={4} className="py-3 px-4 text-right">
+                      Total Cost:
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {formatIDR(totalCost)}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -202,6 +235,22 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
         </div>
 
         <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 flex-shrink-0">
+          <button
+            onClick={handleCopyIngredients}
+            className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+          >
+            {copied ? (
+              <>
+                <Check className="w-4 h-4 text-green-500" />
+                <span className="text-green-500">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                Copy Ingredients
+              </>
+            )}
+          </button>
           <button
             onClick={handleDownloadExcel}
             className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
