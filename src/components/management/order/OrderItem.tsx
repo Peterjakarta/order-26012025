@@ -61,11 +61,31 @@ export default function OrderItem({
               <div>
                 <div className="flex items-center gap-3">
                   <h3 className="font-medium text-lg">{branch?.name}</h3>
-                  <span className="text-sm text-gray-500">#{order.id.slice(0, 8)}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-500">
+                      {new Date(order.orderDate).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </span>
+                    {order.poNumber && (
+                      <>
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                          PO: {order.poNumber}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="text-sm text-gray-600 mt-1">
+                <div className="text-sm text-gray-600 mt-2">
                   Ordered by: {order.orderedBy}
                 </div>
+                {order.notes && (
+                  <div className="mt-2 text-sm text-gray-500 bg-gray-50 p-2 rounded-md">
+                    {order.notes}
+                  </div>
+                )}
               </div>
             </button>
           </div>
@@ -106,7 +126,7 @@ export default function OrderItem({
       </div>
       
       {showProducts && (
-        <div className="border-t px-6 py-4 bg-gray-50">
+        <div className="border-t px-6 py-4 bg-gray-50/50">
           <OrderProducts order={order} />
         </div>
       )}
