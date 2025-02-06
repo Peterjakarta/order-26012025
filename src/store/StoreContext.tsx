@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db, COLLECTIONS, getBatch, commitBatchIfNeeded, getNetworkStatus } from '../lib/firebase';
 import { categories as initialCategories } from '../data/categories';
-import type { Product, ProductCategory, CategoryData, Ingredient, Recipe, StockLevel, StockHistory } from '../types/types';
+import type { Product, ProductCategory, CategoryData, Ingredient, Recipe, StockLevel, StockHistory, StockCategory } from '../types/types';
 import { auth } from '../lib/firebase';
 
 interface StoreState {
@@ -28,6 +28,7 @@ interface StoreState {
   ingredients: Ingredient[];
   recipes: Recipe[];
   stockLevels: Record<string, StockLevel>;
+  stockCategories: StockCategory[];
   stockHistory: StockHistory[];
 }
 
@@ -43,6 +44,7 @@ interface StoreContextType extends StoreState {
   addIngredient: (ingredient: Omit<Ingredient, 'id'>) => Promise<void>;
   updateIngredient: (id: string, ingredient: Omit<Ingredient, 'id'>) => Promise<void>;
   deleteIngredient: (id: string) => Promise<void>;
+  updateIngredientCategories: (ingredientId: string, categoryIds: string[]) => Promise<void>;
   updateStockLevel: (ingredientId: string, data: { 
     quantity: number;
     minStock?: number;
@@ -54,6 +56,9 @@ interface StoreContextType extends StoreState {
   updateRecipe: (id: string, recipe: Omit<Recipe, 'id'>) => Promise<void>;
   deleteRecipe: (id: string) => Promise<void>;
   getProductsByCategory: (category: string) => Product[];
+  addStockCategory: (data: { name: string; description?: string }) => Promise<void>;
+  updateStockCategory: (id: string, data: { name: string; description?: string }) => Promise<void>;
+  deleteStockCategory: (id: string) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -82,6 +87,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     ingredients: [],
     recipes: [],
     stockLevels: {} as Record<string, StockLevel>,
+    stockCategories: [],
     stockHistory: [],
     stockReductionHistory: {} as Record<string, boolean>
   }));
@@ -105,6 +111,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     return () => unsubscribe();
   }, []);
+
   // Subscribe to stock history from Firebase
   useEffect(() => {
     const q = query(
@@ -144,6 +151,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         };
       });
       setState(prev => ({ ...prev, stockLevels: stockData }));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Subscribe to stock categories from Firebase
+  useEffect(() => {
+    const q = query(collection(db, COLLECTIONS.STOCK_CATEGORIES), orderBy('name'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const categoriesData: StockCategory[] = [];
+      snapshot.forEach((doc) => {
+        categoriesData.push({
+          id: doc.id,
+          ...doc.data(),
+          created_at: doc.data().created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+          updated_at: doc.data().updated_at?.toDate?.()?.toISOString() || new Date().toISOString()
+        } as StockCategory);
+      });
+      setState(prev => ({ ...prev, stockCategories: categoriesData }));
     });
 
     return () => unsubscribe();
@@ -531,6 +558,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const updateIngredientCategories = useCallback(async (ingredientId: string, categoryIds: string[]) => {
+    try {
+      // Get reference to the ingredient-category relationships
+      const batch = writeBatch(db);
+      
+      // Delete existing relationships
+      const q = query(
+        collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS),
+        where('ingredient_id', '==', ingredientId)
+      );
+      const snapshot = await getDocs(q);
+      snapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      // Add new relationships
+      for (const categoryId of categoryIds) {
+        const docRef = doc(collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS));
+        batch.set(docRef, {
+          category_id: categoryId,
+          ingredient_id: ingredientId,
+          created_at: serverTimestamp()
+        });
+      }
+      
+      await batch.commit();
+    } catch (error) {
+      console.error('Error updating ingredient categories:', error);
+      throw error;
+    }
+  }, []);
+
   const addRecipe = useCallback(async (recipeData: Omit<Recipe, 'id'>) => {
     try {
       await addDoc(collection(db, COLLECTIONS.RECIPES), {
@@ -566,6 +625,44 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const addStockCategory = useCallback(async (data: { name: string; description?: string }) => {
+    try {
+      await addDoc(collection(db, COLLECTIONS.STOCK_CATEGORIES), {
+        ...data,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error adding stock category:', error);
+      throw error;
+    }
+  }, []);
+
+  const updateStockCategory = useCallback(async (
+    id: string,
+    data: { name: string; description?: string }
+  ) => {
+    try {
+      const categoryRef = doc(db, COLLECTIONS.STOCK_CATEGORIES, id);
+      await updateDoc(categoryRef, {
+        ...data,
+        updated_at: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating stock category:', error);
+      throw error;
+    }
+  }, []);
+
+  const deleteStockCategory = useCallback(async (id: string) => {
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.STOCK_CATEGORIES, id));
+    } catch (error) {
+      console.error('Error deleting stock category:', error);
+      throw error;
+    }
+  }, []);
+
   const getProductsByCategory = useCallback((category: string) => {
     return state.products.filter(p => p.category === category);
   }, [state.products]);
@@ -583,12 +680,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addIngredient,
     updateIngredient,
     deleteIngredient,
+    updateIngredientCategories,
     addRecipe,
     updateRecipe,
     deleteRecipe,
     updateStockLevel,
     getStockHistory,
-    getProductsByCategory
+    getProductsByCategory,
+    addStockCategory,
+    updateStockCategory,
+    deleteStockCategory
   };
 
   return (

@@ -17,6 +17,37 @@ import { getAuth } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
 import type { LogEntry } from '../types/types';
 
+// Network status management
+let isOnline = true;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY = 2000; // 2 seconds
+
+// Network status management functions
+export function getNetworkStatus() {
+  return isOnline;
+}
+
+// Reconnection handler
+async function attemptReconnect() {
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    console.warn('Max reconnection attempts reached');
+    return;
+  }
+
+  try {
+    await enableNetwork(db);
+    isOnline = true;
+    reconnectAttempts = 0;
+    console.log('Successfully reconnected to Firestore');
+    window.dispatchEvent(new Event('firestore-reconnected'));
+  } catch (err) {
+    reconnectAttempts++;
+    console.warn(`Reconnection attempt ${reconnectAttempts} failed, retrying in ${RECONNECT_DELAY}ms`);
+    setTimeout(attemptReconnect, RECONNECT_DELAY);
+  }
+}
+
 const firebaseConfig = {
   apiKey: "AIzaSyAFc0V_u1m2AbrW7tkR525Wj-tUwlUEOBw",
   authDomain: "cokelateh-a7b9d.firebaseapp.com",
@@ -29,47 +60,45 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with persistence
-const db = initializeFirestore(app, {
-  cacheSizeBytes: 50 * 1024 * 1024, // Reduced to 50MB for better performance
-  experimentalForceLongPolling: true, // Force long polling for more reliable connections
+// Initialize Firestore with settings
+const firestoreSettings = {
+  cacheSizeBytes: 50 * 1024 * 1024, // 50MB cache
+  experimentalForceLongPolling: true,
   ignoreUndefinedProperties: true
-});
-
-// Configure persistence settings
-const PERSISTENCE_SETTINGS = {
-  synchronizeTabs: true,
-  experimentalTabSynchronization: true
 };
 
-// Enable offline persistence
-enableIndexedDbPersistence(db, PERSISTENCE_SETTINGS).catch((err) => {
-  console.error('Error enabling persistence:', err);
-  if (err.code === 'failed-precondition') {
-    // Multiple tabs open, persistence can only be enabled in one tab at a time
-    console.warn('Persistence unavailable - multiple tabs may be open');
-  } else if (err.code === 'unimplemented') {
-    // The current browser doesn't support persistence
-    console.warn('Persistence not supported in this browser');
+const db = initializeFirestore(app, firestoreSettings);
+
+// Initialize Auth
+const auth = getAuth(app);
+
+// Initialize persistence
+const initializePersistence = async () => {
+  try {
+    await enableIndexedDbPersistence(db);
+    console.log('Persistence enabled successfully');
+  } catch (err) {
+    if (err.code === 'failed-precondition') {
+      console.warn('Multiple tabs detected - persistence enabled in first tab only');
+    } else if (err.code === 'unimplemented') {
+      console.warn('Persistence not supported in this browser');
+    } else {
+      console.error('Error enabling persistence:', err);
+    }
   }
-});
-
-// Network status management
-let isOnline = true;
-
-// Export network status checker
-export const getNetworkStatus = () => isOnline;
+};
 
 window.addEventListener('online', () => {
   console.log('Reconnecting to Firestore...');
   isOnline = true;
-  enableNetwork(db);
+  reconnectAttempts = 0;
+  attemptReconnect();
 });
 
 window.addEventListener('offline', () => {
   console.log('Disconnecting from Firestore due to offline...');
   isOnline = false;
-  disableNetwork(db);
+  disableNetwork(db).catch(console.error);
 });
 
 // Batch operations helper (single implementation)
@@ -114,8 +143,6 @@ export async function commitBatchIfNeeded() {
     await batch.commit();
   }
 }
-// Initialize Auth
-const auth = getAuth(app);
 
 // Define collection names
 export const COLLECTIONS = {
@@ -129,6 +156,8 @@ export const COLLECTIONS = {
   RECIPES: 'recipes',
   STOCK: 'stock',
   STOCK_HISTORY: 'stock_history',
+  STOCK_CATEGORIES: 'stock_categories',
+  STOCK_CATEGORY_ITEMS: 'stock_category_items',
   LOGS: 'logs'
 };
 
@@ -174,7 +203,7 @@ async function createDefaultAdmin() {
   }
 }
 
-// Create default admin user
-createDefaultAdmin();
+// Initialize persistence and create admin user
+initializePersistence().then(createDefaultAdmin);
 
 export { db, auth };

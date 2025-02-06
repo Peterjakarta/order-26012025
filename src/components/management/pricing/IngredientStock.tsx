@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Package2, Plus, Edit2, AlertCircle, Save, X, History, FileSpreadsheet } from 'lucide-react';
+import { Package2, Plus, Edit2, AlertCircle, Save, X, History, FileSpreadsheet, ChevronDown, ChevronRight, ClipboardList } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
 import { useDebounce } from '../../../hooks/useDebounce';
 import { getNetworkStatus } from '../../../lib/firebase';
 import { formatIDR } from '../../../utils/currencyFormatter';
 import { generateExcelData, saveWorkbook } from '../../../utils/excelGenerator';
+import { generateStockChecklistPDF } from '../../../utils/pdfGenerator';
 import StockHistory from './StockHistory';
+import StockCategories from './StockCategories';
+import { collection, getDocs, query } from 'firebase/firestore';
+import { db } from '../../../lib/firebase';
+import { COLLECTIONS } from '../../../lib/firebase';
 
 interface StockEntry {
   ingredientId: string;
@@ -14,17 +19,48 @@ interface StockEntry {
 }
 
 export default function IngredientStock() {
-  const { ingredients, stockLevels, updateStockLevel } = useStore();
+  const { ingredients, stockLevels, updateStockLevel, stockCategories, updateIngredientCategories } = useStore();
   const [error, setError] = useState<string | null>(null);
   const [editingMinStock, setEditingMinStock] = useState<string | null>(null);
   const [minStockInput, setMinStockInput] = useState<string>('');
   const [showHistory, setShowHistory] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
   const [localStockLevels, setLocalStockLevels] = useState<Record<string, number>>({});
+  const [categoryIngredients, setCategoryIngredients] = useState<Record<string, string[]>>({});
   const [editingStock, setEditingStock] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState<Set<string>>(new Set());
   const [pendingUpdates, setPendingUpdates] = useState<Record<string, number>>({});
   const [lastSaveTime, setLastSaveTime] = useState<Record<string, number>>({});
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+
+  // Load category-ingredient relationships
+  useEffect(() => {
+    const loadCategoryIngredients = async () => {
+      try {
+        const q = query(collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS));
+        const snapshot = await getDocs(q);
+        
+        const categoryMap: Record<string, string[]> = {};
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const categoryId = data.category_id;
+          const ingredientId = data.ingredient_id;
+          
+          if (!categoryMap[categoryId]) {
+            categoryMap[categoryId] = [];
+          }
+          categoryMap[categoryId].push(ingredientId);
+        });
+        
+        setCategoryIngredients(categoryMap);
+      } catch (err) {
+        console.error('Error loading category ingredients:', err);
+        setError('Failed to load category ingredients');
+      }
+    };
+
+    loadCategoryIngredients();
+  }, []);
 
   // Initialize local stock levels from Firestore data
   useEffect(() => {
@@ -96,18 +132,76 @@ export default function IngredientStock() {
 
   const handleDownloadExcel = () => {
     try {
-      // Prepare data for Excel
+      // Prepare header rows
       const data = [
         ['Ingredient Stock Levels'],
         ['Generated:', new Date().toLocaleString()],
-        [''],
-        ['Ingredient', 'Current Stock', 'Unit', 'Min Stock', 'Package Size', 'Package Unit', 'Unit Cost'],
-        ...ingredients.map(ingredient => {
+        ['']
+      ];
+
+      // Process each category
+      stockCategories.forEach(category => {
+        // Get ingredients for this category from the categoryIngredients state
+        const categoryIngredientsList = ingredients.filter(ingredient => 
+          (categoryIngredients[category.id] || []).includes(ingredient.id)
+        );
+
+        if (categoryIngredientsList.length > 0) {
+          // Add category header
+          data.push(
+            [''],
+            [category.name],
+            ['Ingredient', 'Current Stock', 'Unit', 'Min Stock', 'Package Size', 'Package Unit', 'Unit Cost']
+          );
+
+          // Add ingredients
+          categoryIngredientsList.forEach(ingredient => {
+            const stockData = stockLevels[ingredient.id] || {};
+            const currentStock = stockData.quantity || 0;
+            const minStock = stockData.minStock;
+            
+            data.push([
+              ingredient.name,
+              currentStock,
+              ingredient.unit,
+              minStock || '-',
+              ingredient.packageSize,
+              ingredient.packageUnit,
+              formatIDR(ingredient.price)
+            ]);
+          });
+
+          // Add category summary
+          const totalStock = categoryIngredientsList.reduce((sum, ingredient) => {
+            const stockData = stockLevels[ingredient.id] || {};
+            return sum + (stockData.quantity || 0);
+          }, 0);
+
+          data.push(
+            [''],
+            [`Total ${category.name} Stock:`, totalStock]
+          );
+        }
+      });
+
+      // Add uncategorized ingredients if any exist
+      const uncategorizedIngredients = ingredients.filter(ingredient => 
+        !Object.values(categoryIngredients).some(cats => cats.includes(ingredient.id))
+      );
+
+      if (uncategorizedIngredients.length > 0) {
+        data.push(
+          [''],
+          ['Uncategorized Ingredients'],
+          ['Ingredient', 'Current Stock', 'Unit', 'Min Stock', 'Package Size', 'Package Unit', 'Unit Cost']
+        );
+
+        uncategorizedIngredients.forEach(ingredient => {
           const stockData = stockLevels[ingredient.id] || {};
           const currentStock = stockData.quantity || 0;
           const minStock = stockData.minStock;
           
-          return [
+          data.push([
             ingredient.name,
             currentStock,
             ingredient.unit,
@@ -115,15 +209,75 @@ export default function IngredientStock() {
             ingredient.packageSize,
             ingredient.packageUnit,
             formatIDR(ingredient.price)
-          ];
-        })
-      ];
-
+          ]);
+        });
+      }
+      
+      // Generate and save Excel file
       const wb = generateExcelData(data, 'Stock Levels');
       saveWorkbook(wb, 'ingredient-stock.xlsx');
+      setError(null); // Clear any existing errors
+
     } catch (err) {
       console.error('Error generating Excel:', err);
       setError('Failed to generate Excel file. Please try again.');
+    }
+  };
+
+  const handleDownloadChecklist = () => {
+    try {
+      // Generate checklist data by category
+      const checklistData = stockCategories.map(category => {
+        // Get ingredients for this category
+        const categoryIngredientsList = ingredients.filter(ingredient => 
+          (categoryIngredients[category.id] || []).includes(ingredient.id)
+        );
+
+        return {
+          categoryName: category.name,
+          ingredients: categoryIngredientsList.map(ingredient => {
+            const stockData = stockLevels[ingredient.id] || {};
+            return {
+              name: ingredient.name,
+              currentStock: stockData.quantity || 0,
+              unit: ingredient.unit,
+              minStock: stockData.minStock,
+              packageSize: ingredient.packageSize,
+              packageUnit: ingredient.packageUnit
+            };
+          })
+        };
+      });
+
+      // Add uncategorized ingredients if any exist
+      const uncategorizedIngredients = ingredients.filter(ingredient => 
+        !Object.values(categoryIngredients).some(cats => cats.includes(ingredient.id))
+      );
+
+      if (uncategorizedIngredients.length > 0) {
+        checklistData.push({
+          categoryName: 'Uncategorized',
+          ingredients: uncategorizedIngredients.map(ingredient => {
+            const stockData = stockLevels[ingredient.id] || {};
+            return {
+              name: ingredient.name,
+              currentStock: stockData.quantity || 0,
+              unit: ingredient.unit,
+              minStock: stockData.minStock,
+              packageSize: ingredient.packageSize,
+              packageUnit: ingredient.packageUnit
+            };
+          })
+        });
+      }
+
+      // Generate and save PDF
+      const doc = generateStockChecklistPDF(checklistData);
+      doc.save('stock-checklist.pdf');
+      setError(null);
+    } catch (err) {
+      console.error('Error generating checklist PDF:', err);
+      setError('Failed to generate checklist PDF. Please try again.');
     }
   };
 
@@ -289,11 +443,20 @@ export default function IngredientStock() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
+        <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
           <Package2 className="w-6 h-6" />
           <h2 className="text-xl font-semibold">Ingredient Stock</h2>
         </div>
+        </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleDownloadChecklist}
+            className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+          >
+            <ClipboardList className="w-4 h-4" />
+            Download Checklist
+          </button>
           <button
             onClick={handleDownloadExcel}
             className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
@@ -318,140 +481,199 @@ export default function IngredientStock() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b">
-                <th className="text-left py-3 px-4">Ingredient</th>
-                <th className="text-left py-3 px-4">Current Stock</th>
-                <th className="text-left py-3 px-4">Min Stock</th>
-                <th className="text-left py-3 px-4">Package Size</th>
-                <th className="text-left py-3 px-4">Unit Cost</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {ingredients.map(ingredient => {
-                const stockData = stockLevels[ingredient.id] || {};
-                const currentStock = stockData.quantity || 0;
-                const minStock = stockData.minStock;
-                const warning = getLowStockWarning(ingredient, stockData.quantity || 0);
+      <div className="space-y-2">
+        {stockCategories.map(category => {
+          const categoryIngredientIds = categoryIngredients[category.id] || [];
+          const filteredIngredients = ingredients.filter(ingredient => 
+            categoryIngredientIds.includes(ingredient.id)
+          );
 
-                return (
-                  <tr key={ingredient.id} className={warning ? 'bg-yellow-50' : ''}>
-                    <td className="py-3 px-4">
-                      <div>
-                        <span className="font-medium">{ingredient.name}</span>
-                        {warning && (
-                          <div className="flex items-center gap-1 text-red-600 text-sm mt-1">
-                            <AlertCircle className="w-4 h-4" />
-                            {warning}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={(localStockLevels[ingredient.id] ?? currentStock) || ''}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value);
-                            if (!isNaN(value) && value >= 0) {
-                              handleUpdateStock(ingredient.id, value);
-                            }
-                          }}
-                          min="0"
-                          step="1"
-                          className={`w-32 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
-                            warning ? 'border-red-300 bg-red-50' : ''
-                          }`}
-                          title="Enter stock quantity"
-                          maxLength={10}
-                          style={{ appearance: 'textfield' }}
-                        />
-                        <span className="text-gray-500">{ingredient.unit}</span>
-                        {editingStock.has(ingredient.id) && (
-                          <button
-                            onClick={() => handleSaveStock(ingredient.id)}
-                            disabled={saving.has(ingredient.id)}
-                            className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300 flex items-center gap-1"
-                          >
-                            <Save className="w-4 h-4" />
-                            {saving.has(ingredient.id) ? 'Saving...' : 'Save'}
-                          </button>
-                        )}
-                        {saving.has(ingredient.id) && !editingStock.has(ingredient.id) && (
-                          <span className="text-yellow-600 text-sm">Saving...</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      {editingMinStock === ingredient.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            value={minStockInput}
-                            onChange={(e) => setMinStockInput(e.target.value)}
-                            min="0"
-                            className="w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500" title="Enter minimum stock level"
-                            placeholder="Enter min"
-                          />
-                          <button
-                            onClick={() => handleMinStockSubmit(ingredient.id)}
-                            className="p-1 text-green-600 hover:bg-green-50 rounded"
-                          >
-                            <Save className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingMinStock(null);
-                              setMinStockInput('');
-                            }}
-                            className="p-1 text-gray-400 hover:bg-gray-50 rounded"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span>
-                            {minStock !== undefined ? `${minStock} ${ingredient.unit}` : '-'}
-                          </span>
-                          <button
-                            onClick={() => {
-                              setEditingMinStock(ingredient.id);
-                              setMinStockInput(minStock?.toString() || '');
-                            }}
-                            className="p-1 text-gray-400 hover:bg-gray-50 rounded"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedIngredient(ingredient.id);
-                              setShowHistory(true);
-                            }}
-                            className="p-1 text-gray-400 hover:bg-gray-50 rounded"
-                            title="View history"
-                          >
-                            <History className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      {ingredient.packageSize} {ingredient.packageUnit}
-                    </td>
-                    <td className="py-3 px-4">
-                      {formatIDR(ingredient.price)} / {ingredient.packageUnit}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+          const isExpanded = expandedCategory === category.id;
+
+          return (
+            <div key={category.id} className="bg-white rounded-lg shadow-sm border">
+              <button
+                onClick={() => setExpandedCategory(expandedCategory === category.id ? null : category.id)}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  {isExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                  ) : (
+                    <ChevronRight className="w-5 h-5 text-gray-500" />
+                  )}
+                  <div className="text-left">
+                    <h3 className="font-medium text-gray-900">{category.name}</h3>
+                    <p className="text-sm text-gray-500 text-left">
+                      {filteredIngredients.length} ingredients
+                    </p>
+                  </div>
+                </div>
+                {category.description && (
+                  <p className="text-sm text-gray-500">{category.description}</p>
+                )}
+              </button>
+
+              {isExpanded && (
+                <div className="border-t">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[800px] divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Ingredient
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Current Stock
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Min Stock
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Package Size
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Unit Cost
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredIngredients.map(ingredient => {
+                          const stockData = stockLevels[ingredient.id] || {};
+                          const currentStock = stockData.quantity || 0;
+                          const minStock = stockData.minStock;
+                          const warning = getLowStockWarning(ingredient, stockData.quantity || 0);
+
+                      return (
+                        <tr
+                          key={ingredient.id}
+                          className={`${warning ? 'bg-yellow-50' : ''} hover:bg-gray-50`}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {ingredient.name}
+                                </div>
+                                {warning && (
+                                  <div className="flex items-center gap-1 text-red-600 text-xs mt-1">
+                                    <AlertCircle className="w-3 h-3" />
+                                    {warning}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                value={(localStockLevels[ingredient.id] ?? currentStock) || ''}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value);
+                                  if (!isNaN(value) && value >= 0) {
+                                    handleUpdateStock(ingredient.id, value);
+                                  }
+                                }}
+                                min="0"
+                                step="1"
+                                className={`w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
+                                  warning ? 'border-red-300 bg-red-50' : ''
+                                }`}
+                                title="Enter stock quantity"
+                                maxLength={10}
+                                style={{ appearance: 'textfield' }}
+                              />
+                              <span className="text-sm text-gray-500">{ingredient.unit}</span>
+                              {editingStock.has(ingredient.id) && (
+                                <button
+                                  onClick={() => handleSaveStock(ingredient.id)}
+                                  disabled={saving.has(ingredient.id)}
+                                  className="px-2 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300 flex items-center gap-1"
+                                >
+                                  <Save className="w-3 h-3" />
+                                  {saving.has(ingredient.id) ? 'Saving...' : 'Save'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {editingMinStock === ingredient.id ? (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  value={minStockInput}
+                                  onChange={(e) => setMinStockInput(e.target.value)}
+                                  min="0"
+                                  className="w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                                  placeholder="Enter min"
+                                />
+                                <button
+                                  onClick={() => handleMinStockSubmit(ingredient.id)}
+                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                >
+                                  <Save className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingMinStock(null);
+                                    setMinStockInput('');
+                                  }}
+                                  className="p-1 text-gray-400 hover:bg-gray-50 rounded"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-900">
+                                {minStock !== undefined ? `${minStock} ${ingredient.unit}` : '-'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {ingredient.packageSize} {ingredient.packageUnit}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatIDR(ingredient.price)} / {ingredient.packageUnit}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setSelectedIngredient(ingredient.id);
+                                  setShowHistory(true);
+                                }}
+                                className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                                title="View history"
+                              >
+                                <History className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingMinStock(ingredient.id);
+                                  setMinStockInput(minStock?.toString() || '');
+                                }}
+                                className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                                title="Set minimum stock"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
       
       {/* Stock History Modal */}
@@ -470,6 +692,10 @@ export default function IngredientStock() {
           </div>
         </div>
       )}
+
+      <div className="mt-8 pt-8 border-t">
+        <StockCategories />
+      </div>
     </div>
   );
 }

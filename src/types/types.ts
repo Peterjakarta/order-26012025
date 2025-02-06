@@ -38,3 +38,17 @@ export interface LogEntry {
   details?: string;
   category: 'auth' | 'feature' | 'system';
 }
+
+export interface StockCategory {
+  id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StockCategoryItem {
+  category_id: string;
+  ingredient_id: string;
+  created_at: string;
+}

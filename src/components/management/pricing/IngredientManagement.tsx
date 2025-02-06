@@ -1,19 +1,82 @@
-import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Upload, Copy, Check, Package2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, Upload, Copy, Check, Package2, FolderEdit } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
-import type { Ingredient } from '../../../types/types';
+import type { Ingredient, StockCategory } from '../../../types/types';
 import IngredientForm from './IngredientForm';
 import BulkIngredientImport from './BulkIngredientImport';
 import ProductToIngredient from './ProductToIngredient';
 import { formatIDR } from '../../../utils/currencyFormatter';
+import { collection, getDocs, query } from 'firebase/firestore';
+import { COLLECTIONS } from '../../../lib/firebase';
 
 export default function IngredientManagement() {
-  const { ingredients, addIngredient, updateIngredient, deleteIngredient } = useStore();
+  const { ingredients, stockCategories, addIngredient, updateIngredient, deleteIngredient, updateIngredientCategories } = useStore();
   const [isAddingIngredient, setIsAddingIngredient] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showProductImport, setShowProductImport] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<Record<string, string[]>>({});
+  const [savingCategories, setSavingCategories] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+
+  const handleCategoryChange = async (ingredientId: string, categoryIds: string[]) => {
+    try {
+      setSavingCategories(prev => new Set(prev).add(ingredientId));
+      setError(null);
+
+      // Update local state immediately
+      setSelectedCategories(prev => ({
+        ...prev,
+        [ingredientId]: categoryIds
+      }));
+
+      // Save to database
+      await updateIngredientCategories(ingredientId, categoryIds);
+      
+      // Close dropdown after successful save
+      setEditingCategoryId(null);
+    } catch (err) {
+      setError('Failed to update categories. Please try again.');
+      console.error('Error updating categories:', err);
+    } finally {
+      setSavingCategories(prev => {
+        const next = new Set(prev);
+        next.delete(ingredientId);
+        return next;
+      });
+    }
+  };
+
+  // Load initial category selections
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const q = query(collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS));
+        const snapshot = await getDocs(q);
+        
+        const categoryMap: Record<string, string[]> = {};
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const ingredientId = data.ingredient_id;
+          const categoryId = data.category_id;
+          
+          if (!categoryMap[ingredientId]) {
+            categoryMap[ingredientId] = [];
+          }
+          categoryMap[ingredientId].push(categoryId);
+        });
+        
+        setSelectedCategories(categoryMap);
+      } catch (err) {
+        console.error('Error loading ingredient categories:', err);
+        setError('Failed to load ingredient categories');
+      }
+    };
+
+    loadCategories();
+  }, []);
 
   const handleSubmit = async (data: Omit<Ingredient, 'id'>) => {
     try {
@@ -111,10 +174,16 @@ export default function IngredientManagement() {
         />
       )}
 
+      {error && (
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-4">
+          {error}
+        </div>
+      )}
+
       <div className="bg-white shadow-sm rounded-lg divide-y">
         {ingredients.map(ingredient => (
           <div key={ingredient.id}>
-            {editingIngredient?.id === ingredient.id ? (
+            {editingIngredient?.id === ingredient.id ? ( 
               <div className="p-4">
                 <IngredientForm
                   ingredient={ingredient}
@@ -123,15 +192,68 @@ export default function IngredientManagement() {
                 />
               </div>
             ) : (
-              <div className="p-4 flex justify-between items-center">
+              <div className="p-4 flex justify-between items-center hover:bg-gray-50">
                 <div>
                   <h3 className="font-medium">{ingredient.name}</h3>
-                  <p className="text-sm text-gray-600">
-                    {formatIDR(ingredient.price)} per {ingredient.packageSize} {ingredient.packageUnit}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Used in: {ingredient.unit}
-                  </p>
+                  <div className="mt-1 space-y-1">
+                    <p className="text-sm text-gray-600">
+                      {formatIDR(ingredient.price)} per {ingredient.packageSize} {ingredient.packageUnit}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Used in: {ingredient.unit}
+                    </p>
+                    <div className="relative inline-block">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600">Categories:</label>
+                        {editingCategoryId === ingredient.id ? (
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="text-sm border rounded-md px-2 py-1 pr-8 bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                              value={selectedCategories[ingredient.id] || []}
+                              onChange={(e) => {
+                                const selected = Array.from(e.target.selectedOptions).map(option => option.value);
+                                handleCategoryChange(ingredient.id, selected);
+                              }}
+                              multiple
+                              size={4}
+                              onClick={(e) => e.stopPropagation()}
+                              disabled={savingCategories.has(ingredient.id)}
+                            >
+                              {stockCategories.map(category => (
+                                <option 
+                                  key={category.id} 
+                                  value={category.id}
+                                  className="py-1 px-2 hover:bg-gray-100"
+                                >
+                                  {category.name}
+                                </option>
+                              ))}
+                            </select>
+                            {savingCategories.has(ingredient.id) && (
+                              <span className="text-xs text-gray-500">Saving...</span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-600">
+                              {selectedCategories[ingredient.id]?.length
+                                ? stockCategories
+                                    .filter(c => selectedCategories[ingredient.id]?.includes(c.id))
+                                    .map(c => c.name)
+                                    .join(', ')
+                                : 'None'}
+                            </span>
+                            <button
+                              onClick={() => setEditingCategoryId(ingredient.id)}
+                              className="p-1 hover:bg-gray-100 rounded-full"
+                            >
+                              <FolderEdit className="w-4 h-4 text-gray-400" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <button

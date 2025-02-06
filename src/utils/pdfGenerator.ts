@@ -7,6 +7,129 @@ import { calculateExpiryDate } from './dateUtils';
 import { isBonBonCategory, isPralinesCategory } from './quantityUtils';
 import { formatIDR } from './currencyFormatter';
 
+interface StockChecklistCategory {
+  categoryName: string;
+  ingredients: {
+    name: string;
+    currentStock: number;
+    unit: string;
+    minStock?: number;
+    packageSize: number;
+    packageUnit: string;
+  }[];
+}
+
+export function generateStockChecklistPDF(categories: StockChecklistCategory[]) {
+  // Create PDF document in portrait mode
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  // Set initial position
+  let yPos = 15;
+  const pageWidth = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
+  const margin = 10;
+  const columnWidth = (pageWidth - (margin * 2)) / 2;
+
+  // Add title and date
+  doc.setFontSize(16);
+  doc.text('Stock Count Checklist', margin, yPos);
+  doc.setFontSize(10);
+  doc.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth - margin - 40, yPos);
+  yPos += 10;
+
+  // Process each category
+  categories.forEach((category, index) => {
+    // Check if we need a new page
+    if (yPos > pageHeight - 20) {
+      doc.addPage();
+      yPos = 15;
+    }
+
+    // Add category header
+    doc.setFillColor(236, 72, 153); // Pink color
+    doc.setTextColor(255, 255, 255);
+    doc.rect(margin, yPos, pageWidth - (margin * 2), 7, 'F');
+    doc.text(category.categoryName, margin + 2, yPos + 5);
+    yPos += 10;
+
+    // Add table headers
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(9);
+    doc.text('Ingredient', margin, yPos);
+    doc.text('Current Stock', margin + (columnWidth * 0.8), yPos);
+    doc.text('Count', margin + (columnWidth * 1.6), yPos);
+    yPos += 5;
+
+    // Add ingredients
+    category.ingredients.forEach(ingredient => {
+      // Check if we need a new page
+      if (yPos > pageHeight - 15) {
+        doc.addPage();
+        yPos = 15;
+        
+        // Repeat headers on new page
+        doc.setFillColor(236, 72, 153);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos, pageWidth - (margin * 2), 7, 'F');
+        doc.text(`${category.categoryName} (continued)`, margin + 2, yPos + 5);
+        yPos += 10;
+
+        doc.setTextColor(0, 0, 0);
+        doc.text('Ingredient', margin, yPos);
+        doc.text('Current Stock', margin + (columnWidth * 0.8), yPos);
+        doc.text('Count', margin + (columnWidth * 1.6), yPos);
+        yPos += 5;
+      }
+
+      // Add ingredient row
+      doc.text(ingredient.name, margin, yPos);
+      doc.text(
+        `${ingredient.currentStock} ${ingredient.unit}`, 
+        margin + (columnWidth * 0.8), 
+        yPos
+      );
+
+      // Add count box
+      doc.rect(
+        margin + (columnWidth * 1.6), 
+        yPos - 4, 
+        40, 
+        6
+      );
+
+      // Add min stock warning if applicable
+      if (ingredient.minStock !== undefined) {
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(
+          `Min: ${ingredient.minStock} ${ingredient.unit}`,
+          margin + (columnWidth * 0.8) + 40,
+          yPos
+        );
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+      }
+
+      yPos += 8;
+    });
+
+    // Add space between categories
+    yPos += 5;
+  });
+
+  // Add notes section at the bottom of the last page
+  const notesY = pageHeight - 40;
+  doc.setFontSize(10);
+  doc.text('Notes:', margin, notesY);
+  doc.rect(margin, notesY + 2, pageWidth - (margin * 2), 30);
+
+  return doc;
+}
+
 export function generateProductionChecklistPDF(order: Order, products: Product[]) {
   // Create PDF document
   const doc = new jsPDF({
