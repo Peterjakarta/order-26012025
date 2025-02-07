@@ -25,14 +25,17 @@ service cloud.firestore {
 
     // Users collection
     match /users/{userId} {
-      allow read: if isOwner(userId) || hasPermission('manage_users');
-      allow create: if isAuthenticated() && 
-                   request.auth.uid == userId;
-      allow update: if isAdmin() || 
-                   (isOwner(userId) && 
-                    !request.resource.data.diff(resource.data).affectedKeys()
-                      .hasAny(['role', 'permissions']));
-      allow delete: if isAdmin() && !isOwner(userId);
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow list: if isAuthenticated() && (hasPermission('manage_users') || isAdmin());
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        (request.auth.uid == userId && !request.resource.data.role == 'admin')
+      );
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions']))
+      );
+      allow delete: if isAuthenticated() && isAdmin() && !isOwner(userId);
     }
 
     // Categories collection

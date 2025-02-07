@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, AlertCircle, Edit2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 import UserPermissions, { AVAILABLE_PERMISSIONS } from './UserPermissions';
 import type { User } from '../../../types/types';
 
 interface UserFormProps {
   initialData?: {
-    username: string;
+    email: string;
     role: 'admin' | 'staff';
     permissions: string[];
   };
   onSubmit: (data: {
-    username: string;
+    email: string;
     password?: string;
     role: 'admin' | 'staff';
     permissions: string[];
@@ -20,7 +20,7 @@ interface UserFormProps {
 }
 
 function UserForm({ initialData, onSubmit, onCancel }: UserFormProps) {
-  const [username, setUsername] = useState(initialData?.username || '');
+  const [email, setEmail] = useState(initialData?.email || '');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'staff'>(initialData?.role || 'staff');
   const [permissions, setPermissions] = useState<string[]>(initialData?.permissions || []);
@@ -31,13 +31,23 @@ function UserForm({ initialData, onSubmit, onCancel }: UserFormProps) {
     setError(null);
 
     try {
+      // Validate email
+      if (!email.includes('@')) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      // Validate password for new users
+      if (!initialData && password.length < 8) {
+        throw new Error('Password must be at least 8 characters');
+      }
+
       // Validate permissions
       if (permissions.length === 0) {
         throw new Error('Please select at least one permission');
       }
 
       await onSubmit({
-        username,
+        email,
         password: password || undefined, // Only include password if set
         role,
         permissions
@@ -70,16 +80,16 @@ function UserForm({ initialData, onSubmit, onCancel }: UserFormProps) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-            Username
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            Email
           </label>
           <input
-            type="text"
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            type="email"
+            id="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             required
-            disabled={!!initialData} // Disable username field when editing
+            disabled={!!initialData} // Disable email field when editing
             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:bg-gray-100"
           />
         </div>
@@ -148,13 +158,13 @@ export default function UserManagement() {
   const { user: currentUser, getUsers, addUser, updateUser, removeUser } = useAuth();
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [editingUser, setEditingUser] = useState<{
-    username: string;
+    email: string;
     role: 'admin' | 'staff';
     permissions: string[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<Array<{
-    username: string;
+    email: string;
     role: 'admin' | 'staff';
     permissions: string[];
   }>>([]);
@@ -178,7 +188,7 @@ export default function UserManagement() {
   }, [getUsers]);
 
   const handleAddUser = async (data: {
-    username: string;
+    email: string;
     password?: string;
     role: 'admin' | 'staff';
     permissions: string[];
@@ -188,7 +198,7 @@ export default function UserManagement() {
         throw new Error('Password is required for new users');
       }
 
-      await addUser(data.username, data.password, data.role, data.permissions);
+      await addUser(data.email, data.password, data.role, data.permissions);
       setIsAddingUser(false);
       
       // Refresh users list
@@ -200,13 +210,13 @@ export default function UserManagement() {
   };
 
   const handleUpdateUser = async (data: {
-    username: string;
+    email: string;
     password?: string;
     role: 'admin' | 'staff';
     permissions: string[];
   }) => {
     try {
-      await updateUser(data.username, {
+      await updateUser(data.email, {
         role: data.role,
         permissions: data.permissions
       });
@@ -220,10 +230,10 @@ export default function UserManagement() {
     }
   };
 
-  const handleRemoveUser = async (username: string) => {
+  const handleRemoveUser = async (email: string) => {
     try {
       setError(null);
-      await removeUser(username);
+      await removeUser(email);
       
       // Refresh users list
       const updatedUsers = await getUsers();
@@ -278,9 +288,9 @@ export default function UserManagement() {
 
       <div className="bg-white shadow-sm rounded-lg divide-y">
         {users.map(user => (
-          <div key={user.username} className="p-4 flex justify-between items-center">
+          <div key={user.email} className="p-4 flex justify-between items-center">
             <div>
-              <h3 className="font-medium">{user.username}</h3>
+              <h3 className="font-medium">{user.email}</h3>
               <p className="text-sm text-gray-600">
                 Role: {user.role}
               </p>
@@ -300,22 +310,22 @@ export default function UserManagement() {
             </div>
             <div className="flex gap-2">
               {/* Only show edit button for admin user if current user is admin */}
-              {(user.username !== 'admin' || currentUser?.role === 'admin') && (
-              <button
-                onClick={() => setEditingUser({
-                  username: user.username,
-                  role: user.role,
-                  permissions: user.permissions
-                })}
-                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-              >
-                <Edit2 className="w-4 h-4" />
-                Edit
-              </button>
-              )}
-              {user.username !== 'admin' && (
+              {(user.email !== 'admin@cokelateh.com' || currentUser?.role === 'admin') && (
                 <button
-                  onClick={() => handleRemoveUser(user.username)}
+                  onClick={() => setEditingUser({
+                    email: user.email,
+                    role: user.role,
+                    permissions: user.permissions
+                  })}
+                  className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Edit
+                </button>
+              )}
+              {user.email !== 'admin@cokelateh.com' && (
+                <button
+                  onClick={() => handleRemoveUser(user.email)}
                   className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
                 >
                   <Trash2 className="w-4 h-4" />
