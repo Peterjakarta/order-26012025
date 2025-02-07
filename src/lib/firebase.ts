@@ -13,7 +13,7 @@ import {
   disableNetwork,
   enableNetwork
 } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
 import type { LogEntry } from '../types/types';
 
@@ -50,9 +50,9 @@ async function attemptReconnect() {
 
 const firebaseConfig = {
   apiKey: "AIzaSyAFc0V_u1m2AbrW7tkR525Wj-tUwlUEOBw",
-  authDomain: "cokelateh-a7b9d.firebaseapp.com",
+  authDomain: "cokelateh-a7b9d.firebaseapp.com", 
   projectId: "cokelateh-a7b9d",
-  storageBucket: "cokelateh-a7b9d.appspot.com",
+  storageBucket: "cokelateh-a7b9d.firebasestorage.app",
   messagingSenderId: "873783861603",
   appId: "1:873783861603:web:c13e7b7b63adb19c90f356"
 };
@@ -179,31 +179,7 @@ export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) 
   }
 }
 
-// Create default admin user if it doesn't exist
-async function createDefaultAdmin() {
-  try {
-    const usersRef = collection(db, COLLECTIONS.USERS);
-    const adminDocRef = doc(usersRef, 'admin');
-    const adminDoc = await getDoc(adminDocRef);
-
-    if (!adminDoc.exists()) {
-      const hashedPassword = await bcrypt.hash('stafcokelateh', 10);
-      await setDoc(adminDocRef, {
-        username: 'admin',
-        password_hash: hashedPassword,
-        role: 'admin',
-        permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders'],
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp()
-      });
-      console.log('Default admin user created successfully');
-    }
-  } catch (error) {
-    console.error('Error creating default admin:', error);
-  }
-}
-
-// Initialize persistence and create admin user
-initializePersistence().then(createDefaultAdmin);
+// Initialize persistence
+initializePersistence();
 
 export { db, auth };

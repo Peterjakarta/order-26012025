@@ -4,7 +4,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function LoginForm() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,16 +19,25 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
-      const success = await login(username, password);
+      const success = await login(email, password);
       if (success) {
         // Navigate to the originally requested URL or default page
         const from = location.state?.from?.pathname || '/';
         navigate(from, { replace: true });
       } else {
-        setError('Invalid username or password');
+        setError('Invalid credentials. Please check your email and password.');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      const error = err as Error;
+      if (error.message.includes('auth/user-not-found')) {
+        setError('No account found with this email.');
+      } else if (error.message.includes('auth/wrong-password')) {
+        setError('Incorrect password.');
+      } else if (error.message.includes('auth/invalid-email')) {
+        setError('Please enter a valid email address.');
+      } else {
+        setError('An error occurred. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -62,17 +71,17 @@ export default function LoginForm() {
         <div className="bg-black/50 backdrop-blur-sm p-8 rounded-xl shadow-xl border border-yellow-500/20">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-yellow-400 mb-1">
-                Username
+              <label htmlFor="email" className="block text-sm font-medium text-yellow-400 mb-1">
+                Email
               </label>
               <input
-                type="text"
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                id="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-2 bg-black/30 border border-yellow-500/30 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-white placeholder-gray-400"
-                placeholder="Enter your username"
+                placeholder="Enter your email"
               />
             </div>
 

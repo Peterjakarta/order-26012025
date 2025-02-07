@@ -1,24 +1,20 @@
 import { useState, useCallback, useEffect } from 'react';
-import bcrypt from 'bcryptjs';
-import { db, createLogEntry } from '../lib/firebase';
 import { 
-  collection,
-  doc,
-  getDoc,
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs,
+  query,
+  where,
   setDoc,
   updateDoc,
   deleteDoc,
-  query,
   orderBy,
-  getDocs,
-  where,
   serverTimestamp
 } from 'firebase/firestore';
+import { db, auth, createLogEntry, COLLECTIONS } from '../lib/firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, UserCredential } from 'firebase/auth';
 import type { User } from '../types/types';
-
-const COLLECTIONS = {
-  USERS: 'users'
-};
 
 export function useAuth() {
   const [authState, setAuthState] = useState<{
@@ -37,64 +33,121 @@ export function useAuth() {
     return { user: null, isAuthenticated: false };
   });
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
-      // Get user from Firestore by username
-      const usersRef = collection(db, COLLECTIONS.USERS);
-      let userDoc;
+      // Special handling for admin user
+      if (email === 'admin@cokelateh.com') {
+        try {
+          // Try to sign in first
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          
+          // Get or create user document
+          const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
+          
+          if (!userDoc.exists()) {
+            // Create admin document if it doesn't exist
+            await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
+              email,
+              role: 'admin',
+              permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders'],
+              created_at: serverTimestamp(),
+              updated_at: serverTimestamp()
+            });
+          }
 
-      if (username === 'admin') {
-        // For admin, directly get the document
-        userDoc = await getDoc(doc(usersRef, 'admin'));
+          // Set auth state
+          const userData = userDoc.exists() ? userDoc.data() : {
+            role: 'admin',
+            permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders']
+          };
+
+          const user = {
+            id: userCredential.user.uid,
+            email: userCredential.user.email || '',
+            role: userData.role,
+            permissions: userData.permissions
+          };
+
+          setAuthState({
+            user,
+            isAuthenticated: true
+          });
+
+          localStorage.setItem('auth', JSON.stringify({
+            user,
+            isAuthenticated: true
+          }));
+
+          return true;
+        } catch (err) {
+          // If admin doesn't exist, create it
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          
+          // Create admin document
+          await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
+            email,
+            role: 'admin',
+            permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders'],
+            created_at: serverTimestamp(),
+            updated_at: serverTimestamp()
+          });
+
+          const user = {
+            id: userCredential.user.uid,
+            email: userCredential.user.email || '',
+            role: 'admin',
+            permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders']
+          };
+
+          setAuthState({
+            user,
+            isAuthenticated: true
+          });
+
+          localStorage.setItem('auth', JSON.stringify({
+            user,
+            isAuthenticated: true
+          }));
+
+          return true;
+        }
       } else {
-        // For other users, query by username
-        const q = query(usersRef, where('username', '==', username));
-        const snapshot = await getDocs(q);
-        if (snapshot.empty) return false;
-        userDoc = snapshot.docs[0];
+        // Regular user login
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // Get user data from Firestore
+        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
+        
+        if (!userDoc.exists()) {
+          console.error('User document not found in Firestore');
+          return false;
+        }
+
+        const userData = userDoc.data();
+
+        // Set auth state
+        const user = {
+          id: userCredential.user.uid,
+          email: userCredential.user.email || '',
+          role: userData.role,
+          permissions: userData.permissions
+        };
+
+        setAuthState({
+          user,
+          isAuthenticated: true
+        });
+
+        localStorage.setItem('auth', JSON.stringify({
+          user,
+          isAuthenticated: true
+        }));
+
+        return true;
       }
-
-      if (!userDoc.exists()) return false;
-
-      const userData = userDoc.data();
-
-      // Verify password
-      const isValid = await bcrypt.compare(password, userData.password_hash);
-      if (!isValid) {
-        return false;
-      }
-
-      // Set auth state
-      const user = {
-        id: userDoc.id,
-        username: userData.username,
-        role: userData.role,
-        permissions: userData.permissions
-      };
-
-      setAuthState({
-        user,
-        isAuthenticated: true
-      });
-
-      // Store auth state
-      localStorage.setItem('auth', JSON.stringify({
-        user,
-        isAuthenticated: true
-      }));
-
-      // Create login log entry
-      await createLogEntry({
-        userId: user.id,
-        username: user.username,
-        action: 'User Login',
-        category: 'auth'
-      });
-
-      return true;
     } catch (error) {
       console.error('Login error:', error);
-      return false;
+      throw error;
     }
   }, []);
 
@@ -103,7 +156,7 @@ export function useAuth() {
     if (authState.user) {
       createLogEntry({
         userId: authState.user.id,
-        username: authState.user.username,
+        username: authState.user.email,
         action: 'User Logout',
         category: 'auth'
       });
@@ -115,27 +168,63 @@ export function useAuth() {
     });
     localStorage.removeItem('auth');
     window.location.href = '/login';
+  }, [authState.user]);
+
+  const hasPermission = useCallback((permission: string) => {
+    return authState.user?.permissions.includes(permission) || false;
+  }, [authState.user]);
+
+  const getUsers = useCallback(async () => {
+    try {
+      const usersRef = collection(db, COLLECTIONS.USERS);
+      const q = query(usersRef, orderBy('email'));
+      const snapshot = await getDocs(q);
+
+      return snapshot.docs.map(doc => ({
+        email: doc.data().email,
+        role: doc.data().role,
+        permissions: doc.data().permissions
+      }));
+    } catch (error) {
+      console.error('Get users error:', error);
+      return [];
+    }
   }, []);
 
   const addUser = useCallback(async (
-    username: string,
+    email: string,
     password: string,
     role: 'admin' | 'staff',
     permissions: string[]
   ) => {
     try {
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
+      // Validate email and password
+      if (!email || !password) {
+        throw new Error('Email and password are required');
+      }
+
+      if (password.length < 8) {
+        throw new Error('Password must be at least 8 characters');
+      }
+
+      // Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
       // Add user to Firestore
-      const usersRef = collection(db, COLLECTIONS.USERS);
-      await setDoc(doc(usersRef), {
-        username,
-        password_hash: hashedPassword,
+      await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
+        email,
         role,
         permissions,
         created_at: serverTimestamp(),
         updated_at: serverTimestamp()
+      });
+
+      // Create log entry
+      await createLogEntry({
+        userId: userCredential.user.uid,
+        username: email,
+        action: 'User Created',
+        category: 'auth'
       });
 
       return true;
@@ -146,16 +235,16 @@ export function useAuth() {
   }, []);
 
   const updateUser = useCallback(async (
-    username: string,
+    email: string,
     data: {
       role: 'admin' | 'staff';
       permissions: string[];
     }
   ) => {
     try {
-      // Find user by username
+      // Find user by email
       const usersRef = collection(db, COLLECTIONS.USERS);
-      const q = query(usersRef, where('username', '==', username));
+      const q = query(usersRef, where('email', '==', email));
       const snapshot = await getDocs(q);
 
       if (snapshot.empty) {
@@ -172,7 +261,7 @@ export function useAuth() {
       });
 
       // Update auth state if this is the current user
-      if (authState.user?.username === username) {
+      if (authState.user?.email === email) {
         setAuthState(prev => ({
           ...prev,
           user: {
@@ -190,11 +279,11 @@ export function useAuth() {
     }
   }, [authState.user]);
 
-  const removeUser = useCallback(async (username: string) => {
+  const removeUser = useCallback(async (email: string) => {
     try {
-      // Find user by username
+      // Find user by email
       const usersRef = collection(db, COLLECTIONS.USERS);
-      const q = query(usersRef, where('username', '==', username));
+      const q = query(usersRef, where('email', '==', email));
       const snapshot = await getDocs(q);
 
       if (snapshot.empty) {
@@ -213,87 +302,10 @@ export function useAuth() {
     }
   }, []);
 
-  const changePassword = useCallback(async (
-    username: string,
-    currentPassword: string,
-    newPassword: string
-  ) => {
-    try {
-      // Find user by username
-      const usersRef = collection(db, COLLECTIONS.USERS);
-      let userDoc;
-      
-      if (username === 'admin') {
-        // For admin user, get document directly by ID
-        userDoc = await getDoc(doc(usersRef, 'admin'));
-        if (!userDoc.exists()) {
-          return false;
-        }
-      } else {
-        // For other users, query by username
-        const q = query(usersRef, where('username', '==', username));
-        const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-          return false;
-        }
-        userDoc = snapshot.docs[0];
-      }
-      
-      const userData = userDoc.data();
-
-      // Verify current password
-      const isValid = await bcrypt.compare(currentPassword, userData.password_hash);
-      if (!isValid) {
-        return false;
-      }
-
-      // Additional validation for admin password
-      if (username === 'admin' && newPassword.length < 12) {
-        throw new Error('Admin password must be at least 12 characters long');
-      }
-
-      // Hash new password
-      const newHash = await bcrypt.hash(newPassword, 10);
-
-      // Update password in Firestore
-      await updateDoc(userDoc.ref, {
-        password_hash: newHash,
-        updated_at: serverTimestamp()
-      });
-
-      return true;
-    } catch (error) {
-      console.error('Change password error:', error);
-      return false;
-    }
-  }, []);
-
-  const hasPermission = useCallback((permission: string) => {
-    return authState.user?.permissions.includes(permission) || false;
-  }, [authState.user]);
-
-  const getUsers = useCallback(async () => {
-    try {
-      const usersRef = collection(db, COLLECTIONS.USERS);
-      const q = query(usersRef, orderBy('username'));
-      const snapshot = await getDocs(q);
-
-      return snapshot.docs.map(doc => ({
-        username: doc.data().username,
-        role: doc.data().role,
-        permissions: doc.data().permissions
-      }));
-    } catch (error) {
-      console.error('Get users error:', error);
-      return [];
-    }
-  }, []);
-
   return {
     ...authState,
     login,
     logout,
-    changePassword,
     hasPermission,
     addUser,
     updateUser,

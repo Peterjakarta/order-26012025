@@ -2,21 +2,124 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read access to all collections
-    match /{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    // Special rules for logs collection
-    match /logs/{logId} {
-      allow read, write: if true;
+    function hasPermission(permission) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        permission in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || hasPermission('manage_users');
+      allow create: if isAuthenticated() && 
+                   request.auth.uid == userId;
+      allow update: if isAdmin() || 
+                   (isOwner(userId) && 
+                    !request.resource.data.diff(resource.data).affectedKeys()
+                      .hasAny(['role', 'permissions']));
+      allow delete: if isAdmin() && !isOwner(userId);
+    }
+
+    // Categories collection
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
+    }
+
+    // Products collection
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
+    }
+
+    // Orders collection
+    match /orders/{orderId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && hasPermission('create_orders');
+      allow update: if isAuthenticated() && (
+        hasPermission('manage_orders') || 
+        (hasPermission('create_orders') && resource.data.status == 'pending')
+      );
+      allow delete: if hasPermission('manage_orders');
+    }
+
+    // Products collection
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
+    }
+
+    // Categories collection
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
+    }
+
+    // Ingredients collection
+    match /ingredients/{ingredientId} {
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
+    }
+
+    // Recipes collection
+    match /recipes/{recipeId} {
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
+    }
+
+    // Stock collection
+    match /stock/{stockId} {
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
+    }
+
+    // Stock history collection
+    match /stock_history/{historyId} {
+      allow read: if isAuthenticated();
+      allow create: if hasPermission('manage_products');
+      // Never allow updates or deletes to maintain audit trail
+      allow update, delete: if false;
+    }
+
+    // Stock categories collection
+    match /stock_categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
     }
 
     // Stock category items collection
     match /stock_category_items/{itemId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
+    }
+
+    // Logs collection
+    match /logs/{logId} {
+      allow read: if hasPermission('manage_users');
+      allow create: if isAuthenticated();
+      // Never allow updates or deletes to maintain audit trail
+      allow update, delete: if false;
+    }
+
+    // Branches collection
+    match /branches/{branchId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
   }
 }
