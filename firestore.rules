@@ -12,5 +12,11 @@ service cloud.firestore {
     match /logs/{logId} {
       allow read, write: if true;
     }
+
+    // Stock category items collection
+    match /stock_category_items/{itemId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
   }
 }
