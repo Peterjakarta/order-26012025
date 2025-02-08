@@ -35,55 +35,31 @@ export function useAuth() {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
+      // Validate inputs
+      if (!email || !password) {
+        throw new Error('Email and password are required');
+      }
+
       // Special handling for admin user
       if (email === 'admin@cokelateh.com') {
+        let userCredential: UserCredential;
+        
         try {
           // Try to sign in first
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          
-          // Get or create user document
-          const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
-          
-          if (!userDoc.exists()) {
-            // Create admin document if it doesn't exist
-            await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
-              email,
-              role: 'admin',
-              permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders'],
-              created_at: serverTimestamp(),
-              updated_at: serverTimestamp()
-            });
-          }
-
-          // Set auth state
-          const userData = userDoc.exists() ? userDoc.data() : {
-            role: 'admin',
-            permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders']
-          };
-
-          const user = {
-            id: userCredential.user.uid,
-            email: userCredential.user.email || '',
-            role: userData.role,
-            permissions: userData.permissions
-          };
-
-          setAuthState({
-            user,
-            isAuthenticated: true
-          });
-
-          localStorage.setItem('auth', JSON.stringify({
-            user,
-            isAuthenticated: true
-          }));
-
-          return true;
+          userCredential = await signInWithEmailAndPassword(auth, email, password);
         } catch (err) {
           // If admin doesn't exist, create it
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          
-          // Create admin document
+          if (err.code === 'auth/user-not-found') {
+            userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          } else {
+            throw err;
+          }
+        }
+
+        // Get or create admin document
+        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
+        
+        if (!userDoc.exists()) {
           await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
             email,
             role: 'admin',
@@ -91,41 +67,39 @@ export function useAuth() {
             created_at: serverTimestamp(),
             updated_at: serverTimestamp()
           });
-
-          const user = {
-            id: userCredential.user.uid,
-            email: userCredential.user.email || '',
-            role: 'admin',
-            permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders']
-          };
-
-          setAuthState({
-            user,
-            isAuthenticated: true
-          });
-
-          localStorage.setItem('auth', JSON.stringify({
-            user,
-            isAuthenticated: true
-          }));
-
-          return true;
         }
-      } else {
-        // Regular user login
+
+        const user = {
+          id: userCredential.user.uid,
+          email: userCredential.user.email || '',
+          role: 'admin',
+          permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders']
+        };
+
+        setAuthState({ user, isAuthenticated: true });
+        localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
+        
+        // Create login log entry
+        await createLogEntry({
+          userId: user.id,
+          username: user.email,
+          action: 'User Login',
+          category: 'auth'
+        });
+
+        return true;
+      }
+
+      // Regular user login
+      try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        
-        // Get user data from Firestore
         const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
-        
+
         if (!userDoc.exists()) {
-          console.error('User document not found in Firestore');
-          return false;
+          throw new Error('User account not found. Please contact an administrator.');
         }
 
         const userData = userDoc.data();
-
-        // Set auth state
         const user = {
           id: userCredential.user.uid,
           email: userCredential.user.email || '',
@@ -133,21 +107,34 @@ export function useAuth() {
           permissions: userData.permissions
         };
 
-        setAuthState({
-          user,
-          isAuthenticated: true
+        setAuthState({ user, isAuthenticated: true });
+        localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
+
+        // Create login log entry
+        await createLogEntry({
+          userId: user.id,
+          username: user.email,
+          action: 'User Login',
+          category: 'auth'
         });
 
-        localStorage.setItem('auth', JSON.stringify({
-          user,
-          isAuthenticated: true
-        }));
-
         return true;
+      } catch (err) {
+        if (err.code === 'auth/invalid-credential') {
+          throw new Error('Invalid email or password. Please try again.');
+        } else if (err.code === 'auth/user-not-found') {
+          throw new Error('No account found with this email.');
+        } else if (err.code === 'auth/wrong-password') {
+          throw new Error('Incorrect password.');
+        } else if (err.code === 'auth/too-many-requests') {
+          throw new Error('Too many failed attempts. Please try again later.');
+        } else {
+          throw err;
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
-      throw error;
+      throw error instanceof Error ? error : new Error('An error occurred during login. Please try again.');
     }
   }, []);
 
@@ -176,6 +163,12 @@ export function useAuth() {
 
   const getUsers = useCallback(async () => {
     try {
+      // Check if user has permission to manage users
+      if (!authState.user?.permissions.includes('manage_users')) {
+        console.error('User does not have permission to manage users');
+        return [];
+      }
+
       const usersRef = collection(db, COLLECTIONS.USERS);
       const q = query(usersRef, orderBy('email'));
       const snapshot = await getDocs(q);
@@ -186,10 +179,14 @@ export function useAuth() {
         permissions: doc.data().permissions
       }));
     } catch (error) {
-      console.error('Get users error:', error);
+      if (error.code === 'permission-denied') {
+        console.error('Permission denied: User does not have access to manage users');
+      } else {
+        console.error('Error getting users:', error);
+      }
       return [];
     }
-  }, []);
+  }, [authState.user?.permissions]);
 
   const addUser = useCallback(async (
     email: string,

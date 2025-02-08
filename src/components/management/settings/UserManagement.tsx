@@ -162,22 +162,33 @@ export default function UserManagement() {
     role: 'admin' | 'staff';
     permissions: string[];
   } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>('');
   const [users, setUsers] = useState<Array<{
     email: string;
     role: 'admin' | 'staff';
     permissions: string[];
   }>>([]);
   const [loading, setLoading] = useState(true);
+  const [hasPermission, setHasPermission] = useState(false);
 
   // Load users on component mount
   useEffect(() => {
     const loadUsers = async () => {
       try {
+        // Check if user has permission
+        if (!currentUser?.permissions.includes('manage_users')) {
+          setError('You do not have permission to manage users');
+          setHasPermission(false);
+          setLoading(false);
+          return;
+        }
+
+        setHasPermission(true);
         const userList = await getUsers();
         setUsers(userList);
+        setError(null);
       } catch (err) {
-        setError('Failed to load users');
+        setError(err instanceof Error ? err.message : 'Failed to load users');
         console.error('Error loading users:', err);
       } finally {
         setLoading(false);
@@ -185,7 +196,7 @@ export default function UserManagement() {
     };
 
     loadUsers();
-  }, [getUsers]);
+  }, [getUsers, currentUser?.permissions]);
 
   const handleAddUser = async (data: {
     email: string;
@@ -242,6 +253,17 @@ export default function UserManagement() {
       setError(err instanceof Error ? err.message : 'Failed to remove user');
     }
   };
+
+  if (!hasPermission) {
+    return (
+      <div className="p-8 text-center">
+        <h2 className="text-xl font-semibold text-red-600 mb-2">Access Denied</h2>
+        <p className="text-gray-600">
+          You don't have permission to manage users.
+        </p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

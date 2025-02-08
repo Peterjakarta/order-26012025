@@ -25,17 +25,17 @@ service cloud.firestore {
 
     // Users collection
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
-      allow list: if isAuthenticated() && (hasPermission('manage_users') || isAdmin());
+      allow read: if isAuthenticated() && (isOwner(userId) || hasPermission('manage_users'));
+      allow list: if isAuthenticated() && hasPermission('manage_users');
       allow create: if isAuthenticated() && (
-        isAdmin() ||
+        hasPermission('manage_users') ||
         (request.auth.uid == userId && !request.resource.data.role == 'admin')
       );
       allow update: if isAuthenticated() && (
-        isAdmin() ||
+        hasPermission('manage_users') ||
         (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions']))
       );
-      allow delete: if isAuthenticated() && isAdmin() && !isOwner(userId);
+      allow delete: if isAuthenticated() && hasPermission('manage_users') && !isOwner(userId);
     }
 
     // Categories collection
@@ -108,7 +108,8 @@ service cloud.firestore {
     // Stock category items collection
     match /stock_category_items/{itemId} {
       allow read: if isAuthenticated();
-      allow write: if hasPermission('manage_products');
+      allow create, update, delete: if hasPermission('manage_products');
+      allow list: if isAuthenticated();
     }
 
     // Logs collection

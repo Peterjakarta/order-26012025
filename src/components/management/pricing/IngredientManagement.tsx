@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit2, Trash2, Upload, Copy, Check, Package2, FolderEdit } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
+import { auth, db } from '../../../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import type { Ingredient, StockCategory } from '../../../types/types';
 import IngredientForm from './IngredientForm';
 import BulkIngredientImport from './BulkIngredientImport';
@@ -20,6 +22,30 @@ export default function IngredientManagement() {
   const [savingCategories, setSavingCategories] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const q = query(collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS));
+      const snapshot = await getDocs(q);
+      
+      const categoryMap: Record<string, string[]> = {};
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const ingredientId = data.ingredient_id;
+        const categoryId = data.category_id;
+        
+        if (!categoryMap[ingredientId]) {
+          categoryMap[ingredientId] = [];
+        }
+        categoryMap[ingredientId].push(categoryId);
+      });
+      
+      setSelectedCategories(categoryMap);
+    } catch (err) {
+      console.error('Error loading ingredient categories:', err);
+      setError('Failed to load ingredient categories');
+    }
+  }, []);
 
   const handleCategoryChange = async (ingredientId: string, categoryIds: string[]) => {
     try {
@@ -51,32 +77,14 @@ export default function IngredientManagement() {
 
   // Load initial category selections
   useEffect(() => {
-    const loadCategories = async () => {
-      try {
-        const q = query(collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS));
-        const snapshot = await getDocs(q);
-        
-        const categoryMap: Record<string, string[]> = {};
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          const ingredientId = data.ingredient_id;
-          const categoryId = data.category_id;
-          
-          if (!categoryMap[ingredientId]) {
-            categoryMap[ingredientId] = [];
-          }
-          categoryMap[ingredientId].push(categoryId);
-        });
-        
-        setSelectedCategories(categoryMap);
-      } catch (err) {
-        console.error('Error loading ingredient categories:', err);
-        setError('Failed to load ingredient categories');
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loadCategories();
       }
-    };
-
-    loadCategories();
-  }, []);
+    });
+    
+    return () => unsubscribe();
+  }, [loadCategories]);
 
   const handleSubmit = async (data: Omit<Ingredient, 'id'>) => {
     try {

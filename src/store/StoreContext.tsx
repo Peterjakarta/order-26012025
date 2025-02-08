@@ -561,29 +561,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const updateIngredientCategories = useCallback(async (ingredientId: string, categoryIds: string[]) => {
     try {
       // Get reference to the ingredient-category relationships
-      const batch = writeBatch(db);
+      const batch = getBatch();
       
       // Delete existing relationships
       const q = query(
         collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS),
         where('ingredient_id', '==', ingredientId)
       );
-      const snapshot = await getDocs(q);
-      snapshot.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-      
-      // Add new relationships
-      for (const categoryId of categoryIds) {
-        const docRef = doc(collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS));
-        batch.set(docRef, {
-          category_id: categoryId,
-          ingredient_id: ingredientId,
-          created_at: serverTimestamp()
+      try {
+        const snapshot = await getDocs(q);
+        snapshot.forEach(doc => {
+          batch.delete(doc.ref);
         });
-      }
       
-      await batch.commit();
+        // Add new relationships
+        for (const categoryId of categoryIds) {
+          const docRef = doc(collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS));
+          batch.set(docRef, {
+            category_id: categoryId,
+            ingredient_id: ingredientId,
+            created_at: serverTimestamp()
+          });
+        }
+      
+        await commitBatchIfNeeded();
+      } catch (err) {
+        console.error('Error updating ingredient categories:', err);
+        throw new Error('Failed to update ingredient categories. Please try again.');
+      }
     } catch (error) {
       console.error('Error updating ingredient categories:', error);
       throw error;
