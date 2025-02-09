@@ -4,7 +4,10 @@ import packageJson from '../../../../package.json';
 
 export default function VersionInfo() {
   const version = packageJson.version;
-  const commitRef = import.meta.env.VITE_APP_COMMIT_REF || 'Not available';
+  const commitRef = import.meta.env.VITE_COMMIT_REF || 'Not available';
+  const context = import.meta.env.VITE_CONTEXT || 'development';
+  const deployUrl = import.meta.env.VITE_URL || 'localhost';
+  const deployTime = import.meta.env.VITE_DEPLOY_TIME || new Date().toISOString();
 
   return (
     <div className="max-w-md mx-auto space-y-6">
@@ -33,6 +36,11 @@ export default function VersionInfo() {
           </div>
           <div className="text-sm text-gray-600">
             Latest commit: {commitRef}
+          </div>
+          <div className="mt-4 space-y-2 text-sm text-gray-600">
+            <p>Environment: {context}</p>
+            <p>Deploy URL: {deployUrl}</p>
+            <p>Last Deploy: {new Date(deployTime).toLocaleString()}</p>
           </div>
         </div>
       </div>
