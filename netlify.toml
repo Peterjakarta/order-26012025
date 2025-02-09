@@ -1,0 +1,21 @@
+# Netlify configuration file
+[build]
+  # Base directory (where package.json is located)
+  base = "/"
+  
+  # Build command with explicit install and CI=false to prevent treating warnings as errors
+  command = "npm install && CI=false npm run build"
+  
+  # Directory with built assets (for Vite)
+  publish = "dist"
+
+# Set Node.js version
+[build.environment]
+  NODE_VERSION = "18"
+  NPM_FLAGS = "--legacy-peer-deps"
+
+# Handle SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
