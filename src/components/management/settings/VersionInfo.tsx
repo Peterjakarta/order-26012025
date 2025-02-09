@@ -5,6 +5,7 @@ import packageJson from '../../../../package.json';
 export default function VersionInfo() {
   const version = packageJson.version;
   const commitRef = import.meta.env.VITE_COMMIT_REF || 'Not available';
+  const commitMessage = import.meta.env.VITE_COMMIT_MESSAGE || 'No message available';
   const context = import.meta.env.VITE_CONTEXT || 'development';
   const deployUrl = import.meta.env.VITE_URL || 'localhost';
   const deployTime = import.meta.env.VITE_DEPLOY_TIME || new Date().toISOString();
@@ -35,7 +36,10 @@ export default function VersionInfo() {
             </span>
           </div>
           <div className="text-sm text-gray-600">
-            Latest commit: {commitRef}
+            <div className="flex flex-col gap-1">
+              <div>Latest commit: <span className="font-mono">{commitRef}</span></div>
+              <div>Message: {commitMessage}</div>
+            </div>
           </div>
           <div className="mt-4 space-y-2 text-sm text-gray-600">
             <p>Environment: {context}</p>
