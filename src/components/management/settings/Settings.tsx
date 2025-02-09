@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui
 import PasswordChange from './PasswordChange';
 import UserManagement from './UserManagement';
 import BackupRestore from './BackupRestore';
+import VersionInfo from './VersionInfo';
 import { useAuth } from '../../../hooks/useAuth';
 
 export default function Settings() {
@@ -19,6 +20,7 @@ export default function Settings() {
         <TabsList>
           <TabsTrigger value="password">Change Password</TabsTrigger>
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
+          <TabsTrigger value="version">Version Info</TabsTrigger>
           {canManageUsers && (
             <TabsTrigger value="users">User Management</TabsTrigger>
           )}
@@ -33,6 +35,12 @@ export default function Settings() {
         <TabsContent value="backup">
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <BackupRestore />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="version">
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            <VersionInfo />
           </div>
         </TabsContent>
 
