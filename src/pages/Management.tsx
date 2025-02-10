@@ -154,9 +154,11 @@ function PricingDashboard() {
       <div className="grid gap-6 sm:grid-cols-3">
         <Link 
           to="/management/pricing/ingredients"
-          className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
+          className="group p-6 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50"
         >
-          <h3 className="text-lg font-semibold mb-2">Ingredients</h3>
+          <h3 className="text-lg font-semibold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600 group-hover:text-purple-700">
+            Ingredients
+          </h3>
           <p className="text-gray-600">
             Manage ingredients, their costs, and packaging information
           </p>
@@ -164,9 +166,11 @@ function PricingDashboard() {
 
         <Link 
           to="/management/pricing/stock"
-          className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
+          className="group p-6 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] hover:bg-gradient-to-br hover:from-emerald-50 hover:to-green-50"
         >
-          <h3 className="text-lg font-semibold mb-2">Stock Management</h3>
+          <h3 className="text-lg font-semibold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-green-600 group-hover:text-emerald-700">
+            Stock Management
+          </h3>
           <p className="text-gray-600">
             Track and update ingredient stock levels
           </p>
@@ -174,9 +178,11 @@ function PricingDashboard() {
 
         <Link 
           to="/management/pricing/recipes"
-          className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
+          className="group p-6 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50"
         >
-          <h3 className="text-lg font-semibold mb-2">Recipes</h3>
+          <h3 className="text-lg font-semibold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 group-hover:text-blue-700">
+            Recipes
+          </h3>
           <p className="text-gray-600">
             Create and manage recipes, calculate costs and ingredient usage
           </p>

@@ -11,7 +11,7 @@ type ViewMode = 'list' | 'calendar';
 
 export default function ProductionSchedule() {
   const { orderId } = useParams();
-  const { orders, updateOrderStatus, updateOrderProduction } = useOrders();
+  const { orders, updateOrderStatus, updateOrderProduction, removeOrder } = useOrders();
   const { products } = useStore();
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [error, setError] = useState<string | null>(null);
@@ -19,14 +19,19 @@ export default function ProductionSchedule() {
   const startDate = getInitialStartDate();
   const endDate = getDefaultEndDate(startDate);
 
-  // Get all non-completed orders that either:
-  // 1. Are in the URL parameters (newly selected orders)
-  // 2. Have production dates set (already scheduled orders)
-  const orderIds = orderId?.split(',') || [];
-  const relevantOrders = orders.filter(order => 
-    (orderIds.includes(order.id) || (order.productionStartDate && order.productionEndDate)) &&
-    order.status !== 'completed'
-  );
+  // Get orders for production schedule
+  const orderIds = orderId?.split(',').filter(Boolean) || [];
+  const relevantOrders = orders.filter(order => {
+    // Include orders from URL params
+    if (orderIds.includes(order.id)) return true;
+    
+    // Include pending/processing orders
+    if (order.status === 'pending' || order.status === 'processing') {
+      return true;
+    }
+    
+    return false;
+  });
 
   const handleSchedule = async (orderId: string, startDate: string, endDate: string) => {
     try {
@@ -66,12 +71,18 @@ export default function ProductionSchedule() {
   const handleRemoveFromProduction = async (orderId: string) => {
     try {
       setError(null);
-      await updateOrderProduction(orderId, '', ''); // Clear production dates
-      await updateOrderStatus(orderId, 'pending'); // Reset status to pending
+      // Get the order first to check if it exists
+      const order = orders.find(o => o.id === orderId);
+      if (!order) {
+        throw new Error('Order not found');
+      }
+
+      // Remove the order directly - no need to reset status since we're deleting
+      await removeOrder(orderId);
+      setError(null);
     } catch (err) {
       console.error('Error removing from production:', err);
-      setError('Failed to remove from production');
-      throw err;
+      setError(err instanceof Error ? err.message : 'Failed to remove order');
     }
   };
 
@@ -126,8 +137,6 @@ export default function ProductionSchedule() {
           <ProductionList
             startDate={startDate}
             endDate={endDate}
-            orders={relevantOrders}
-            products={products}
             onSchedule={handleSchedule}
             onComplete={handleComplete}
             onRemove={handleRemoveFromProduction}

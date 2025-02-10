@@ -279,7 +279,9 @@ export default function CompletedOrders() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <CheckCircle2 className="w-6 h-6 text-green-600" />
-          <h2 className="text-xl font-semibold">Completed Orders</h2>
+          <h2 className="text-xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-green-600 to-emerald-600">
+            Completed Orders
+          </h2>
         </div>
         <div className="flex flex-col gap-2">
           {error && (
@@ -299,14 +301,14 @@ export default function CompletedOrders() {
           {selectedOrders.size > 0 && (
             <button
               onClick={() => setShowIngredientCalculator(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
+              className="flex items-center gap-2 px-4 py-2 text-white rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg shadow-green-200 transform transition-all duration-300 hover:scale-[1.02]"
             >
               <Calculator className="w-4 h-4" />
               Calculate Ingredients ({selectedOrders.size})
             </button>
           )}
           <div>
-            <label htmlFor="poNumber" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="poNumber" className="block text-sm font-medium bg-clip-text text-transparent bg-gradient-to-r from-gray-600 to-gray-800 mb-1">
               PO Number
             </label>
             <input
@@ -315,7 +317,7 @@ export default function CompletedOrders() {
               value={poNumber}
               onChange={(e) => setPoNumber(e.target.value)}
               placeholder="Optional"
-              className="w-40 p-2 border rounded-md text-sm"
+              className="w-40 p-2 border rounded-lg text-sm shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-shadow duration-300"
             />
           </div>
         </div>
@@ -347,56 +349,56 @@ export default function CompletedOrders() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleDownloadExcel(order)}
-                        className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-emerald-50 hover:to-green-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
                         title="Download Excel"
                       >
-                        <FileSpreadsheet className="w-4 h-4" />
-                        Excel
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-500 group-hover:text-emerald-600" />
+                        <span>Excel</span>
                       </button>
                       <button
                         onClick={() => handleDownloadPDF(order)}
-                        className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-blue-50 hover:to-cyan-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
                         title="Download PDF"
                       >
-                        <FileDown className="w-4 h-4" />
-                        PDF
+                        <FileDown className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
+                        <span>PDF</span>
                       </button>
                       {!stockReductionHistory[order.id] ? (
                         <button
                           onClick={() => handleReduceStock(order)}
                           disabled={loadingStockReduction[order.id]}
-                          className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors
+                          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-300 transform hover:scale-[1.02] shadow-sm border border-gray-100
                             ${loadingStockReduction[order.id]
-                              ? 'bg-green-100 text-green-400 cursor-wait'
-                              : 'text-green-600 hover:bg-green-50'
+                              ? 'bg-green-50 text-green-400 cursor-wait'
+                              : 'bg-white text-green-600 hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 hover:shadow-md group'
                             }`}
                           title="Reduce ingredient stock"
                         >
-                          <Package2 className="w-4 h-4" />
+                          <Package2 className="w-4 h-4 group-hover:text-green-700" />
                           {loadingStockReduction[order.id] ? 'Reducing...' : 'Reduce Stock'}
                         </button>
                       ) : (
                         <button
                           onClick={() => handleRevertStockReduction(order)}
                           disabled={loadingStockReduction[order.id]}
-                          className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors
+                          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-300 transform hover:scale-[1.02] shadow-sm border border-gray-100
                             ${loadingStockReduction[order.id]
-                              ? 'bg-blue-100 text-blue-400 cursor-wait'
-                              : 'text-blue-600 hover:bg-blue-50'
+                              ? 'bg-blue-50 text-blue-400 cursor-wait'
+                              : 'bg-white text-blue-600 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:shadow-md group'
                             }`}
                           title="Revert stock reduction"
                         >
-                          <History className="w-4 h-4" />
+                          <History className="w-4 h-4 group-hover:text-blue-700" />
                           {loadingStockReduction[order.id] ? 'Reverting...' : 'Revert Stock'}
                         </button>
                       )}
                       <button
                         onClick={() => setReopeningOrder(order.id)}
-                        className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-md"
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
                         title="Reopen order for production"
                       >
-                        <RotateCcw className="w-4 h-4" />
-                        Reopen
+                        <RotateCcw className="w-4 h-4 text-purple-500 group-hover:text-purple-600" />
+                        <span>Reopen</span>
                       </button>
                     </div>
                   }

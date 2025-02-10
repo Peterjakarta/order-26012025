@@ -4,6 +4,7 @@ import {
   setDoc,
   deleteDoc, 
   doc, 
+  getDoc,
   onSnapshot, 
   query, 
   orderBy,
@@ -202,7 +203,8 @@ export function useOrders() {
 
   const removeOrder = useCallback(async (id: string) => {
     try {
-      await deleteDoc(doc(db, COLLECTIONS.ORDERS, id));
+      const orderRef = doc(db, COLLECTIONS.ORDERS, id);
+      await deleteDoc(orderRef);
     } catch (error) {
       console.error('Error removing order:', error);
       throw error instanceof Error ? error : new Error('Failed to remove order');

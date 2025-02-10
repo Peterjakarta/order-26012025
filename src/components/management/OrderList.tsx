@@ -97,12 +97,14 @@ export default function OrderList() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <Package2 className="w-6 h-6" />
-          <h2 className="text-xl font-semibold">Active Orders</h2>
+          <h2 className="text-xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
+            Active Orders
+          </h2>
         </div>
         {selectedOrders.size > 0 && (
           <button
             onClick={handlePlanProduction}
-            className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
+            className="flex items-center gap-2 px-4 py-2 text-white rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg shadow-purple-200 transform transition-all duration-300 hover:scale-[1.02]"
           >
             <Calendar className="w-4 h-4" />
             Plan Production ({selectedOrders.size})
@@ -155,11 +157,11 @@ export default function OrderList() {
                         </div>
                         <button
                           onClick={() => downloadPDF(order)}
-                          className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-blue-50 hover:to-cyan-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
                           title="Download PDF"
                         >
-                          <FileDown className="w-4 h-4" />
-                          PDF
+                          <FileDown className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
+                          <span>PDF</span>
                         </button>
                       </div>
                     }
