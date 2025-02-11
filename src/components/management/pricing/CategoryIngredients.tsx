@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, X, Search } from 'lucide-react';
+import { Plus, X, Search, AlertCircle, Check } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
 import type { StockCategory } from '../../../types/types';
 
@@ -13,6 +13,7 @@ export default function CategoryIngredients({ category, onClose }: CategoryIngre
   const [selectedIngredients, setSelectedIngredients] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Filter ingredients based on search term
@@ -32,15 +33,29 @@ export default function CategoryIngredients({ category, onClose }: CategoryIngre
     });
   };
 
-  const handleSave = async () => {
+  const handleAddIngredients = async () => {
     try {
       setLoading(true);
       setError(null);
+      setSuccess(null);
 
-      // TODO: Implement save functionality once backend is ready
-      // await updateCategoryIngredients(category.id, Array.from(selectedIngredients));
+      if (selectedIngredients.size === 0) {
+        setError('Please select at least one ingredient');
+        return;
+      }
+
+      // Update ingredient categories
+      await updateIngredientCategories(
+        Array.from(selectedIngredients),
+        category.id
+      );
       
-      onClose();
+      setSuccess('Ingredients added successfully');
+      setTimeout(() => {
+        setSuccess(null);
+        onClose();
+      }, 1500);
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update ingredients');
     } finally {
@@ -67,7 +82,14 @@ export default function CategoryIngredients({ category, onClose }: CategoryIngre
         <div className="p-6">
           {error && (
             <div className="bg-red-50 text-red-600 p-4 rounded-md mb-4">
-              {error}
+              <p className="text-sm">{error}</p>
+            </div>
+          )}
+      
+          {success && (
+            <div className="flex items-center gap-2 bg-green-50 text-green-600 p-4 rounded-md mb-4">
+              <Check className="w-5 h-5" />
+              <p className="text-sm">{success}</p>
             </div>
           )}
 
@@ -123,12 +145,12 @@ export default function CategoryIngredients({ category, onClose }: CategoryIngre
             Cancel
           </button>
           <button
-            onClick={handleSave}
+            onClick={handleAddIngredients}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:bg-pink-300"
           >
             <Plus className="w-4 h-4" />
-            {loading ? 'Saving...' : 'Add Selected Ingredients'}
+            {loading ? 'Adding...' : `Add Selected (${selectedIngredients.size})`}
           </button>
         </div>
       </div>
