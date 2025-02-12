@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Tag, Plus, Trash2, GripVertical, Upload, ChevronDown, Edit2 } from 'lucide-react';
+import { Tag, Plus, Trash2, GripVertical, Upload } from 'lucide-react';
 import { useCategories } from '../../hooks/useCategories';
 import { useStore } from '../../store/StoreContext';
 import CategoryForm from './CategoryForm';
@@ -60,21 +60,21 @@ export default function CategoryManagement() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold flex items-center gap-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
           <Tag className="w-6 h-6" />
           Categories
         </h2>
         <div className="flex gap-2">
           <button
             onClick={() => setIsBulkImporting(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-blue-50 hover:to-cyan-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
+            className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
           >
-            <Upload className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
+            <Upload className="w-4 h-4" />
             Bulk Import
           </button>
           <button
             onClick={() => setIsAddingCategory(true)}
-            className="flex items-center gap-2 px-4 py-2 text-white rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg shadow-purple-200 transform transition-all duration-300 hover:scale-[1.02]"
+            className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
           >
             <Plus className="w-4 h-4" />
             Add Category
@@ -118,43 +118,38 @@ export default function CategoryManagement() {
               onDragStart={(e) => handleDragStart(key, e)}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(key, e)}
-              className={`${draggedCategory === key ? 'opacity-50 bg-gray-50' : ''} group`}
+              className={`${draggedCategory === key ? 'opacity-50 bg-gray-50' : ''}`}
             >
-              <div className="p-4 flex justify-between items-center cursor-move hover:bg-gradient-to-r hover:from-gray-50 hover:to-pink-50 transition-colors duration-300">
+              <div className="p-4 flex justify-between items-center cursor-move">
                 <div className="flex items-center gap-3">
-                  <GripVertical className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors duration-300" />
+                  <GripVertical className="w-5 h-5 text-gray-400" />
                   <div>
-                    <h3 className="font-medium text-gray-900">{data.name}</h3>
+                    <h3 className="font-medium">{data.name}</h3>
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setExpandedCategory(isExpanded ? null : key)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
+                    className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
                   >
-                    <ChevronDown className={`w-4 h-4 text-indigo-500 group-hover:text-indigo-600 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                     {isExpanded ? 'Hide Products' : 'Show Products'}
                   </button>
                   <button
                     onClick={() => setEditingCategory(key)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-blue-50 hover:to-cyan-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
+                    className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
                   >
-                    <Edit2 className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
-                    <span>Edit</span>
+                    Edit
                   </button>
                   <button
                     onClick={() => deleteCategory(key)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-red-50 hover:to-orange-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
+                    className="px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
                   >
-                    <Trash2 className="w-4 h-4 text-red-500 group-hover:text-red-600" />
-                    <span>Delete</span>
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
               {isExpanded && (
-                <div className="border-t bg-gradient-to-br from-gray-50 to-pink-50/30">
-                  <CategoryProducts category={key} />
-                </div>
+                <CategoryProducts category={key} />
               )}
             </div>
           );

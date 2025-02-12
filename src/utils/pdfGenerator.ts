@@ -8,6 +8,107 @@ import { calculateRecipeCost } from './recipeCalculations';
 import { isBonBonCategory, isPralinesCategory } from './quantityUtils';
 import { formatIDR } from './currencyFormatter';
 
+export function generateOrderWithRecipesPDF(order: Order, products: Product[], recipes: Recipe[], ingredients: Ingredient[]) {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+  
+  const branchName = getBranchName(order.branchId);
+  let yPos = 15;
+
+  // Header
+  doc.setFontSize(16);
+  doc.text('Production Order with Recipes', 14, yPos);
+  yPos += 10;
+
+  // Order details
+  doc.setFontSize(10);
+  doc.text(`Order #: ${order.id.slice(0, 8)}`, 14, yPos);
+  doc.text(`Branch: ${branchName}`, 14, yPos + 6);
+  doc.text(`Production: ${new Date(order.productionStartDate!).toLocaleDateString()} - ${new Date(order.productionEndDate!).toLocaleDateString()}`, 14, yPos + 12);
+  yPos += 20;
+
+  // Products and their recipes
+  for (const item of order.products) {
+    const product = products.find(p => p.id === item.productId);
+    const recipe = recipes.find(r => r.productId === item.productId);
+    if (!product) continue;
+
+    // Add page break if needed
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 15;
+    }
+
+    // Product header
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(product.name, 14, yPos);
+    yPos += 6;
+
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Quantity: ${item.quantity} ${product.unit}`, 14, yPos);
+    yPos += 6;
+
+    if (recipe) {
+      // Recipe details
+      doc.text('Recipe:', 14, yPos);
+      yPos += 6;
+
+      // Ingredients table
+      const tableData = recipe.ingredients.map(ingredient => {
+        const ingredientData = ingredients.find(i => i.id === ingredient.ingredientId);
+        if (!ingredientData) return [];
+
+        const scaledAmount = Math.ceil((ingredient.amount / recipe.yield) * item.quantity);
+        return [
+          ingredientData.name,
+          scaledAmount.toString(),
+          ingredientData.unit
+        ];
+      }).filter(row => row.length > 0);
+
+      if (tableData.length > 0) {
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Ingredient', 'Amount', 'Unit']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: {
+            fillColor: [236, 72, 153],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold'
+          },
+          styles: {
+            fontSize: 9,
+            cellPadding: 2
+          }
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Add recipe notes if any
+      if (recipe.notes) {
+        doc.text('Notes:', 14, yPos);
+        yPos += 5;
+        const splitNotes = doc.splitTextToSize(recipe.notes, 180);
+        doc.text(splitNotes, 14, yPos);
+        yPos += splitNotes.length * 5 + 5;
+      }
+    } else {
+      doc.text('No recipe available', 14, yPos);
+      yPos += 10;
+    }
+
+    yPos += 5; // Space between products
+  }
+
+  return doc;
+}
 interface StockChecklistCategory {
   categoryName: string;
   ingredients: {
@@ -208,114 +309,6 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
   return doc;
 }
 import { calculateRecipeCost } from './recipeCalculations';
-
-export function generateProductionRecipePDF(order: Order, products: Product[], recipes: Recipe[], ingredients: Ingredient[]) {
-  // Create PDF document
-  const doc = new jsPDF();
-  
-  // Header
-  doc.setFontSize(20);
-  doc.text('Production Recipes', 14, 15);
-
-  doc.setFontSize(12);
-  doc.text(`Order #${order.id.slice(0, 8)}`, 14, 25);
-  doc.text(`Production Date: ${new Date().toLocaleDateString()}`, 14, 32);
-
-  let yPos = 45;
-
-  // Process each product in the order
-  for (const item of order.products) {
-    const product = products.find(p => p.id === item.productId);
-    const recipe = recipes.find(r => r.productId === item.productId);
-    
-    if (!product || !recipe) continue;
-
-    // Add page break if needed
-    if (yPos > 250) {
-      doc.addPage();
-      yPos = 15;
-    }
-
-    // Product header
-    doc.setFontSize(14);
-    doc.setTextColor(236, 72, 153); // Pink color
-    doc.text(product.name, 14, yPos);
-    yPos += 8;
-
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Quantity: ${item.quantity} ${product.unit}`, 14, yPos);
-    yPos += 8;
-
-    // Calculate scaled recipe quantities
-    const scale = item.quantity / recipe.yield;
-    
-    // Ingredients table
-    const tableData = recipe.ingredients.map(ingredient => {
-      const ingredientData = ingredients.find(i => i.id === ingredient.ingredientId);
-      if (!ingredientData) return [];
-
-      const scaledAmount = Math.ceil(ingredient.amount * scale);
-      const cost = (scaledAmount / ingredientData.packageSize) * ingredientData.price;
-
-      return [
-        ingredientData.name,
-        scaledAmount.toString(),
-        ingredientData.unit,
-        formatIDR(cost)
-      ];
-    }).filter(row => row.length > 0);
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Ingredient', 'Amount', 'Unit', 'Cost']],
-      body: tableData,
-      theme: 'striped',
-      headStyles: {
-        fillColor: [236, 72, 153],
-        textColor: [255, 255, 255],
-        fontStyle: 'bold'
-      },
-      columnStyles: {
-        0: { cellWidth: 60 },  // Ingredient name
-        1: { cellWidth: 30, halign: 'right' },  // Amount
-        2: { cellWidth: 30 },  // Unit
-        3: { cellWidth: 40, halign: 'right' }   // Cost
-      }
-    });
-
-    // Update yPos for next product
-    yPos = (doc as any).lastAutoTable.finalY + 20;
-
-    // Add cost summary
-    const baseCost = calculateRecipeCost(recipe, ingredients);
-    const scaledCost = baseCost * scale;
-    const laborCost = recipe.laborCost ? recipe.laborCost * scale : 0;
-    const packagingCost = recipe.packagingCost ? recipe.packagingCost * scale : 0;
-    const totalCost = scaledCost + laborCost + packagingCost;
-
-    const costData = [
-      ['Base Cost:', formatIDR(scaledCost)],
-      ['Labor Cost:', formatIDR(laborCost)],
-      ['Packaging Cost:', formatIDR(packagingCost)],
-      ['Total Cost:', formatIDR(totalCost)]
-    ];
-
-    autoTable(doc, {
-      startY: yPos - 15,
-      body: costData,
-      theme: 'plain',
-      columnStyles: {
-        0: { cellWidth: 60, fontStyle: 'bold' },
-        1: { cellWidth: 60, halign: 'right' }
-      }
-    });
-
-    yPos = (doc as any).lastAutoTable.finalY + 20;
-  }
-
-  return doc;
-}
 
 export function generateRecipePDF(recipe: Recipe, ingredients: Ingredient[], quantity: number) {
   // Create PDF document
@@ -645,132 +638,6 @@ export function generateIngredientUsagePDF(data: IngredientUsagePDFData) {
       fillColor: [249, 250, 251],
       textColor: [0, 0, 0],
       fontStyle: 'bold'
-    }
-  });
-
-  return doc;
-}
-
-export function generateOrderListPDF(orders: Order[], products: Product[]) {
-  // Create PDF document
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4'
-  });
-
-  let yPos = 20;
-  const margin = 14;
-  const pageWidth = doc.internal.pageSize.width;
-  const pageHeight = doc.internal.pageSize.height;
-
-  // Process each order
-  orders.forEach((order, index) => {
-    // Add page break if needed
-    if (yPos > pageHeight - 60) {
-      doc.addPage();
-      yPos = 20;
-    }
-
-    // Order header
-    doc.setFontSize(14);
-    doc.setTextColor(236, 72, 153); // Pink color
-    doc.text(`Order #${order.orderNumber || order.id.slice(0, 8)}`, margin, yPos);
-    yPos += 8;
-
-    // Order info
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    const branch = getBranchName(order.branchId);
-    doc.text(`Branch: ${branch}`, margin, yPos);
-    doc.text(`Order Date: ${new Date(order.orderDate).toLocaleDateString()}`, margin + 80, yPos);
-    yPos += 6;
-    doc.text(`Ordered By: ${order.orderedBy}`, margin, yPos);
-    if (order.poNumber) {
-      doc.text(`PO #: ${order.poNumber}`, margin + 80, yPos);
-    }
-    yPos += 10;
-
-    // Products table
-    const tableData = order.products.map(item => {
-      const product = products.find(p => p.id === item.productId);
-      if (!product) return [];
-
-      const mouldInfo = calculateMouldCount(product.category, item.quantity);
-      const showMould = isBonBonCategory(product.category) || isPralinesCategory(product.category);
-      const expiryDate = order.completedAt ? calculateExpiryDate(order.completedAt, product.category) : null;
-
-      return [
-        product.name,
-        `${item.quantity} ${product.unit || ''}`,
-        `${item.producedQuantity || 0} ${product.unit || ''}`,
-        `${item.stockQuantity || 0} ${product.unit || ''}`,
-        `${item.rejectQuantity || 0} ${product.unit || ''}`,
-        item.rejectNotes || '-',
-        order.completedAt ? new Date(order.completedAt).toLocaleDateString() : '-',
-        expiryDate ? expiryDate.toLocaleDateString() : '-',
-        showMould ? mouldInfo : '-'
-      ];
-    }).filter(row => row.length > 0);
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Product', 'Ordered', 'Produced', 'Stock', 'Reject', 'Reject Notes', 'Production Date', 'Expiry Date', 'Mould']],
-      body: tableData,
-      theme: 'striped',
-      headStyles: {
-        fillColor: [236, 72, 153],
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        fontSize: 8
-      },
-      columnStyles: {
-        0: { cellWidth: 35 },  // Product
-        1: { cellWidth: 20 },  // Ordered
-        2: { cellWidth: 20 },  // Produced
-        3: { cellWidth: 20 },  // Stock
-        4: { cellWidth: 20 },  // Reject
-        5: { cellWidth: 25 },  // Reject Notes
-        6: { cellWidth: 20 },  // Production Date
-        7: { cellWidth: 20 },  // Expiry Date
-        8: { cellWidth: 20 }   // Mould
-      },
-      styles: {
-        fontSize: 8,
-        cellPadding: 2,
-        overflow: 'linebreak'
-      },
-      didDrawCell: (data) => {
-        if (data.section === 'body') {
-          if (data.column.index === 2) {
-            const row = data.row.index;
-            const orderedQty = parseInt(tableData[row][1]);
-            const producedQty = parseInt(tableData[row][2]);
-            if (producedQty < orderedQty) {
-              doc.setTextColor(201, 93, 0); // Orange for under-produced
-            } else {
-              doc.setTextColor(21, 128, 61); // Green for matched/exceeded
-            }
-          } else if (data.column.index === 4 || data.column.index === 5) {
-            // Red color for reject quantities and notes
-            const rejectQty = parseInt(tableData[data.row.index][4]);
-            if (rejectQty > 0) {
-              doc.setTextColor(220, 38, 38); // Red for rejects
-            }
-          } else {
-            doc.setTextColor(0, 0, 0); // Reset to black
-          }
-        }
-      }
-    });
-
-    // Update yPos for next order
-    yPos = (doc as any).lastAutoTable.finalY + 20;
-
-    // Add divider between orders
-    if (index < orders.length - 1) {
-      doc.setDrawColor(200, 200, 200);
-      doc.line(margin, yPos - 10, pageWidth - margin, yPos - 10);
     }
   });
 

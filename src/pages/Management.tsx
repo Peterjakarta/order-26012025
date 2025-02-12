@@ -154,11 +154,9 @@ function PricingDashboard() {
       <div className="grid gap-6 sm:grid-cols-3">
         <Link 
           to="/management/pricing/ingredients"
-          className="group p-6 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50"
+          className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
         >
-          <h3 className="text-lg font-semibold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600 group-hover:text-purple-700">
-            Ingredients
-          </h3>
+          <h3 className="text-lg font-semibold mb-2">Ingredients</h3>
           <p className="text-gray-600">
             Manage ingredients, their costs, and packaging information
           </p>
@@ -166,11 +164,9 @@ function PricingDashboard() {
 
         <Link 
           to="/management/pricing/stock"
-          className="group p-6 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] hover:bg-gradient-to-br hover:from-emerald-50 hover:to-green-50"
+          className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
         >
-          <h3 className="text-lg font-semibold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-green-600 group-hover:text-emerald-700">
-            Stock Management
-          </h3>
+          <h3 className="text-lg font-semibold mb-2">Stock Management</h3>
           <p className="text-gray-600">
             Track and update ingredient stock levels
           </p>
@@ -178,11 +174,9 @@ function PricingDashboard() {
 
         <Link 
           to="/management/pricing/recipes"
-          className="group p-6 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50"
+          className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
         >
-          <h3 className="text-lg font-semibold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 group-hover:text-blue-700">
-            Recipes
-          </h3>
+          <h3 className="text-lg font-semibold mb-2">Recipes</h3>
           <p className="text-gray-600">
             Create and manage recipes, calculate costs and ingredient usage
           </p>
@@ -201,10 +195,10 @@ function NavTab({ to, active, children, icon }: {
   return (
     <Link
       to={to}
-      className={`px-4 py-2 rounded-md transition-all flex items-center gap-2 ${
+      className={`relative px-4 py-2 rounded-md transition-all duration-300 flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${
         active
-          ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-glow'
-          : 'text-gray-600 hover:bg-gray-50'
+          ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-glow hover:shadow-lg hover:from-purple-700 hover:to-pink-700 after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500'
+          : 'text-gray-600 hover:bg-gray-50/80 hover:shadow-depth backdrop-blur-sm bg-white/50'
       }`}
     >
       {icon}

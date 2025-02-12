@@ -92,31 +92,23 @@ export default function OrderItem({
           <div className="flex items-center gap-3">
             {extraActions}
             {onScheduleProduction && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onScheduleProduction(order.id);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-indigo-50 hover:to-blue-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
-                  title="Schedule production"
-                >
-                  <Calendar className="w-4 h-4 text-indigo-500 group-hover:text-indigo-600" />
-                  <span>Schedule</span>
-                </button>
-              </div>
+              <button
+                onClick={() => onScheduleProduction(order.id)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-sm"
+                title="Schedule production"
+              >
+                <Calendar className="w-4 h-4" />
+                Schedule
+              </button>
             )}
             {order.status !== 'completed' && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setShowEditDialog(true)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
-                >
-                  <Edit className="w-4 h-4 text-emerald-500 group-hover:text-emerald-600" />
-                  <span>Edit</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setShowEditDialog(true)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-sm"
+              >
+                <Edit className="w-4 h-4" />
+                Edit
+              </button>
             )}
             <OrderStatus 
               order={order}
@@ -124,10 +116,11 @@ export default function OrderItem({
             />
             <button
               onClick={() => setShowConfirm(true)}
-              className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-300"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-all duration-200 hover:shadow-sm"
               title="Remove order"
             >
               <Trash2 className="w-4 h-4" />
+              Remove
             </button>
           </div>
         </div>

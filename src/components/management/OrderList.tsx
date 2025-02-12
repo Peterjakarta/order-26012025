@@ -97,14 +97,12 @@ export default function OrderList() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <Package2 className="w-6 h-6" />
-          <h2 className="text-xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
-            Active Orders
-          </h2>
+          <h2 className="text-xl font-semibold">Active Orders</h2>
         </div>
         {selectedOrders.size > 0 && (
           <button
             onClick={handlePlanProduction}
-            className="flex items-center gap-2 px-4 py-2 text-white rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg shadow-purple-200 transform transition-all duration-300 hover:scale-[1.02]"
+            className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-md hover:from-pink-700 hover:to-purple-700 transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
           >
             <Calendar className="w-4 h-4" />
             Plan Production ({selectedOrders.size})
@@ -157,11 +155,11 @@ export default function OrderList() {
                         </div>
                         <button
                           onClick={() => downloadPDF(order)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white rounded-lg hover:bg-gradient-to-r hover:from-blue-50 hover:to-cyan-50 border border-gray-100 shadow-sm transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
+                          className="flex items-center gap-2 px-3 py-1 text-sm border border-gray-200 rounded-md hover:bg-gray-50/80 transition-all duration-300 hover:shadow-soft hover:scale-[1.02] active:scale-[0.98] backdrop-blur-sm bg-white/50"
                           title="Download PDF"
                         >
-                          <FileDown className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
-                          <span>PDF</span>
+                          <FileDown className="w-4 h-4" />
+                          PDF
                         </button>
                       </div>
                     }
