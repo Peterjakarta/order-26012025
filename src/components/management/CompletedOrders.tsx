@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, FileDown, RotateCcw, FileSpreadsheet, Calculator, Package2, History } from 'lucide-react';
+import { CheckCircle2, FileDown, RotateCcw, FileSpreadsheet, Calculator, Package2, History, AlertCircle } from 'lucide-react';
 import { useOrders } from '../../hooks/useOrders';
 import { useStore } from '../../store/StoreContext';
 import { useBranches } from '../../hooks/useBranches';
@@ -25,10 +25,12 @@ export default function CompletedOrders() {
   const stockReductionHistory = React.useMemo(() => {
     return stockHistory.reduce((acc, entry) => {
       if (entry.orderId && entry.changeType === 'reduction') {
-        acc[entry.orderId] = true;
+        acc[entry.orderId] = 'reduced';
+      } else if (entry.orderId && entry.changeType === 'reversion') {
+        acc[entry.orderId] = 'reverted';
       }
       return acc;
-    }, {} as Record<string, boolean>);
+    }, {} as Record<string, 'reduced' | 'reverted'>);
   }, [stockHistory]);
 
   const handleReduceStock = async (order: Order) => {
@@ -37,16 +39,13 @@ export default function CompletedOrders() {
       setSuccess(null);
       setLoadingStockReduction(prev => ({ ...prev, [order.id]: true }));
       
-      // Validate order exists and has products
       if (!order || !order.products?.length) {
         setError('Invalid order data');
         return;
       }
 
-      // Validate all ingredients exist before starting any updates
       const ingredientUpdates: { ingredientId: string; newQuantity: number }[] = [];
 
-      // Validate order has products and recipes exist
       const invalidProducts = order.products.filter(item => {
         const recipe = recipes.find(r => r.productId === item.productId);
         return !recipe;
@@ -60,24 +59,37 @@ export default function CompletedOrders() {
         return;
       }
 
-      // Calculate ingredient usage for each product
       for (const item of order.products) {
         const recipe = recipes.find(r => r.productId === item.productId);
         if (!recipe) continue; // Already validated above
 
-        // Calculate scaling factor based on produced quantity and round up
-        const scale = Math.ceil((item.producedQuantity || item.quantity) / recipe.yield);
+        const producedQty = item.producedQuantity || 0;
+        if (producedQty === 0) {
+          const productName = products.find(p => p.id === item.productId)?.name || item.productId;
+          throw new Error(`No produced quantity set for ${productName}. Please set the produced quantity before reducing stock.`);
+        }
+        
+        // Calculate exact scale based on produced quantity
+        const scale = Number(producedQty) / Number(recipe.yield);
+        if (isNaN(scale) || !isFinite(scale)) {
+          const productName = products.find(p => p.id === item.productId)?.name || item.productId;
+          throw new Error(`Invalid recipe yield for ${productName}. Please check the recipe configuration.`);
+        }
 
-        // Calculate stock reduction for each ingredient
         for (const ingredient of recipe.ingredients) {
-          // Validate ingredient exists
           if (!ingredient.ingredientId) {
             console.error('Invalid ingredient data:', ingredient);
             continue;
           }
 
           const stockData = stockLevels[ingredient.ingredientId] || { quantity: 0 };
-          const amountToReduce = Math.ceil(ingredient.amount * scale); // Round up to whole number
+          // Calculate exact amount needed based on recipe yield and produced quantity
+          const amountToReduce = Math.ceil(Number(ingredient.amount) * scale);
+          if (isNaN(amountToReduce) || !isFinite(amountToReduce)) {
+            const ingredientData = ingredients.find(i => i.id === ingredient.ingredientId);
+            throw new Error(`Invalid ingredient amount for ${ingredientData?.name || ingredient.ingredientId}`);
+          }
+
           const newQuantity = Math.max(0, stockData.quantity - amountToReduce);
 
           // Add to updates array
@@ -88,7 +100,6 @@ export default function CompletedOrders() {
         }
       }
 
-      // Validate all ingredients exist
       const missingIngredients = ingredientUpdates.filter(update => 
         !ingredients.find(i => i.id === update.ingredientId)
       );
@@ -97,7 +108,6 @@ export default function CompletedOrders() {
         throw new Error('Some ingredients are missing from the database');
       }
 
-      // Process all stock updates
       for (const update of ingredientUpdates) {
         const stockData = stockLevels[update.ingredientId] || { quantity: 0 };
         try {
@@ -141,7 +151,6 @@ export default function CompletedOrders() {
         return;
       }
 
-      // Validate order has products and recipes exist
       const invalidProducts = order.products.filter(item => {
         const recipe = recipes.find(r => r.productId === item.productId);
         return !recipe;
@@ -155,24 +164,37 @@ export default function CompletedOrders() {
         return;
       }
 
-      // Calculate ingredient usage for each product
       for (const item of order.products) {
         const recipe = recipes.find(r => r.productId === item.productId);
         if (!recipe) continue; // Already validated above
 
-        // Calculate scaling factor based on produced quantity
-        const scale = (item.producedQuantity || item.quantity) / recipe.yield;
+        const producedQty = item.producedQuantity || 0;
+        if (producedQty === 0) {
+          const productName = products.find(p => p.id === item.productId)?.name || item.productId;
+          throw new Error(`No produced quantity set for ${productName}. Cannot revert stock without produced quantity.`);
+        }
+        
+        // Calculate exact scale based on produced quantity
+        const scale = Number(producedQty) / Number(recipe.yield);
+        if (isNaN(scale) || !isFinite(scale)) {
+          const productName = products.find(p => p.id === item.productId)?.name || item.productId;
+          throw new Error(`Invalid recipe yield for ${productName}. Please check the recipe configuration.`);
+        }
 
-        // Add back stock for each ingredient
         for (const ingredient of recipe.ingredients) {
-          // Validate ingredient exists
           if (!ingredient.ingredientId) {
             console.error('Invalid ingredient data:', ingredient);
             continue;
           }
 
           const stockData = stockLevels[ingredient.ingredientId] || { quantity: 0 };
-          const amountToAdd = Math.ceil(ingredient.amount * scale); // Round up to whole number
+          // Calculate exact amount to add based on recipe yield and produced quantity
+          const amountToAdd = Math.ceil(Number(ingredient.amount) * scale);
+          if (isNaN(amountToAdd) || !isFinite(amountToAdd)) {
+            const ingredientData = ingredients.find(i => i.id === ingredient.ingredientId);
+            throw new Error(`Invalid ingredient amount for ${ingredientData?.name || ingredient.ingredientId}`);
+          }
+
           const newQuantity = stockData.quantity + amountToAdd;
 
           ingredientUpdates.push({
@@ -375,7 +397,7 @@ export default function CompletedOrders() {
                           <Package2 className="w-4 h-4" />
                           {loadingStockReduction[order.id] ? 'Reducing...' : 'Reduce Stock'}
                         </button>
-                      ) : (
+                      ) : stockReductionHistory[order.id] === 'reduced' ? (
                         <button
                           onClick={() => handleRevertStockReduction(order)}
                           disabled={loadingStockReduction[order.id]}
@@ -388,6 +410,20 @@ export default function CompletedOrders() {
                         >
                           <History className="w-4 h-4" />
                           {loadingStockReduction[order.id] ? 'Reverting...' : 'Revert Stock'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleReduceStock(order)}
+                          disabled={loadingStockReduction[order.id]}
+                          className={`relative flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
+                            ${loadingStockReduction[order.id]
+                              ? 'bg-green-100 text-green-400 cursor-wait transform-none hover:shadow-none'
+                              : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
+                            }`}
+                          title="Reduce ingredient stock"
+                        >
+                          <Package2 className="w-4 h-4" />
+                          {loadingStockReduction[order.id] ? 'Reducing...' : 'Reduce Stock'}
                         </button>
                       )}
                       <button

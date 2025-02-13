@@ -235,7 +235,7 @@ export function generateStockChecklistPDF(categories: StockChecklistCategory[]) 
 export function generateProductionChecklistPDF(order: Order, products: Product[]) {
   // Create PDF document
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: 'landscape',
     unit: 'mm',
     format: 'a4'
   });
@@ -245,12 +245,12 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
 
   // Header
   doc.setFontSize(16);
-  doc.text('Production Checklist', 14, 15);
+  doc.text('Production Checklist', 20, 15);
 
   doc.setFontSize(9);
-  doc.text(`Order #: ${order.id.slice(0, 8)}`, 14, 25);
-  doc.text(`Branch: ${branchName}`, 14, 30);
-  doc.text(`Production Date: ${new Date().toLocaleDateString()}`, 14, 35);
+  doc.text(`Order #: ${order.id.slice(0, 8)}`, 20, 25);
+  doc.text(`Branch: ${branchName}`, 20, 30);
+  doc.text(`Production Date: ${new Date().toLocaleDateString()}`, 20, 35);
 
   // Create table
   const tableData = order.products.map(item => {
@@ -264,6 +264,8 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
       product.name,
       `${item.quantity} ${product.unit || ''}`,
       showMould ? mouldInfo : '-',
+      '', // Produced
+      '', // Rejected
       '', // Spray
       '', // Ready
       '', // Shell
@@ -274,7 +276,7 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
 
   autoTable(doc, {
     startY: 45,
-    head: [['Product', 'Ordered', 'Mould', 'Spray', 'Ready', 'Shell', 'Ganache', 'Closed']],
+    head: [['Product', 'Ordered', 'Mould', 'Produced', 'Rejected', 'Spray', 'Ready', 'Shell', 'Ganache', 'Closed']],
     body: tableData,
     theme: 'striped',
     headStyles: {
@@ -285,14 +287,16 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
       cellPadding: 4
     },
     columnStyles: {
-      0: { cellWidth: 50 },  // Product
-      1: { cellWidth: 25 },  // Ordered
-      2: { cellWidth: 25 },  // Mould
-      3: { cellWidth: 15 },  // Spray
-      4: { cellWidth: 15 },  // Ready
-      5: { cellWidth: 15 },  // Shell
-      6: { cellWidth: 15 },  // Ganache
-      7: { cellWidth: 15 }   // Closed
+      0: { cellWidth: 27 },  // Product
+      1: { cellWidth: 27 },  // Ordered
+      2: { cellWidth: 27 },  // Mould
+      3: { cellWidth: 27 },  // Produced  
+      4: { cellWidth: 27 },  // Rejected
+      5: { cellWidth: 27 },  // Spray
+      6: { cellWidth: 27 },  // Ready
+      7: { cellWidth: 27 },  // Shell
+      8: { cellWidth: 27 },  // Ganache
+      9: { cellWidth: 27 }   // Closed
     },
     styles: {
       fontSize: 9,
@@ -303,7 +307,7 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
       lineColor: [0, 0, 0],
       minCellHeight: 6
     },
-    margin: { left: 10, right: 10 }
+    margin: { left: 20, right: 20 }
   });
 
   return doc;

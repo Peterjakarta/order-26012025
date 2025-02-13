@@ -93,19 +93,6 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
   const handleSubmit = async () => {
     try {
       setError('');
-      
-      // Validate quantities
-      for (const item of order.products) {
-        const produced = producedQuantities[item.productId] || 0;
-        const stock = stockQuantities[item.productId] || 0;
-        const reject = rejectQuantities[item.productId] || 0;
-        
-        // Total produced must match or exceed ordered quantity
-        if (produced + stock + reject < item.quantity) {
-          setError(`Total quantities must match or exceed ordered amount for all products`);
-          return;
-        }
-      }
 
       await onComplete(producedQuantities, stockQuantities, rejectQuantities, rejectNotes);
       if (onClose) {
