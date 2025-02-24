@@ -102,7 +102,7 @@ export default function OrderList() {
         {selectedOrders.size > 0 && (
           <button
             onClick={handlePlanProduction}
-            className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
+            className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-md hover:from-pink-700 hover:to-purple-700 transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
           >
             <Calendar className="w-4 h-4" />
             Plan Production ({selectedOrders.size})
@@ -155,7 +155,7 @@ export default function OrderList() {
                         </div>
                         <button
                           onClick={() => downloadPDF(order)}
-                          className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                          className="flex items-center gap-2 px-3 py-1 text-sm border border-gray-200 rounded-md hover:bg-gray-50/80 transition-all duration-300 hover:shadow-soft hover:scale-[1.02] active:scale-[0.98] backdrop-blur-sm bg-white/50"
                           title="Download PDF"
                         >
                           <FileDown className="w-4 h-4" />

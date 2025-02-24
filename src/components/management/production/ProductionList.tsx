@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight, ClipboardCheck } from 'lucide-react';
+import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight, ClipboardCheck, FileSpreadsheet } from 'lucide-react';
 import type { Order } from '../../../types/types';
 import { useBranches } from '../../../hooks/useBranches';
 import { useStore } from '../../../store/StoreContext';
 import { calculateMouldCount } from '../../../utils/mouldCalculations';
 import { isBonBonCategory, isPralinesCategory } from '../../../utils/quantityUtils';
 import { getBranchStyles } from '../../../utils/branchStyles';
-import { generateOrderPDF, generateProductionChecklistPDF } from '../../../utils/pdfGenerator';
+import { generateOrderPDF, generateProductionChecklistPDF, generateOrderWithRecipesPDF } from '../../../utils/pdfGenerator';
 import OrderCompletion from '../order/OrderCompletion';
 
 interface ProductionListProps {
@@ -40,6 +40,7 @@ export default function ProductionList({
   const [completingOrder, setCompletingOrder] = useState<Order | null>(null);
   const [editingDates, setEditingDates] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const { recipes, ingredients } = useStore();
 
   // Separate orders into scheduled and unscheduled
   const scheduledOrders = orders.filter(order => order.productionStartDate && order.productionEndDate);
@@ -136,6 +137,11 @@ export default function ProductionList({
   const handleDownloadChecklist = (order: Order) => {
     const doc = generateProductionChecklistPDF(order, products);
     doc.save(`production-checklist-${order.id.slice(0, 8)}.pdf`);
+  };
+
+  const handleDownloadRecipes = (order: Order) => {
+    const doc = generateOrderWithRecipesPDF(order, products, recipes, ingredients);
+    doc.save(`production-recipes-${order.id.slice(0, 8)}.pdf`);
   };
 
   const toggleOrderExpanded = (orderId: string) => {
@@ -270,7 +276,7 @@ export default function ProductionList({
                     <button
                       onClick={() => handleSchedule(order.id)}
                       disabled={!dates?.start || !dates?.end}
-                      className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:bg-pink-300"
+                      className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-md hover:from-pink-700 hover:to-purple-700 transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:hover:shadow-none overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
                     >
                       <Calendar className="w-4 h-4" />
                       Schedule Production
@@ -331,31 +337,43 @@ export default function ProductionList({
                           Remove from Production
                         </button>
                       )}
-                      <button
-                        onClick={() => handleDownloadPDF(order)}
-                        className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-                        title="Download PDF"
-                      >
-                        <FileDown className="w-4 h-4" />
-                        PDF
-                      </button>
-                      <button
-                        onClick={() => handleDownloadChecklist(order)}
-                        className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-                        title="Download Production Checklist"
-                      >
-                        <ClipboardCheck className="w-4 h-4" />
-                        Checklist
-                      </button>
-                      {onComplete && (
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleDownloadExcel(order)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-sm"
+                        >
+                          <FileSpreadsheet className="w-4 h-4" />
+                          Excel
+                        </button>
+                        <button
+                          onClick={() => handleDownloadPDF(order)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-sm"
+                        >
+                          <FileDown className="w-4 h-4" />
+                          PDF
+                        </button>
+                        <button
+                          onClick={() => handleDownloadChecklist(order)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-sm"
+                        >
+                          <ClipboardCheck className="w-4 h-4" />
+                          Checklist
+                        </button>
+                        <button
+                          onClick={() => handleDownloadRecipes(order)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-sm"
+                        >
+                          <FileDown className="w-4 h-4" />
+                          Recipes
+                        </button>
                         <button
                           onClick={() => setCompletingOrder(order)}
-                          className="flex items-center gap-2 px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-200 hover:shadow-lg"
                         >
                           <CheckCircle2 className="w-4 h-4" />
                           Complete Order
                         </button>
-                      )}
+                      </div>
                       <div className="text-sm">
                         {isEditing ? (
                           <div className={`grid sm:grid-cols-2 gap-4 bg-white p-4 rounded-lg ${isExpanded ? '' : 'hidden'}`}>

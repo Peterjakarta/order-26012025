@@ -195,10 +195,10 @@ function NavTab({ to, active, children, icon }: {
   return (
     <Link
       to={to}
-      className={`px-4 py-2 rounded-md transition-all flex items-center gap-2 ${
+      className={`relative px-4 py-2 rounded-md transition-all duration-300 flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${
         active
-          ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-glow'
-          : 'text-gray-600 hover:bg-gray-50'
+          ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-glow hover:shadow-lg hover:from-purple-700 hover:to-pink-700 after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500'
+          : 'text-gray-600 hover:bg-gray-50/80 hover:shadow-depth backdrop-blur-sm bg-white/50'
       }`}
     >
       {icon}

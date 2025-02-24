@@ -4,9 +4,111 @@ import type { Order, Product, Recipe, Ingredient } from '../types/types';
 import { getBranchName } from '../data/branches';
 import { calculateMouldCount } from './mouldCalculations';
 import { calculateExpiryDate } from './dateUtils';
+import { calculateRecipeCost } from './recipeCalculations';
 import { isBonBonCategory, isPralinesCategory } from './quantityUtils';
 import { formatIDR } from './currencyFormatter';
 
+export function generateOrderWithRecipesPDF(order: Order, products: Product[], recipes: Recipe[], ingredients: Ingredient[]) {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+  
+  const branchName = getBranchName(order.branchId);
+  let yPos = 15;
+
+  // Header
+  doc.setFontSize(16);
+  doc.text('Production Order with Recipes', 14, yPos);
+  yPos += 10;
+
+  // Order details
+  doc.setFontSize(10);
+  doc.text(`Order #: ${order.id.slice(0, 8)}`, 14, yPos);
+  doc.text(`Branch: ${branchName}`, 14, yPos + 6);
+  doc.text(`Production: ${new Date(order.productionStartDate!).toLocaleDateString()} - ${new Date(order.productionEndDate!).toLocaleDateString()}`, 14, yPos + 12);
+  yPos += 20;
+
+  // Products and their recipes
+  for (const item of order.products) {
+    const product = products.find(p => p.id === item.productId);
+    const recipe = recipes.find(r => r.productId === item.productId);
+    if (!product) continue;
+
+    // Add page break if needed
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 15;
+    }
+
+    // Product header
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(product.name, 14, yPos);
+    yPos += 6;
+
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Quantity: ${item.quantity} ${product.unit}`, 14, yPos);
+    yPos += 6;
+
+    if (recipe) {
+      // Recipe details
+      doc.text('Recipe:', 14, yPos);
+      yPos += 6;
+
+      // Ingredients table
+      const tableData = recipe.ingredients.map(ingredient => {
+        const ingredientData = ingredients.find(i => i.id === ingredient.ingredientId);
+        if (!ingredientData) return [];
+
+        const scaledAmount = Math.ceil((ingredient.amount / recipe.yield) * item.quantity);
+        return [
+          ingredientData.name,
+          scaledAmount.toString(),
+          ingredientData.unit
+        ];
+      }).filter(row => row.length > 0);
+
+      if (tableData.length > 0) {
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Ingredient', 'Amount', 'Unit']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: {
+            fillColor: [236, 72, 153],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold'
+          },
+          styles: {
+            fontSize: 9,
+            cellPadding: 2
+          }
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Add recipe notes if any
+      if (recipe.notes) {
+        doc.text('Notes:', 14, yPos);
+        yPos += 5;
+        const splitNotes = doc.splitTextToSize(recipe.notes, 180);
+        doc.text(splitNotes, 14, yPos);
+        yPos += splitNotes.length * 5 + 5;
+      }
+    } else {
+      doc.text('No recipe available', 14, yPos);
+      yPos += 10;
+    }
+
+    yPos += 5; // Space between products
+  }
+
+  return doc;
+}
 interface StockChecklistCategory {
   categoryName: string;
   ingredients: {
@@ -133,7 +235,7 @@ export function generateStockChecklistPDF(categories: StockChecklistCategory[]) 
 export function generateProductionChecklistPDF(order: Order, products: Product[]) {
   // Create PDF document
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: 'landscape',
     unit: 'mm',
     format: 'a4'
   });
@@ -143,12 +245,12 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
 
   // Header
   doc.setFontSize(16);
-  doc.text('Production Checklist', 14, 15);
+  doc.text('Production Checklist', 20, 15);
 
   doc.setFontSize(9);
-  doc.text(`Order #: ${order.id.slice(0, 8)}`, 14, 25);
-  doc.text(`Branch: ${branchName}`, 14, 30);
-  doc.text(`Production Date: ${new Date().toLocaleDateString()}`, 14, 35);
+  doc.text(`Order #: ${order.id.slice(0, 8)}`, 20, 25);
+  doc.text(`Branch: ${branchName}`, 20, 30);
+  doc.text(`Production Date: ${new Date().toLocaleDateString()}`, 20, 35);
 
   // Create table
   const tableData = order.products.map(item => {
@@ -162,6 +264,8 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
       product.name,
       `${item.quantity} ${product.unit || ''}`,
       showMould ? mouldInfo : '-',
+      '', // Produced
+      '', // Rejected
       '', // Spray
       '', // Ready
       '', // Shell
@@ -172,7 +276,7 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
 
   autoTable(doc, {
     startY: 45,
-    head: [['Product', 'Ordered', 'Mould', 'Spray', 'Ready', 'Shell', 'Ganache', 'Closed']],
+    head: [['Product', 'Ordered', 'Mould', 'Produced', 'Rejected', 'Spray', 'Ready', 'Shell', 'Ganache', 'Closed']],
     body: tableData,
     theme: 'striped',
     headStyles: {
@@ -183,14 +287,16 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
       cellPadding: 4
     },
     columnStyles: {
-      0: { cellWidth: 50 },  // Product
-      1: { cellWidth: 25 },  // Ordered
-      2: { cellWidth: 25 },  // Mould
-      3: { cellWidth: 15 },  // Spray
-      4: { cellWidth: 15 },  // Ready
-      5: { cellWidth: 15 },  // Shell
-      6: { cellWidth: 15 },  // Ganache
-      7: { cellWidth: 15 }   // Closed
+      0: { cellWidth: 27 },  // Product
+      1: { cellWidth: 27 },  // Ordered
+      2: { cellWidth: 27 },  // Mould
+      3: { cellWidth: 27 },  // Produced  
+      4: { cellWidth: 27 },  // Rejected
+      5: { cellWidth: 27 },  // Spray
+      6: { cellWidth: 27 },  // Ready
+      7: { cellWidth: 27 },  // Shell
+      8: { cellWidth: 27 },  // Ganache
+      9: { cellWidth: 27 }   // Closed
     },
     styles: {
       fontSize: 9,
@@ -201,7 +307,7 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
       lineColor: [0, 0, 0],
       minCellHeight: 6
     },
-    margin: { left: 10, right: 10 }
+    margin: { left: 20, right: 20 }
   });
 
   return doc;
