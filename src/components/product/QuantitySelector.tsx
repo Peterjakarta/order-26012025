@@ -91,7 +91,7 @@ export default function QuantitySelector({ product, quantity, onQuantityChange }
           onBlur={handleBlur}
           min="0"
           step={step}
-          className="w-16 text-center font-medium border rounded-md py-1 px-2"
+          className="w-24 text-center font-medium border rounded-md py-1 px-2"
           title={`Enter quantity (steps of ${step})`}
         />
         

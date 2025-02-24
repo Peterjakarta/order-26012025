@@ -94,7 +94,7 @@ export default function OrderItem({
             {onScheduleProduction && (
               <button
                 onClick={() => onScheduleProduction(order.id)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-sm"
+                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
                 title="Schedule production"
               >
                 <Calendar className="w-4 h-4" />
@@ -104,7 +104,7 @@ export default function OrderItem({
             {order.status !== 'completed' && (
               <button
                 onClick={() => setShowEditDialog(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-sm"
+                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
               >
                 <Edit className="w-4 h-4" />
                 Edit
@@ -116,11 +116,10 @@ export default function OrderItem({
             />
             <button
               onClick={() => setShowConfirm(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-all duration-200 hover:shadow-sm"
+              className="p-1 text-red-600 hover:bg-red-50 rounded"
               title="Remove order"
             >
               <Trash2 className="w-4 h-4" />
-              Remove
             </button>
           </div>
         </div>

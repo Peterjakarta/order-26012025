@@ -93,6 +93,19 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
   const handleSubmit = async () => {
     try {
       setError('');
+      
+      // Validate quantities
+      for (const item of order.products) {
+        const produced = producedQuantities[item.productId] || 0;
+        const stock = stockQuantities[item.productId] || 0;
+        const reject = rejectQuantities[item.productId] || 0;
+        
+        // Total produced must match or exceed ordered quantity
+        if (produced + stock + reject < item.quantity) {
+          setError(`Total quantities must match or exceed ordered amount for all products`);
+          return;
+        }
+      }
 
       await onComplete(producedQuantities, stockQuantities, rejectQuantities, rejectNotes);
       if (onClose) {
@@ -208,7 +221,7 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
                       value={producedQuantities[item.productId] || 0}
                       onChange={(e) => handleQuantityChange(item.productId, 'produced', e.target.value)}
                       min="0"
-                      className="w-24 px-3 py-1.5 border rounded-md text-right"
+                      className="w-32 px-3 py-1.5 border rounded-md text-right"
                     />
                     <span className="ml-2 text-gray-600">{product.unit}</span>
                   </td>
@@ -218,7 +231,7 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
                       value={stockQuantities[item.productId] || 0}
                       onChange={(e) => handleQuantityChange(item.productId, 'stock', e.target.value)}
                       min="0"
-                      className="w-24 px-3 py-1.5 border rounded-md text-right"
+                      className="w-32 px-3 py-1.5 border rounded-md text-right"
                     />
                     <span className="ml-2 text-gray-600">{product.unit}</span>
                   </td>
@@ -228,7 +241,7 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
                       value={rejectQuantities[item.productId] || 0}
                       onChange={(e) => handleQuantityChange(item.productId, 'reject', e.target.value)}
                       min="0"
-                      className="w-24 px-3 py-1.5 border rounded-md text-right text-red-600"
+                      className="w-32 px-3 py-1.5 border rounded-md text-right text-red-600"
                     />
                     <span className="ml-2 text-gray-600">{product.unit}</span>
                   </td>

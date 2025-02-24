@@ -85,10 +85,10 @@ export default function ProductionSchedule() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => setViewMode('list')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-md ${
               viewMode === 'list' 
-                ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-lg hover:from-pink-700 hover:to-purple-700' 
-                : 'text-gray-600 hover:bg-gray-50/80 hover:shadow-sm'
+                ? 'bg-pink-600 text-white' 
+                : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
             <List className="w-4 h-4" />
@@ -96,10 +96,10 @@ export default function ProductionSchedule() {
           </button>
           <button
             onClick={() => setViewMode('calendar')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-md ${
               viewMode === 'calendar' 
-                ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-lg hover:from-pink-700 hover:to-purple-700' 
-                : 'text-gray-600 hover:bg-gray-50/80 hover:shadow-sm'
+                ? 'bg-pink-600 text-white' 
+                : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
             <Calendar className="w-4 h-4" />
