@@ -11,17 +11,17 @@ export default function ProductInfo({ product }: ProductInfoProps) {
   
   return (
     <div className="flex-grow">
-      <h4 className="font-medium">{product.name}</h4>
+      <h4 className="font-medium text-gray-900">{product.name}</h4>
       {product.showDescription && product.description && (
-        <p className="text-sm text-gray-600">{product.description}</p>
+        <p className="text-sm text-gray-600 mt-1 line-clamp-2">{product.description}</p>
       )}
       {product.showPrice && product.price !== undefined && (
-        <p className="text-sm font-medium text-gray-700 mt-1">
+        <p className="text-sm font-medium text-pink-600 mt-1">
           {formatIDR(product.price)}{showUnit && ` per ${product.unit}`}
         </p>
       )}
       {product.showMinOrder && product.minOrder !== undefined && (
-        <p className="text-sm text-gray-600">
+        <p className="text-xs text-gray-500 mt-0.5">
           Minimum order: {product.minOrder}{showUnit && ` ${product.unit}`}
         </p>
       )}

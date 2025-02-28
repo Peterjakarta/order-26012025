@@ -11,13 +11,15 @@ interface ProductSelectProps {
 
 export default function ProductSelect({ product, quantity, onQuantityChange }: ProductSelectProps) {
   return (
-    <div className="flex items-center p-4 bg-white gap-4">
+    <div className="flex items-center p-4 bg-white gap-4 group hover:bg-gray-50 transition-colors duration-200 border-t first:border-t-0">
       <ProductInfo product={product} />
-      <QuantitySelector
-        product={product}
-        quantity={quantity}
-        onQuantityChange={onQuantityChange}
-      />
+      <div className="ml-auto">
+        <QuantitySelector
+          product={product}
+          quantity={quantity}
+          onQuantityChange={onQuantityChange}
+        />
+      </div>
     </div>
   );
 }

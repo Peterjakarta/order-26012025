@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClipboardList, User, FileText } from 'lucide-react';
+import { ClipboardList, User, FileText, CalendarDays, Loader2, Send } from 'lucide-react';
 import type { OrderItem } from '../types/types';
 import ProductCategoryList from './ProductCategoryList';
 import OrderPreviewDialog from './order/OrderPreviewDialog';
@@ -7,6 +7,7 @@ import { useStore } from '../store/StoreContext';
 import { useOrders } from '../hooks/useOrders';
 import { useBranches } from '../hooks/useBranches';
 import { isValidBranch } from '../data/branches';
+import { Button } from './ui/button';
 
 export default function OrderForm() {
   const { categories, products } = useStore();
@@ -19,7 +20,7 @@ export default function OrderForm() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [notes, setNotes] = useState('');
   const [showPreview, setShowPreview] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   // Clean up orderItems when products change
@@ -68,6 +69,8 @@ export default function OrderForm() {
 
   const handleConfirmOrder = async () => {
     try {
+      setSubmitStatus('loading');
+      
       await addOrder({
         branchId: selectedBranch,
         orderedBy: orderedBy.trim(),
@@ -100,27 +103,35 @@ export default function OrderForm() {
     }
   };
 
+  const isFormValid = selectedBranch && orderedBy.trim() && orderItems.length > 0;
+
   return (
     <>
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-8">
         {submitStatus === 'success' && (
-          <div className="bg-green-50 text-green-800 p-4 rounded-md">
-            Order submitted successfully!
+          <div className="bg-green-50 text-green-800 p-4 rounded-lg shadow-sm border border-green-200 animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-500" />
+              <p className="font-medium">Order submitted successfully!</p>
+            </div>
           </div>
         )}
         
         {submitStatus === 'error' && (
-          <div className="bg-red-50 text-red-800 p-4 rounded-md">
-            {errorMessage || 'There was an error submitting your order. Please try again.'}
+          <div className="bg-red-50 text-red-800 p-4 rounded-lg shadow-sm border border-red-200 animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-red-500" />
+              <p className="font-medium">{errorMessage || 'There was an error submitting your order. Please try again.'}</p>
+            </div>
           </div>
         )}
 
         <div className="space-y-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <ClipboardList className="w-5 h-5" />
+            <ClipboardList className="w-5 h-5 text-pink-600" />
             Order Information
           </h2>
-          <div className="space-y-4">
+          <div className="p-6 bg-white rounded-lg shadow-sm border border-gray-200 space-y-4">
             <div>
               <label htmlFor="branch" className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
               <select
@@ -128,7 +139,7 @@ export default function OrderForm() {
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
                 required
-                className="w-full p-2 border rounded-md"
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white"
               >
                 <option value="">Select Branch</option>
                 {branches.map(branch => (
@@ -142,7 +153,7 @@ export default function OrderForm() {
             <div>
               <label htmlFor="orderedBy" className="block text-sm font-medium text-gray-700 mb-1">
                 <span className="flex items-center gap-2">
-                  <User className="w-4 h-4" />
+                  <User className="w-4 h-4 text-gray-400" />
                   Ordered By
                 </span>
               </label>
@@ -153,14 +164,14 @@ export default function OrderForm() {
                 onChange={(e) => setOrderedBy(e.target.value)}
                 required
                 placeholder="Enter your name"
-                className="w-full p-2 border rounded-md"
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
               />
             </div>
 
             <div>
               <label htmlFor="poNumber" className="block text-sm font-medium text-gray-700 mb-1">
                 <span className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
+                  <FileText className="w-4 h-4 text-gray-400" />
                   PO Number
                 </span>
               </label>
@@ -170,13 +181,16 @@ export default function OrderForm() {
                 value={poNumber}
                 onChange={(e) => setPoNumber(e.target.value)}
                 placeholder="Enter PO number (optional)"
-                className="w-full p-2 border rounded-md"
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
               />
             </div>
 
             <div>
               <label htmlFor="orderDate" className="block text-sm font-medium text-gray-700 mb-1">
-                Order Date
+                <span className="flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4 text-gray-400" />
+                  Order Date
+                </span>
               </label>
               <input
                 type="date"
@@ -185,50 +199,64 @@ export default function OrderForm() {
                 onChange={(e) => setOrderDate(e.target.value)}
                 required
                 max={new Date().toISOString().split('T')[0]}
-                className="w-full p-2 border rounded-md"
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
               />
             </div>
           </div>
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-xl font-semibold">Products</h2>
-          <ProductCategoryList
-            orderItems={orderItems}
-            onQuantityChange={(productId, quantity) => {
-              setOrderItems(prev => {
-                const existing = prev.find(item => item.productId === productId);
-                if (!existing && quantity > 0) {
-                  return [...prev, { productId, quantity }];
-                }
-                if (quantity === 0) {
-                  return prev.filter(item => item.productId !== productId);
-                }
-                return prev.map(item => 
-                  item.productId === productId ? { ...item, quantity } : item
-                );
-              });
-            }}
-          />
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <ShoppingBag className="w-5 h-5 text-pink-600" />
+            Products
+          </h2>
+          <div className="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+            <ProductCategoryList
+              orderItems={orderItems}
+              onQuantityChange={(productId, quantity) => {
+                setOrderItems(prev => {
+                  const existing = prev.find(item => item.productId === productId);
+                  if (!existing && quantity > 0) {
+                    return [...prev, { productId, quantity }];
+                  }
+                  if (quantity === 0) {
+                    return prev.filter(item => item.productId !== productId);
+                  }
+                  return prev.map(item => 
+                    item.productId === productId ? { ...item, quantity } : item
+                  );
+                });
+              }}
+            />
+          </div>
         </div>
 
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Additional Notes</h2>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="w-full p-2 border rounded-md h-24"
-            placeholder="Any special requirements or notes..."
-          />
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-pink-600" />
+            Additional Notes
+          </h2>
+          <div className="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 h-24 resize-none"
+              placeholder="Any special requirements or notes..."
+            />
+          </div>
         </div>
 
-        <button
+        <Button
           type="submit"
-          disabled={submitStatus !== 'idle'}
-          className="w-full bg-pink-600 text-white py-2 px-4 rounded-md hover:bg-pink-700 transition-colors disabled:bg-pink-300"
+          variant="primary"
+          size="lg"
+          disabled={submitStatus === 'loading' || !isFormValid}
+          className="w-full"
+          icon={<Send className="w-5 h-5" />}
+          loading={submitStatus === 'loading'}
         >
           Preview Order
-        </button>
+        </Button>
       </form>
 
       <OrderPreviewDialog
@@ -245,3 +273,33 @@ export default function OrderForm() {
     </>
   );
 }
+
+// Import these components as needed
+const CheckCircle = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+  </svg>
+);
+
+const AlertCircle = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10"></circle>
+    <line x1="12" y1="8" x2="12" y2="12"></line>
+    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+  </svg>
+);
+
+const ShoppingBag = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+    <line x1="3" y1="6" x2="21" y2="6"></line>
+    <path d="M16 10a4 4 0 0 1-8 0"></path>
+  </svg>
+);
+
+const MessageSquare = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+  </svg>
+);

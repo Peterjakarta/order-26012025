@@ -77,9 +77,13 @@ export default function QuantitySelector({ product, quantity, onQuantityChange }
         <button
           type="button"
           onClick={handleDecrease}
-          className="p-1 rounded-md hover:bg-gray-100 text-gray-500 disabled:opacity-50 disabled:hover:bg-transparent"
+          className={`p-1.5 rounded-md text-gray-500 transition-colors 
+            ${quantity === 0 
+              ? 'opacity-50 cursor-not-allowed' 
+              : 'hover:bg-gray-100 hover:text-gray-700 active:bg-gray-200'
+            }`}
           disabled={quantity === 0}
-          title={quantity === 0 ? "Can't decrease" : `Decrease quantity`}
+          title={quantity === 0 ? "Can't decrease" : `Decrease by ${step}`}
         >
           <Minus className="w-4 h-4" />
         </button>
@@ -91,15 +95,17 @@ export default function QuantitySelector({ product, quantity, onQuantityChange }
           onBlur={handleBlur}
           min="0"
           step={step}
-          className="w-28 text-center font-medium border rounded-md py-1 px-2"
+          className="w-28 text-center font-medium border border-gray-300 rounded-md py-1.5 px-2 
+            focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-shadow"
           title={`Enter quantity (steps of ${step})`}
         />
         
         <button
           type="button"
           onClick={handleIncrease}
-          className="p-1 rounded-md hover:bg-gray-100 text-gray-500"
-          title={`Increase quantity`}
+          className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 
+            active:bg-gray-200 transition-colors"
+          title={`Increase by ${step}`}
         >
           <Plus className="w-4 h-4" />
         </button>

@@ -46,7 +46,7 @@ export function TabsList({ children, activeTab, onTabChange }: TabsListProps) {
   });
 
   return (
-    <div className="flex gap-2 border-b">
+    <div className="flex gap-1 border-b border-gray-200 mb-6">
       {enhancedChildren}
     </div>
   );
@@ -57,19 +57,21 @@ interface TabsTriggerProps {
   children: React.ReactNode;
   active?: boolean;
   onClick?: () => void;
+  icon?: React.ReactNode;
 }
 
-export function TabsTrigger({ value, children, active, onClick }: TabsTriggerProps) {
+export function TabsTrigger({ value, children, active, onClick, icon }: TabsTriggerProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium transition-colors relative
+      className={`px-4 py-2.5 text-sm font-medium transition-all duration-200 ease-in-out flex items-center gap-2
         ${active 
-          ? 'text-pink-600 border-b-2 border-pink-600' 
-          : 'text-gray-600 hover:text-gray-900'
+          ? 'text-pink-600 border-b-2 border-pink-600 bg-pink-50/50' 
+          : 'text-gray-600 hover:text-gray-900 hover:border-b-2 hover:border-gray-300'
         }`}
     >
+      {icon && <span className="inline-flex">{icon}</span>}
       {children}
     </button>
   );
@@ -83,5 +85,9 @@ interface TabsContentProps {
 
 export function TabsContent({ value, children, activeTab }: TabsContentProps) {
   if (value !== activeTab) return null;
-  return <div>{children}</div>;
+  return (
+    <div className="animate-fadeIn">
+      {children}
+    </div>
+  );
 }
