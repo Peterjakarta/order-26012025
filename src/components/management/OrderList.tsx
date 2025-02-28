@@ -135,7 +135,7 @@ export default function OrderList() {
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md flex items-center gap-2 disabled:opacity-50"
+            className="w-36 h-10 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-md hover:from-gray-600 hover:to-gray-700 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -143,10 +143,10 @@ export default function OrderList() {
           {selectedOrders.size > 0 && (
             <button
               onClick={handlePlanProduction}
-              className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-md hover:from-pink-700 hover:to-purple-700 transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
+              className="w-40 h-10 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-md hover:from-pink-700 hover:to-purple-700 transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98]"
             >
               <Calendar className="w-4 h-4" />
-              Plan Production ({selectedOrders.size})
+              Plan ({selectedOrders.size})
             </button>
           )}
         </div>
@@ -181,23 +181,12 @@ export default function OrderList() {
                     selected={selectedOrders.has(order.id)}
                     extraActions={
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-3 mb-1">
-                          <span className={`px-2 py-0.5 rounded-md text-sm ${branchStyles}`}>
-                            {branch?.name} • {new Date(order.orderDate).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
-                          </span>
-                          {order.poNumber && (
-                            <span className="text-sm text-gray-500">
-                              PO: {order.poNumber}
-                            </span>
-                          )}
-                        </div>
+                        <span className={`px-2 py-0.5 rounded-md text-sm ${branchStyles}`}>
+                          {branch?.name}
+                        </span>
                         <button
                           onClick={() => downloadPDF(order)}
-                          className="flex items-center gap-2 px-3 py-1 text-sm border border-gray-200 rounded-md hover:bg-gray-50/80 transition-all duration-300 hover:shadow-soft hover:scale-[1.02] active:scale-[0.98] backdrop-blur-sm bg-white/50"
+                          className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md hover:from-amber-600 hover:to-orange-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
                           title="Download PDF"
                         >
                           <FileDown className="w-4 h-4" />

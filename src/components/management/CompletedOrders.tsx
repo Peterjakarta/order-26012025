@@ -449,7 +449,7 @@ export default function CompletedOrders() {
           {selectedOrders.size > 0 && (
             <button
               onClick={() => setShowIngredientCalculator(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
+              className="w-52 h-10 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-md hover:bg-pink-700"
             >
               <Calculator className="w-4 h-4" />
               Calculate Ingredients ({selectedOrders.size})
@@ -459,20 +459,20 @@ export default function CompletedOrders() {
             <button
               onClick={handleManualRefresh}
               disabled={isRefreshing}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md flex items-center gap-2 disabled:opacity-50"
+              className="w-32 h-10 flex items-center justify-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <button
               onClick={expandAllMonths}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+              className="w-32 h-10 flex items-center justify-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
             >
               Expand All
             </button>
             <button
               onClick={collapseAllMonths}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+              className="w-32 h-10 flex items-center justify-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
             >
               Collapse All
             </button>
@@ -546,7 +546,7 @@ export default function CompletedOrders() {
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => handleDownloadExcel(order)}
-                                  className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-200 rounded-md hover:bg-gray-50/80 transition-all duration-300 hover:shadow-soft hover:scale-[1.02] active:scale-[0.98] backdrop-blur-sm bg-white/50"
+                                  className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-md hover:from-indigo-600 hover:to-blue-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
                                   title="Download Excel"
                                 >
                                   <FileSpreadsheet className="w-4 h-4" />
@@ -554,7 +554,7 @@ export default function CompletedOrders() {
                                 </button>
                                 <button
                                   onClick={() => handleDownloadPDF(order)}
-                                  className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-200 rounded-md hover:bg-gray-50/80 transition-all duration-300 hover:shadow-soft hover:scale-[1.02] active:scale-[0.98] backdrop-blur-sm bg-white/50"
+                                  className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-purple-500 to-violet-500 text-white rounded-md hover:from-purple-600 hover:to-violet-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
                                   title="Download PDF"
                                 >
                                   <FileDown className="w-4 h-4" />
@@ -564,10 +564,10 @@ export default function CompletedOrders() {
                                   <button
                                     onClick={() => handleReduceStock(order)}
                                     disabled={loadingStockReduction[order.id]}
-                                    className={`relative flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
+                                    className={`w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
                                       ${loadingStockReduction[order.id]
                                         ? 'bg-green-100 text-green-400 cursor-wait transform-none hover:shadow-none'
-                                        : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
+                                        : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:from-emerald-600 hover:to-green-600'
                                       }`}
                                     title="Reduce ingredient stock"
                                   >
@@ -578,10 +578,10 @@ export default function CompletedOrders() {
                                   <button
                                     onClick={() => handleRevertStockReduction(order)}
                                     disabled={loadingStockReduction[order.id]}
-                                    className={`relative flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
+                                    className={`w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
                                       ${loadingStockReduction[order.id]
                                         ? 'bg-blue-100 text-blue-400 cursor-wait transform-none hover:shadow-none'
-                                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
+                                        : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
                                       }`}
                                     title="Revert stock reduction"
                                   >
@@ -589,14 +589,13 @@ export default function CompletedOrders() {
                                     {loadingStockReduction[order.id] ? 'Reverting...' : 'Revert Stock'}
                                   </button>
                                 ) : (
-                                  // This should not be reached with the improved logic, but keeping as fallback
                                   <button
                                     onClick={() => handleReduceStock(order)}
                                     disabled={loadingStockReduction[order.id]}
-                                    className={`relative flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
+                                    className={`w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
                                       ${loadingStockReduction[order.id]
                                         ? 'bg-green-100 text-green-400 cursor-wait transform-none hover:shadow-none'
-                                        : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
+                                        : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:from-emerald-600 hover:to-green-600'
                                       }`}
                                     title="Reduce ingredient stock"
                                   >
@@ -606,7 +605,7 @@ export default function CompletedOrders() {
                                 )}
                                 <button
                                   onClick={() => setReopeningOrder(order.id)}
-                                  className="relative flex items-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-md hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
+                                  className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md hover:from-amber-600 hover:to-orange-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
                                   title="Reopen order for production"
                                 >
                                   <RotateCcw className="w-4 h-4" />
