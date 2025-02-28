@@ -68,13 +68,13 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
       ['Recipe Cost Calculator'],
       [''],
       ['Recipe:', recipe.name],
-      ['Quantity:', `${quantity} ${recipe.yieldUnit}`],
+      ['Quantity:', `${quantity} ${recipe.yieldUnit}`], // Use current quantity
       [''],
       ['Ingredients'],
       ['Name', 'Amount', 'Unit', 'Unit Price', 'Cost'],
       ...ingredientUsage.map(usage => usage && [
         usage.ingredient.name,
-        usage.amount.toFixed(2),
+        usage.amount.toFixed(2), // This is already scaled based on the current quantity
         usage.ingredient.unit,
         formatIDR(usage.unitPrice),
         formatIDR(usage.cost)
@@ -95,17 +95,22 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
   };
 
   const handleDownloadPDF = () => {
+    // Pass the current quantity to the PDF generator
     const doc = generateRecipePDF(recipe, ingredients, quantity);
     doc.save(`recipe-${recipe.name.toLowerCase().replace(/\s+/g, '-')}.pdf`);
   };
 
   const handleCopyIngredients = () => {
     try {
-      // Format ingredients for copying
+      // Format ingredients for copying with the scaled amounts based on current quantity
       const ingredientText = recipe.ingredients.map(item => {
         const ingredient = ingredients.find(i => i.id === item.ingredientId);
         if (!ingredient) return null;
-        return `${ingredient.id}|${item.amount}`;
+        
+        // Scale the ingredient amount according to the current quantity
+        const scaledAmount = (item.amount / recipe.yield) * quantity;
+        
+        return `${ingredient.id}|${Math.ceil(scaledAmount)}`;
       }).filter(Boolean).join('\n');
 
       // Copy to clipboard

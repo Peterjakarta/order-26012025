@@ -16,7 +16,7 @@ import {
   limit,
   getDoc
 } from 'firebase/firestore';
-import { db, COLLECTIONS, getBatch, commitBatchIfNeeded, getNetworkStatus } from '../lib/firebase';
+import { db, COLLECTIONS, getBatch, commitBatchIfNeeded, getNetworkStatus, handleFirestoreError } from '../lib/firebase';
 import { categories as initialCategories } from '../data/categories';
 import type { Product, ProductCategory, CategoryData, Ingredient, Recipe, StockLevel, StockHistory, StockCategory } from '../types/types';
 import { auth } from '../lib/firebase';
@@ -59,6 +59,7 @@ interface StoreContextType extends StoreState {
   addStockCategory: (data: { name: string; description?: string }) => Promise<void>;
   updateStockCategory: (id: string, data: { name: string; description?: string }) => Promise<void>;
   deleteStockCategory: (id: string) => Promise<void>;
+  refreshStockHistory: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -113,6 +114,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Subscribe to stock history from Firebase
+  const refreshStockHistory = useCallback(async () => {
+    try {
+      console.log('Manually refreshing stock history...');
+      // Get the most recent 200 entries to ensure we have the latest data
+      const q = query(
+        collection(db, COLLECTIONS.STOCK_HISTORY),
+        orderBy('timestamp', 'desc'),
+        limit(200)
+      );
+      
+      const snapshot = await getDocs(q);
+      const historyData: StockHistory[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        historyData.push({
+          id: doc.id,
+          ...data,
+          timestamp: data.timestamp?.toDate?.()?.toISOString() || new Date().toISOString()
+        } as StockHistory);
+      });
+      
+      setState(prev => ({ ...prev, stockHistory: historyData }));
+      console.log(`Refreshed stock history: ${historyData.length} entries`);
+      return historyData;
+    } catch (error) {
+      console.error('Error refreshing stock history:', error);
+      return state.stockHistory;
+    }
+  }, [state.stockHistory]);
+
   useEffect(() => {
     const q = query(
       collection(db, COLLECTIONS.STOCK_HISTORY),
@@ -217,6 +248,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         });
 
         await commitBatchIfNeeded();
+        // Refresh history after manual update
+        await refreshStockHistory();
         return;
       }
 
@@ -289,6 +322,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       
       await commitBatchIfNeeded();
+      
+      // Refresh history after a significant operation like reduction or reversion
+      if (data.changeType === 'reduction' || data.changeType === 'reversion') {
+        await refreshStockHistory();
+      }
     } catch (error) {
       // Log detailed error information
       console.error('Error updating stock level:', {
@@ -301,30 +339,80 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       throw error;
     }
-  }, [state.stockLevels]);
+  }, [state.stockLevels, refreshStockHistory]);
 
   const getStockHistory = useCallback(async (ingredientId?: string) => {
     try {
-      let q = query(
-        collection(db, COLLECTIONS.STOCK_HISTORY),
-        orderBy('timestamp', 'desc')
-      );
+      // Check if we're offline
+      if (!getNetworkStatus()) {
+        // Return cached history data if offline
+        let filteredHistory = state.stockHistory;
+        if (ingredientId) {
+          filteredHistory = state.stockHistory.filter(h => h.ingredientId === ingredientId);
+        }
+        return filteredHistory;
+      }
+
+      // IMPORTANT: We need to completely avoid using composite queries with 'where' and 'orderBy'
+      // together, as they require explicit index creation.
+      // Instead, we'll use two different simple query strategies:
       
+      // Strategy 1: Just get all history and filter in memory if ingredientId is provided
+      // This avoids index issues but isn't efficient for large datasets
       if (ingredientId) {
-        q = query(q, where('ingredientId', '==', ingredientId));
+        try {
+          const simpleQuery = query(
+            collection(db, COLLECTIONS.STOCK_HISTORY),
+            where('ingredientId', '==', ingredientId)
+          );
+          
+          const snapshot = await getDocs(simpleQuery);
+          const historyEntries = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate?.()?.toISOString() || new Date().toISOString()
+          })) as StockHistory[];
+          
+          // Sort in memory (since we can't use orderBy with where without an index)
+          return historyEntries.sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+        } catch (queryError) {
+          console.error('Error executing stock history query:', queryError);
+          // Fallback to the cached history and filter in memory
+          return state.stockHistory.filter(h => h.ingredientId === ingredientId);
+        }
       }
       
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate?.()?.toISOString() || new Date().toISOString()
-      })) as StockHistory[];
+      // Strategy 2: For all history, just use orderBy without where
+      // This should always work without special indexes
+      try {
+        const simpleQuery = query(
+          collection(db, COLLECTIONS.STOCK_HISTORY),
+          orderBy('timestamp', 'desc'),
+          limit(200) // Increased limit to capture more history
+        );
+        
+        const snapshot = await getDocs(simpleQuery);
+        return snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          timestamp: doc.data().timestamp?.toDate?.()?.toISOString() || new Date().toISOString()
+        })) as StockHistory[];
+      } catch (queryError) {
+        console.error('Error executing stock history query:', queryError);
+        // Return cached data
+        return state.stockHistory;
+      }
     } catch (error) {
       console.error('Error getting stock history:', error);
-      throw new Error('Failed to get stock history');
+      // Return cached data on any error
+      if (ingredientId) {
+        return state.stockHistory.filter(h => h.ingredientId === ingredientId);
+      }
+      return state.stockHistory;
     }
-  }, []);
+  }, [state.stockHistory]);
 
   // Subscribe to categories from Firebase
   useEffect(() => {
@@ -694,7 +782,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     getProductsByCategory,
     addStockCategory,
     updateStockCategory,
-    deleteStockCategory
+    deleteStockCategory,
+    refreshStockHistory
   };
 
   return (

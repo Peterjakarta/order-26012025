@@ -179,6 +179,37 @@ export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) 
   }
 }
 
+// Helper to handle Firestore errors gracefully
+export function handleFirestoreError(error: any, fallbackMessage: string = 'A database error occurred'): string {
+  console.error('Firestore error:', error);
+  
+  if (!error) return fallbackMessage;
+  
+  // Check for specific error codes
+  if (error.code === 'failed-precondition') {
+    // Often happens with missing indexes
+    return 'The operation cannot be completed at this time. This might be due to missing database indexes.';
+  }
+  
+  if (error.code === 'permission-denied') {
+    return 'You do not have permission to perform this operation.';
+  }
+  
+  if (error.code === 'unavailable') {
+    return 'The service is currently unavailable. Please try again later.';
+  }
+  
+  if (error.code === 'resource-exhausted') {
+    return 'The system is currently overloaded. Please try again later.';
+  }
+  
+  if (error.code === 'unauthenticated') {
+    return 'Your session has expired. Please log in again.';
+  }
+  
+  return error.message || fallbackMessage;
+}
+
 // Initialize persistence
 initializePersistence();
 

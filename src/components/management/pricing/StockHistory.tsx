@@ -12,7 +12,7 @@ interface StockHistoryProps {
 }
 
 export default function StockHistory({ ingredientId, onClose }: StockHistoryProps) {
-  const { ingredients, getStockHistory } = useStore();
+  const { ingredients, getStockHistory, stockHistory: cachedHistory } = useStore();
   const [history, setHistory] = useState<StockHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,11 +31,26 @@ export default function StockHistory({ ingredientId, onClose }: StockHistoryProp
     try {
       setLoading(true);
       setError(null);
-      const historyData = await getStockHistory(ingredientId);
-      setHistory(historyData);
+      
+      // Use cached history initially to prevent UI freezing
+      if (ingredientId) {
+        setHistory(cachedHistory.filter(item => item.ingredientId === ingredientId));
+      } else {
+        setHistory(cachedHistory);
+      }
+      
+      // Then load fresh data
+      try {
+        const historyData = await getStockHistory(ingredientId);
+        setHistory(historyData);
+      } catch (err) {
+        console.error('Error loading stock history:', err);
+        // We already set initial data from cache, so we don't set error here
+        // Just log it to avoid disrupting the user experience
+      }
     } catch (err) {
-      console.error('Error loading stock history:', err);
-      setError('Failed to load stock history');
+      console.error('Error in loadHistory:', err);
+      setError('Failed to load stock history. Using cached data.');
     } finally {
       setLoading(false);
     }

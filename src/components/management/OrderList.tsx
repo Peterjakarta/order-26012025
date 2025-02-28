@@ -1,22 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { Package2, AlertCircle, Calendar, FileDown } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Package2, AlertCircle, Calendar, FileDown, RefreshCw } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '../../hooks/useOrders';
 import { useBranches } from '../../hooks/useBranches';
 import OrderItem from './order/OrderItem';
 import { useOrderActions } from '../../hooks/useOrderActions';
 
 export default function OrderList() {
-  const { orders, loading, error, removeOrder, updateOrderStatus } = useOrders();
+  const { orders, loading, error, removeOrder, updateOrderStatus, refreshOrders } = useOrders();
   const { branches } = useBranches();
   const { downloadPDF } = useOrderActions();
   const navigate = useNavigate();
+  const location = useLocation();
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Reset selected orders when orders change
   useEffect(() => {
     setSelectedOrders(new Set());
   }, [orders]);
+
+  // Refresh orders when navigating to this page
+  useEffect(() => {
+    const refresh = async () => {
+      setIsRefreshing(true);
+      await refreshOrders();
+      setIsRefreshing(false);
+    };
+    
+    refresh();
+  }, [refreshOrders, location.pathname]);
+  
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshOrders();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
 
   // Filter out completed orders and sort by order date
   const pendingOrders = orders
@@ -62,7 +82,7 @@ export default function OrderList() {
     navigate(`/management/production/${Array.from(selectedOrders).join(',')}`);
   };
 
-  if (loading) {
+  if (loading && !isRefreshing) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Loading orders...</p>
@@ -75,6 +95,12 @@ export default function OrderList() {
       <div className="bg-red-50 text-red-800 p-4 rounded-lg flex items-center gap-2">
         <AlertCircle className="w-5 h-5" />
         <p>{error}</p>
+        <button 
+          onClick={refreshOrders}
+          className="ml-4 px-3 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -98,16 +124,32 @@ export default function OrderList() {
         <div className="flex items-center gap-2">
           <Package2 className="w-6 h-6" />
           <h2 className="text-xl font-semibold">Active Orders</h2>
+          {isRefreshing && (
+            <span className="text-sm text-gray-500 flex items-center ml-2">
+              <RefreshCw className="w-4 h-4 animate-spin mr-1" />
+              Refreshing...
+            </span>
+          )}
         </div>
-        {selectedOrders.size > 0 && (
+        <div className="flex items-center gap-3">
           <button
-            onClick={handlePlanProduction}
-            className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-md hover:from-pink-700 hover:to-purple-700 transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md flex items-center gap-2 disabled:opacity-50"
           >
-            <Calendar className="w-4 h-4" />
-            Plan Production ({selectedOrders.size})
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
-        )}
+          {selectedOrders.size > 0 && (
+            <button
+              onClick={handlePlanProduction}
+              className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-md hover:from-pink-700 hover:to-purple-700 transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
+            >
+              <Calendar className="w-4 h-4" />
+              Plan Production ({selectedOrders.size})
+            </button>
+          )}
+        </div>
       </div>
 
       {pendingOrders.length === 0 ? (

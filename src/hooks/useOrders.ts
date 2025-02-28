@@ -9,7 +9,8 @@ import {
   orderBy,
   updateDoc,
   serverTimestamp,
-  where
+  where,
+  getDocs
 } from 'firebase/firestore';
 import { db, COLLECTIONS } from '../lib/firebase';
 import { generateOrderNumber } from '../utils/orderUtils';
@@ -20,14 +21,26 @@ export function useOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null); 
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   // Add subscription cleanup flag
   const subscriptionRef = useRef<(() => void) | null>(null);
+  const didInitializeRef = useRef(false);
 
+  // This effect runs when refreshCounter changes, forcing a data reload
   useEffect(() => {
     setLoading(true);
     setError(null);
     let isMounted = true;
+
+    // Clean up previous subscription if exists
+    if (subscriptionRef.current) {
+      subscriptionRef.current();
+      subscriptionRef.current = null;
+    }
+
+    // Flag to indicate we've set up the subscription
+    didInitializeRef.current = true;
 
     try {
       // Create a more robust query with proper ordering
@@ -35,6 +48,8 @@ export function useOrders() {
         collection(db, COLLECTIONS.ORDERS),
         orderBy('updatedAt', 'desc')
       );
+
+      console.log(`Setting up orders subscription (refresh #${refreshCounter})`);
 
       // Set up new subscription
       subscriptionRef.current = onSnapshot(q, 
@@ -120,7 +135,7 @@ export function useOrders() {
       }
     };
 
-  }, []); // Add empty dependency array
+  }, [refreshCounter]); // Add refreshCounter to trigger this effect when needed
 
   const addOrder = useCallback(async (orderData: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>) => {
     try {
@@ -171,6 +186,9 @@ export function useOrders() {
 
       await setDoc(doc(db, COLLECTIONS.ORDERS, orderId), order);
       
+      // Force refresh after adding
+      setRefreshCounter(prev => prev + 1);
+      
       return {
         id: orderId,
         ...orderData,
@@ -194,6 +212,9 @@ export function useOrders() {
         updatedAt: now,
         status: orderData.status || 'pending'
       });
+      
+      // Force refresh after updating
+      setRefreshCounter(prev => prev + 1);
     } catch (error) {
       console.error('Error updating order:', error);
       throw error instanceof Error ? error : new Error('Failed to update order');
@@ -203,6 +224,9 @@ export function useOrders() {
   const removeOrder = useCallback(async (id: string) => {
     try {
       await deleteDoc(doc(db, COLLECTIONS.ORDERS, id));
+      
+      // Force refresh after removing
+      setRefreshCounter(prev => prev + 1);
     } catch (error) {
       console.error('Error removing order:', error);
       throw error instanceof Error ? error : new Error('Failed to remove order');
@@ -254,6 +278,9 @@ export function useOrders() {
       }
 
       await updateDoc(orderRef, updateData);
+      
+      // Force refresh after updating status
+      setRefreshCounter(prev => prev + 1);
     } catch (error) {
       console.error('Error updating order:', error);
       throw error instanceof Error ? error : new Error('Failed to update order status');
@@ -273,10 +300,19 @@ export function useOrders() {
         productionStartDate: startDate,
         productionEndDate: endDate,
       });
+      
+      // Force refresh after updating production details
+      setRefreshCounter(prev => prev + 1);
     } catch (error) {
       console.error('Error updating order production:', error);
       throw error instanceof Error ? error : new Error('Failed to update production schedule');
     }
+  }, []);
+
+  // Function to manually refresh orders
+  const refreshOrders = useCallback(() => {
+    console.log('Manually refreshing orders data');
+    setRefreshCounter(prev => prev + 1);
   }, []);
 
   return { 
@@ -287,6 +323,7 @@ export function useOrders() {
     updateOrder,
     removeOrder,
     updateOrderStatus,
-    updateOrderProduction
+    updateOrderProduction,
+    refreshOrders
   };
 }

@@ -312,13 +312,12 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
 
   return doc;
 }
-import { calculateRecipeCost } from './recipeCalculations';
 
 export function generateRecipePDF(recipe: Recipe, ingredients: Ingredient[], quantity: number) {
   // Create PDF document
   const doc = new jsPDF();
   
-  // Calculate costs
+  // Calculate costs based on the provided quantity (not the default yield)
   const baseCost = calculateRecipeCost(recipe, ingredients);
   const scaledCost = (baseCost / recipe.yield) * quantity;
   const laborCost = recipe.laborCost ? (recipe.laborCost / recipe.yield) * quantity : 0;
@@ -326,7 +325,7 @@ export function generateRecipePDF(recipe: Recipe, ingredients: Ingredient[], qua
   const totalCost = scaledCost + laborCost + packagingCost;
   const costPerUnit = totalCost / quantity;
 
-  // Calculate total weight
+  // Calculate total weight based on the specified quantity
   const totalWeight = recipe.ingredients.reduce((total, item) => {
     const ingredient = ingredients.find(i => i.id === item.ingredientId);
     if (!ingredient) return total;
@@ -342,13 +341,13 @@ export function generateRecipePDF(recipe: Recipe, ingredients: Ingredient[], qua
   doc.text(`Recipe: ${recipe.name}`, 14, 25);
   doc.text(`Quantity: ${quantity} ${recipe.yieldUnit}`, 14, 32);
 
-  // Ingredients table
+  // Ingredients table - use scaled amounts based on the provided quantity
   const tableData = recipe.ingredients.map(item => {
     const ingredient = ingredients.find(i => i.id === item.ingredientId);
     if (!ingredient) return [];
 
     const scaledAmount = (item.amount / recipe.yield) * quantity;
-    const cost = (scaledAmount / ingredient.packageSize) * ingredient.price;
+    const cost = (ingredient.price / ingredient.packageSize) * scaledAmount;
 
     return [
       ingredient.name,

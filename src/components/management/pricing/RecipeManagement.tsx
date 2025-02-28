@@ -14,6 +14,7 @@ export default function RecipeManagement() {
   const [copyingRecipe, setCopyingRecipe] = useState<Recipe | null>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [expandedRecipes, setExpandedRecipes] = useState<Set<string>>(new Set());
+  const [justCopied, setJustCopied] = useState<string | null>(null);
 
   const handleSubmit = async (data: Omit<Recipe, 'id'>) => {
     try {
@@ -34,13 +35,16 @@ export default function RecipeManagement() {
   };
 
   const handleCopyRecipe = (recipe: Recipe) => {
-    const copyData = {
+    setCopyingRecipe({
       ...recipe,
       name: `${recipe.name} (Copy)`,
       description: recipe.description || '',
       notes: recipe.notes || ''
-    };
-    setCopyingRecipe(copyData);
+    });
+    
+    // Show "Copied" indicator briefly
+    setJustCopied(recipe.id);
+    setTimeout(() => setJustCopied(null), 2000);
   };
 
   // Group recipes by category
@@ -80,17 +84,27 @@ export default function RecipeManagement() {
         </button>
       </div>
 
-      {(isAddingRecipe || editingRecipe || copyingRecipe) && (
-        <RecipeForm
-          recipe={editingRecipe || copyingRecipe}
-          onSubmit={handleSubmit}
-          onCancel={() => {
-            setIsAddingRecipe(false);
-            setEditingRecipe(null);
-            setCopyingRecipe(null);
-          }}
-          isEditing={!!editingRecipe}
-        />
+      {isAddingRecipe && (
+        <div className="mb-6">
+          <h3 className="text-lg font-medium mb-3">New Recipe</h3>
+          <RecipeForm
+            recipe={null}
+            onSubmit={handleSubmit}
+            onCancel={() => setIsAddingRecipe(false)}
+          />
+        </div>
+      )}
+
+      {copyingRecipe && (
+        <div className="mb-6">
+          <h3 className="text-lg font-medium mb-3">Copy Recipe</h3>
+          <RecipeForm
+            recipe={copyingRecipe}
+            onSubmit={handleSubmit}
+            onCancel={() => setCopyingRecipe(null)}
+            isEditing={false}
+          />
+        </div>
       )}
 
       {calculatingRecipe && (
@@ -127,51 +141,65 @@ export default function RecipeManagement() {
               {isExpanded && (
                 <div className="border-t divide-y">
                   {recipes.map(recipe => (
-                    <div key={`recipe-${recipe.id}`} className="p-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h4 className="font-medium">{recipe.name}</h4>
-                          <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
-                            <span>Yield: {recipe.yield} {recipe.yieldUnit}</span>
-                            {recipe.laborCost && (
-                              <span>Labor: {formatIDR(recipe.laborCost)}</span>
-                            )}
-                            {recipe.packagingCost && (
-                              <span>Packaging: {formatIDR(recipe.packagingCost)}</span>
-                            )}
+                    <div key={`recipe-${recipe.id}`}>
+                      {editingRecipe?.id === recipe.id ? (
+                        <div className="p-4">
+                          <h3 className="text-lg font-medium mb-3">Edit Recipe</h3>
+                          <RecipeForm
+                            recipe={recipe}
+                            onSubmit={handleSubmit}
+                            onCancel={() => setEditingRecipe(null)}
+                            isEditing={true}
+                          />
+                        </div>
+                      ) : (
+                        <div className="p-4">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <h4 className="font-medium">{recipe.name}</h4>
+                              <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
+                                <span>Yield: {recipe.yield} {recipe.yieldUnit}</span>
+                                {recipe.laborCost && (
+                                  <span>Labor: {formatIDR(recipe.laborCost)}</span>
+                                )}
+                                {recipe.packagingCost && (
+                                  <span>Packaging: {formatIDR(recipe.packagingCost)}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setCalculatingRecipe(recipe)}
+                                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                              >
+                                <Calculator className="w-4 h-4" />
+                                Calculate
+                              </button>
+                              <button
+                                onClick={() => handleCopyRecipe(recipe)}
+                                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                              >
+                                <Copy className="w-4 h-4" />
+                                {justCopied === recipe.id ? 'Copied!' : 'Copy'}
+                              </button>
+                              <button
+                                onClick={() => setEditingRecipe(recipe)}
+                                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => deleteRecipe(recipe.id)}
+                                className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Delete
+                              </button>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setCalculatingRecipe(recipe)}
-                            className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-                          >
-                            <Calculator className="w-4 h-4" />
-                            Calculate
-                          </button>
-                          <button
-                            onClick={() => handleCopyRecipe(recipe)}
-                            className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-                          >
-                            <Copy className="w-4 h-4" />
-                            Copy
-                          </button>
-                          <button
-                            onClick={() => setEditingRecipe(recipe)}
-                            className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => deleteRecipe(recipe.id)}
-                            className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                          </button>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>
