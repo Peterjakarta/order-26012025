@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight, ClipboardCheck, FileSpreadsheet } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight, ClipboardCheck, FileSpreadsheet, AlertCircle } from 'lucide-react';
 import type { Order } from '../../../types/types';
 import { useBranches } from '../../../hooks/useBranches';
 import { useStore } from '../../../store/StoreContext';
@@ -41,26 +41,29 @@ export default function ProductionList({
   const [editingDates, setEditingDates] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const { recipes, ingredients } = useStore();
+  const [dateErrors, setDateErrors] = useState<Record<string, string>>({});
 
   // Separate orders into scheduled and unscheduled
   const scheduledOrders = orders.filter(order => order.productionStartDate && order.productionEndDate);
   const unscheduledOrders = orders.filter(order => !order.productionStartDate || !order.productionEndDate);
 
   const handleStartDateChange = (orderId: string, date: string) => {
+    setDateErrors(prev => ({ ...prev, [orderId]: '' }));
     setOrderDates(prev => ({
       ...prev,
       [orderId]: {
         start: date,
-        end: prev[orderId]?.end || endDate
+        end: prev[orderId]?.end || ''
       }
     }));
   };
 
   const handleEndDateChange = (orderId: string, date: string) => {
+    setDateErrors(prev => ({ ...prev, [orderId]: '' }));
     setOrderDates(prev => ({
       ...prev,
       [orderId]: {
-        start: prev[orderId]?.start || startDate,
+        start: prev[orderId]?.start || '',
         end: date
       }
     }));
@@ -69,15 +72,22 @@ export default function ProductionList({
   const handleSchedule = async (orderId: string) => {
     try {
       setError(null);
+      setDateErrors(prev => ({ ...prev, [orderId]: '' }));
       const dates = orderDates[orderId];
       
       if (!dates?.start || !dates?.end) {
-        setError('Please select both start and end dates');
+        setDateErrors(prev => ({ 
+          ...prev, 
+          [orderId]: 'Please select both start and end dates'
+        }));
         return;
       }
 
       if (new Date(dates.end) < new Date(dates.start)) {
-        setError('End date cannot be before start date');
+        setDateErrors(prev => ({ 
+          ...prev, 
+          [orderId]: 'End date cannot be before start date'
+        }));
         return;
       }
 
@@ -215,36 +225,68 @@ export default function ProductionList({
                     </div>
                   </div>
 
-                  {/* Date Selection */}
-                  {isExpanded && <div className="grid sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Start Date
-                      </label>
-                      <input
-                        type="date"
-                        value={dates?.start || ''}
-                        onChange={(e) => handleStartDateChange(order.id, e.target.value)}
-                        className="w-full p-2 border rounded-md"
-                        min={new Date().toISOString().split('T')[0]}
-                      />
+                  {/* Enhanced Date Selection - Always visible */}
+                  <div className="bg-gray-50 border rounded-lg p-5 mt-4">
+                    <h4 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-pink-600" />
+                      Production Schedule
+                    </h4>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Start Date
+                          <span className="text-red-500 ml-1">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={dates?.start || ''}
+                          onChange={(e) => handleStartDateChange(order.id, e.target.value)}
+                          className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                          min={new Date().toISOString().split('T')[0]}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          End Date
+                          <span className="text-red-500 ml-1">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={dates?.end || ''}
+                          onChange={(e) => handleEndDateChange(order.id, e.target.value)}
+                          className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                          min={dates?.start || new Date().toISOString().split('T')[0]}
+                          required
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        End Date
-                      </label>
-                      <input
-                        type="date"
-                        value={dates?.end || ''}
-                        onChange={(e) => handleEndDateChange(order.id, e.target.value)}
-                        className="w-full p-2 border rounded-md"
-                        min={dates?.start || new Date().toISOString().split('T')[0]}
-                      />
+                    {dateErrors[order.id] && (
+                      <div className="text-sm text-red-600 bg-red-50 p-2 rounded-md mt-2">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          {dateErrors[order.id]}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex justify-end pt-4 mt-2">
+                      <button
+                        onClick={() => handleSchedule(order.id)}
+                        disabled={!dates?.start || !dates?.end}
+                        className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 
+                          text-white rounded-md hover:from-pink-700 hover:to-purple-700 transition-all duration-300 
+                          hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 
+                          disabled:cursor-not-allowed disabled:transform-none disabled:hover:shadow-none"
+                      >
+                        <Calendar className="w-4 h-4" />
+                        Schedule Production
+                      </button>
                     </div>
-                  </div>}
+                  </div>
 
                   {/* Products */}
                   {isExpanded && <div className="space-y-2">
+                    <h4 className="font-medium text-gray-700 mb-2">Products:</h4>
                     {order.products.map(item => {
                       const product = products.find(p => p.id === item.productId);
                       if (!product) return null;
@@ -253,10 +295,10 @@ export default function ProductionList({
                       const showMould = isBonBonCategory(product.category) || isPralinesCategory(product.category);
 
                       return (
-                        <div key={item.productId} className="flex justify-between items-center text-sm">
-                          <span>{product.name}</span>
+                        <div key={item.productId} className="flex justify-between items-center text-sm bg-white p-3 rounded-md border">
+                          <span className="font-medium">{product.name}</span>
                           <div className="flex items-center gap-4">
-                            <span className="font-medium">
+                            <span>
                               {item.quantity} {product.unit}
                             </span>
                             {showMould && (
@@ -271,17 +313,6 @@ export default function ProductionList({
                       );
                     })}
                   </div>}
-
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => handleSchedule(order.id)}
-                      disabled={!dates?.start || !dates?.end}
-                      className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-md hover:from-pink-700 hover:to-purple-700 transition-all duration-300 hover:shadow-glass hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:hover:shadow-none overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
-                    >
-                      <Calendar className="w-4 h-4" />
-                      Schedule Production
-                    </button>
-                  </div>
                 </div>
               );
             })}
@@ -376,32 +407,34 @@ export default function ProductionList({
                       </div>
                       <div className="text-sm">
                         {isEditing ? (
-                          <div className={`grid sm:grid-cols-2 gap-4 bg-white p-4 rounded-lg ${isExpanded ? '' : 'hidden'}`}>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Start Date
-                              </label>
-                              <input
-                                type="date"
-                                value={dates?.start || ''}
-                                onChange={(e) => handleStartDateChange(order.id, e.target.value)}
-                                className="w-full p-2 border rounded-md"
-                                min={new Date().toISOString().split('T')[0]}
-                              />
+                          <div className="bg-white p-4 rounded-lg border shadow-sm space-y-4">
+                            <div className="grid sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Start Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={dates?.start || ''}
+                                  onChange={(e) => handleStartDateChange(order.id, e.target.value)}
+                                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                                  min={new Date().toISOString().split('T')[0]}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  End Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={dates?.end || ''}
+                                  onChange={(e) => handleEndDateChange(order.id, e.target.value)}
+                                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                                  min={dates?.start || new Date().toISOString().split('T')[0]}
+                                />
+                              </div>
                             </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                End Date
-                              </label>
-                              <input
-                                type="date"
-                                value={dates?.end || ''}
-                                onChange={(e) => handleEndDateChange(order.id, e.target.value)}
-                                className="w-full p-2 border rounded-md"
-                                min={dates?.start || new Date().toISOString().split('T')[0]}
-                              />
-                            </div>
-                            <div className="col-span-2 flex justify-end gap-2">
+                            <div className="flex justify-end gap-2">
                               <button
                                 onClick={() => setEditingDates(null)}
                                 className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"

@@ -1,53 +1,65 @@
 import React, { useState, useEffect } from 'react';
-import { WifiOff } from 'lucide-react';
+import { WifiOff, Wifi, RefreshCw } from 'lucide-react';
 import { getNetworkStatus } from '../../lib/firebase';
 
 export default function NetworkStatus() {
   const [isOnline, setIsOnline] = useState(getNetworkStatus());
-  const [showOffline, setShowOffline] = useState(false);
-  const [reconnecting, setReconnecting] = useState(false);
+  const [status, setStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected');
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setReconnecting(true);
-      setIsOnline(true);
-      // Keep showing the status while reconnecting
+    const handleConnectionChange = (e: CustomEvent) => {
+      const newStatus = e.detail.status;
+      setStatus(newStatus);
+      setVisible(newStatus !== 'connected');
+      
+      // Auto-hide after 5 seconds if connected
+      if (newStatus === 'connected') {
+        setTimeout(() => setVisible(false), 5000);
+      }
     };
 
-    const handleOffline = () => {
-      setIsOnline(false);
-      setReconnecting(false);
-      setShowOffline(true);
-    };
-
-    // Listen for Firebase reconnection success
-    const handleReconnected = () => {
-      setReconnecting(false);
-      setShowOffline(false);
-    };
-
-    window.addEventListener('firestore-reconnected', handleReconnected);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    window.addEventListener('firebase-connection', handleConnectionChange as EventListener);
 
     // Check initial status
     setIsOnline(getNetworkStatus());
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('firestore-reconnected', handleReconnected);
+      window.removeEventListener('firebase-connection', handleConnectionChange as EventListener);
     };
   }, []);
 
-  if (!showOffline) return null;
+  if (!visible) return null;
+
+  const statusConfig = {
+    connected: {
+      icon: <Wifi className="w-4 h-4 text-green-500" />,
+      bg: 'bg-green-50',
+      text: 'text-green-800',
+      message: 'Connected'
+    },
+    disconnected: {
+      icon: <WifiOff className="w-4 h-4 text-red-500" />,
+      bg: 'bg-red-50',
+      text: 'text-red-800',
+      message: 'Offline'
+    },
+    reconnecting: {
+      icon: <RefreshCw className="w-4 h-4 text-yellow-500 animate-spin" />,
+      bg: 'bg-yellow-50',
+      text: 'text-yellow-800',
+      message: 'Reconnecting...'
+    }
+  };
+
+  const config = statusConfig[status];
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
-      <div className="bg-yellow-50 text-yellow-800 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-        <WifiOff className="w-4 h-4" />
-        <span className="text-sm font-medium">
-          {reconnecting ? 'Reconnecting...' : isOnline ? 'Connected' : 'Working offline'}
+      <div className={`${config.bg} ${config.text} px-4 py-2 rounded-lg shadow-lg flex items-center gap-2`}>
+        {config.icon}
+        <span className="text-sm font-medium whitespace-nowrap">
+          {config.message}
         </span>
       </div>
     </div>

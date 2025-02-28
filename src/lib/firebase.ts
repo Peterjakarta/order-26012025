@@ -20,31 +20,43 @@ import type { LogEntry } from '../types/types';
 // Network status management
 let isOnline = true;
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_DELAY = 2000; // 2 seconds
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_DELAY = 3000; // 3 seconds
+const RECONNECT_BACKOFF_FACTOR = 1.5; // Exponential backoff
 
 // Network status management functions
 export function getNetworkStatus() {
   return isOnline;
 }
 
+// Notify UI of connection status changes
+function dispatchConnectionEvent(status: 'connected' | 'disconnected' | 'reconnecting') {
+  window.dispatchEvent(new CustomEvent('firebase-connection', { 
+    detail: { status } 
+  }));
+}
+
 // Reconnection handler
 async function attemptReconnect() {
   if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
     console.warn('Max reconnection attempts reached');
+    dispatchConnectionEvent('disconnected');
     return;
   }
 
   try {
     await enableNetwork(db);
     isOnline = true;
+    dispatchConnectionEvent('connected');
     reconnectAttempts = 0;
     console.log('Successfully reconnected to Firestore');
     window.dispatchEvent(new Event('firestore-reconnected'));
   } catch (err) {
     reconnectAttempts++;
-    console.warn(`Reconnection attempt ${reconnectAttempts} failed, retrying in ${RECONNECT_DELAY}ms`);
-    setTimeout(attemptReconnect, RECONNECT_DELAY);
+    const delay = RECONNECT_DELAY * Math.pow(RECONNECT_BACKOFF_FACTOR, reconnectAttempts - 1);
+    console.warn(`Reconnection attempt ${reconnectAttempts} failed, retrying in ${delay}ms`);
+    dispatchConnectionEvent('reconnecting');
+    setTimeout(attemptReconnect, delay);
   }
 }
 
@@ -83,7 +95,13 @@ const initializePersistence = async () => {
     } else if (err.code === 'unimplemented') {
       console.warn('Persistence not supported in this browser');
     } else {
-      console.error('Error enabling persistence:', err);
+      console.error('Error enabling persistence:', err.message);
+      // Log detailed error info but continue - app will work without persistence
+      console.debug('Persistence error details:', {
+        code: err.code,
+        name: err.name,
+        stack: err.stack
+      });
     }
   }
 };
@@ -91,6 +109,7 @@ const initializePersistence = async () => {
 window.addEventListener('online', () => {
   console.log('Reconnecting to Firestore...');
   isOnline = true;
+  dispatchConnectionEvent('reconnecting');
   reconnectAttempts = 0;
   attemptReconnect();
 });
@@ -98,6 +117,7 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => {
   console.log('Disconnecting from Firestore due to offline...');
   isOnline = false;
+  dispatchConnectionEvent('disconnected');
   disableNetwork(db).catch(console.error);
 });
 
