@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight, ClipboardCheck, FileSpreadsheet, AlertCircle } from 'lucide-react';
-import type { Order } from '../../../types/types';
+import type { Order, Product } from '../../../types/types';
 import { useBranches } from '../../../hooks/useBranches';
 import { useStore } from '../../../store/StoreContext';
 import { calculateMouldCount } from '../../../utils/mouldCalculations';
 import { isBonBonCategory, isPralinesCategory } from '../../../utils/quantityUtils';
 import { getBranchStyles } from '../../../utils/branchStyles';
 import { generateOrderPDF, generateProductionChecklistPDF, generateOrderWithRecipesPDF } from '../../../utils/pdfGenerator';
+import { generateExcelData, saveWorkbook } from '../../../utils/excelGenerator';
 import OrderCompletion from '../order/OrderCompletion';
 
 interface ProductionListProps {
@@ -142,6 +143,47 @@ export default function ProductionList({
   const handleDownloadPDF = (order: Order) => {
     const doc = generateOrderPDF(order, products);
     doc.save(`production-${order.id.slice(0, 8)}.pdf`);
+  };
+
+  const handleDownloadExcel = (order: Order) => {
+    try {
+      // Prepare data for Excel
+      const data = [
+        ['Production Order Details'],
+        ['Order #:', order.id.slice(0, 8)],
+        ['Branch:', branches.find(b => b.id === order.branchId)?.name || 'Unknown'],
+        ['Order Date:', new Date(order.orderDate).toLocaleDateString()],
+        ['Production Date:', order.productionStartDate || ''],
+        [''],
+        ['Products'],
+        ['Product', 'Quantity', 'Unit', 'Mould Info']
+      ];
+
+      // Add product rows
+      order.products.forEach(item => {
+        const product = products.find(p => p.id === item.productId);
+        if (!product) return;
+
+        const mouldInfo = calculateMouldCount(product.category, item.quantity);
+        data.push([
+          product.name,
+          item.quantity.toString(),
+          product.unit || '',
+          mouldInfo || '-'
+        ]);
+      });
+
+      // Add notes if present
+      if (order.notes) {
+        data.push([''], ['Notes:', order.notes]);
+      }
+
+      const wb = generateExcelData(data, 'Production Order');
+      saveWorkbook(wb, `production-order-${order.id.slice(0, 8)}.xlsx`);
+    } catch (err) {
+      console.error('Error generating Excel:', err);
+      setError('Failed to generate Excel file');
+    }
   };
 
   const handleDownloadChecklist = (order: Order) => {

@@ -22,19 +22,17 @@ export default function CompletedOrders() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loadingStockReduction, setLoadingStockReduction] = useState<Record<string, boolean>>({});
+  const [revertingStockReduction, setRevertingStockReduction] = useState<Record<string, boolean>>({});
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   // Create a lookup map of order IDs that have been reduced
   const stockReductionHistory = React.useMemo(() => {
-    // Group by orderId and find the latest entry for each order
     const latestEntries: Record<string, { type: 'reduced' | 'reverted', timestamp: string }> = {};
     
-    // Process all entries to find the latest for each order
     stockHistory.forEach(entry => {
       if (!entry.orderId) return;
       
-      // Only consider reduction or reversion entries
       if (entry.changeType !== 'reduction' && entry.changeType !== 'reversion') return;
       
       const existingEntry = latestEntries[entry.orderId];
@@ -46,7 +44,6 @@ export default function CompletedOrders() {
       }
     });
     
-    // Convert to simple map of orderId -> state
     const result: Record<string, 'reduced' | 'reverted'> = {};
     Object.entries(latestEntries).forEach(([orderId, entry]) => {
       result[orderId] = entry.type;
@@ -79,7 +76,7 @@ export default function CompletedOrders() {
     } finally {
       setTimeout(() => {
         setIsRefreshing(false);
-      }, 500); // Add a small delay for better UX feedback
+      }, 500);
     }
   };
 
@@ -103,27 +100,27 @@ export default function CompletedOrders() {
 
       if (invalidProducts.length > 0) {
         const productNames = invalidProducts
-          .map(item => products.find(p => p.id === item.productId)?.name || item.productId)
+          .map(item => products.find(p => p.id === item.productId)?.name || 'Unknown Product')
           .join(', ');
         setError(`Missing recipes for: ${productNames}. Stock reduction not possible.`);
         return;
       }
 
       for (const item of order.products) {
-        const recipe = recipes.find(r => r.productId === item.productId);
-        if (!recipe) continue; // Already validated above
+        const product = products.find(p => p.id === item.productId);
+        if (!product) continue;
 
-        const producedQty = item.producedQuantity || 0;
+        const recipe = recipes.find(r => r.productId === item.productId);
+        if (!recipe) continue;
+
+        const producedQty = Number(item.producedQuantity) || 0;
         if (producedQty === 0) {
-          const productName = products.find(p => p.id === item.productId)?.name || item.productId;
-          throw new Error(`No produced quantity set for ${productName}. Please set the produced quantity before reducing stock.`);
+          throw new Error(`No produced quantity set for ${product.name}. Please set the produced quantity before reducing stock.`);
         }
         
-        // Calculate exact scale based on produced quantity
-        const scale = Number(producedQty) / Number(recipe.yield);
+        const scale = producedQty / recipe.yield;
         if (isNaN(scale) || !isFinite(scale)) {
-          const productName = products.find(p => p.id === item.productId)?.name || item.productId;
-          throw new Error(`Invalid recipe yield for ${productName}. Please check the recipe configuration.`);
+          throw new Error(`Invalid recipe yield for ${product.name}. Please check the recipe configuration.`);
         }
 
         for (const ingredient of recipe.ingredients) {
@@ -133,16 +130,14 @@ export default function CompletedOrders() {
           }
 
           const stockData = stockLevels[ingredient.ingredientId] || { quantity: 0 };
-          // Calculate exact amount needed based on recipe yield and produced quantity
           const amountToReduce = Math.ceil(Number(ingredient.amount) * scale);
           if (isNaN(amountToReduce) || !isFinite(amountToReduce)) {
             const ingredientData = ingredients.find(i => i.id === ingredient.ingredientId);
-            throw new Error(`Invalid ingredient amount for ${ingredientData?.name || ingredient.ingredientId}`);
+            throw new Error(`Invalid ingredient amount for ${ingredientData?.name || 'Unknown Ingredient'}`);
           }
 
           const newQuantity = Math.max(0, stockData.quantity - amountToReduce);
 
-          // Add to updates array
           ingredientUpdates.push({
             ingredientId: ingredient.ingredientId,
             newQuantity
@@ -165,27 +160,34 @@ export default function CompletedOrders() {
             quantity: update.newQuantity,
             minStock: stockData.minStock,
             orderId: order.id,
-            changeType: 'reduction' as const
+            changeType: 'reduction'
           });
         } catch (err) {
-          const ingredientName = ingredients.find(i => i.id === update.ingredientId)?.name || update.ingredientId;
+          const ingredientName = ingredients.find(i => i.id === update.ingredientId)?.name || 'Unknown Ingredient';
           throw new Error(`Failed to update stock for ${ingredientName}`);
         }
       }
 
-      // Manually refresh stock history to update UI state
       await refreshStockHistory();
-
-      setError(null);
       setSuccess('Stock levels have been successfully reduced');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccess(null);
-      }, 3000);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      console.error('Error reducing stock:', err);
-      setError(err instanceof Error ? err.message : 'Failed to reduce stock levels');
+      // Log error with more context
+      console.error('Error reducing stock:', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+        orderId: order.id,
+        products: order.products.map(p => ({
+          id: p.productId,
+          name: products.find(prod => prod.id === p.productId)?.name
+        }))
+      });
+
+      // Set user-friendly error message
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unexpected error occurred while reducing stock levels. Please try again.');
+      }
     } finally {
       setLoadingStockReduction(prev => ({ ...prev, [order.id]: false }));
     }
@@ -195,10 +197,8 @@ export default function CompletedOrders() {
     try {
       setError(null);
       setSuccess(null);
-      setLoadingStockReduction(prev => ({ ...prev, [order.id]: true }));
-      const ingredientUpdates: { ingredientId: string; newQuantity: number }[] = [];
+      setRevertingStockReduction(prev => ({ ...prev, [order.id]: true }));
       
-      // Validate order exists and has products
       if (!order || !order.products?.length) {
         setError('Invalid order data');
         return;
@@ -211,41 +211,39 @@ export default function CompletedOrders() {
 
       if (invalidProducts.length > 0) {
         const productNames = invalidProducts
-          .map(item => products.find(p => p.id === item.productId)?.name || item.productId)
+          .map(item => products.find(p => p.id === item.productId)?.name || 'Unknown Product')
           .join(', ');
         setError(`Missing recipes for: ${productNames}. Stock reversion not possible.`);
         return;
       }
 
-      for (const item of order.products) {
-        const recipe = recipes.find(r => r.productId === item.productId);
-        if (!recipe) continue; // Already validated above
+      const ingredientUpdates: { ingredientId: string; newQuantity: number }[] = [];
 
-        const producedQty = item.producedQuantity || 0;
+      for (const item of order.products) {
+        const product = products.find(p => p.id === item.productId);
+        if (!product) continue;
+
+        const recipe = recipes.find(r => r.productId === item.productId);
+        if (!recipe) continue;
+
+        const producedQty = Number(item.producedQuantity) || 0;
         if (producedQty === 0) {
-          const productName = products.find(p => p.id === item.productId)?.name || item.productId;
-          throw new Error(`No produced quantity set for ${productName}. Cannot revert stock without produced quantity.`);
+          throw new Error(`No produced quantity set for ${product.name}. Cannot revert stock without produced quantity.`);
         }
         
-        // Calculate exact scale based on produced quantity
-        const scale = Number(producedQty) / Number(recipe.yield);
+        const scale = producedQty / recipe.yield;
         if (isNaN(scale) || !isFinite(scale)) {
-          const productName = products.find(p => p.id === item.productId)?.name || item.productId;
-          throw new Error(`Invalid recipe yield for ${productName}. Please check the recipe configuration.`);
+          throw new Error(`Invalid recipe yield for ${product.name}. Please check the recipe configuration.`);
         }
 
         for (const ingredient of recipe.ingredients) {
-          if (!ingredient.ingredientId) {
-            console.error('Invalid ingredient data:', ingredient);
-            continue;
-          }
+          if (!ingredient.ingredientId) continue;
 
           const stockData = stockLevels[ingredient.ingredientId] || { quantity: 0 };
-          // Calculate exact amount to add based on recipe yield and produced quantity
           const amountToAdd = Math.ceil(Number(ingredient.amount) * scale);
           if (isNaN(amountToAdd) || !isFinite(amountToAdd)) {
             const ingredientData = ingredients.find(i => i.id === ingredient.ingredientId);
-            throw new Error(`Invalid ingredient amount for ${ingredientData?.name || ingredient.ingredientId}`);
+            throw new Error(`Invalid ingredient amount for ${ingredientData?.name || 'Unknown Ingredient'}`);
           }
 
           const newQuantity = stockData.quantity + amountToAdd;
@@ -257,7 +255,6 @@ export default function CompletedOrders() {
         }
       }
 
-      // Validate all ingredients exist
       const missingIngredients = ingredientUpdates.filter(update => 
         !ingredients.find(i => i.id === update.ingredientId)
       );
@@ -266,7 +263,6 @@ export default function CompletedOrders() {
         throw new Error('Some ingredients are missing from the database');
       }
 
-      // Process all stock updates
       for (const update of ingredientUpdates) {
         const stockData = stockLevels[update.ingredientId] || { quantity: 0 };
         try {
@@ -274,41 +270,44 @@ export default function CompletedOrders() {
             quantity: update.newQuantity,
             minStock: stockData.minStock,
             orderId: order.id,
-            changeType: 'reversion' as const
+            changeType: 'reversion'
           });
         } catch (err) {
-          const ingredientName = ingredients.find(i => i.id === update.ingredientId)?.name || update.ingredientId;
+          const ingredientName = ingredients.find(i => i.id === update.ingredientId)?.name || 'Unknown Ingredient';
           throw new Error(`Failed to update stock for ${ingredientName}`);
         }
       }
 
-      // Manually refresh stock history to update UI state
       await refreshStockHistory();
-
       setSuccess('Stock levels have been successfully reverted');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccess(null);
-      }, 3000);
-
-      setError(null);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      console.error('Error reverting stock reduction:', err);
-      setError(err instanceof Error ? err.message : 'Failed to revert stock levels');
+      // Log error with more context
+      console.error('Error reverting stock reduction:', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+        orderId: order.id,
+        products: order.products.map(p => ({
+          id: p.productId,
+          name: products.find(prod => prod.id === p.productId)?.name
+        }))
+      });
+
+      // Set user-friendly error message
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unexpected error occurred while reverting stock levels. Please try again.');
+      }
     } finally {
-      setLoadingStockReduction(prev => ({ ...prev, [order.id]: false }));
+      setRevertingStockReduction(prev => ({ ...prev, [order.id]: false }));
     }
   };
-  
+
   // Group orders by month
   const ordersByMonth = React.useMemo(() => {
-    // Filter completed orders
     const completedOrders = orders.filter(order => order.status === 'completed');
     
-    // Group orders by month
     const grouped = completedOrders.reduce((acc, order) => {
-      // Extract month and year from completedAt date
       const completedDate = new Date(order.completedAt || order.updatedAt);
       const monthKey = `${completedDate.getFullYear()}-${String(completedDate.getMonth() + 1).padStart(2, '0')}`;
       const monthName = completedDate.toLocaleDateString('en-US', { 
@@ -327,21 +326,17 @@ export default function CompletedOrders() {
       return acc;
     }, {} as Record<string, { monthName: string; orders: Order[] }>);
     
-    // Sort the grouped orders by month (most recent first)
     return Object.entries(grouped)
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([key, { monthName, orders }]) => {
-        // Sort orders within each month by completedAt date (newest first)
-        return {
-          monthKey: key,
-          monthName,
-          orders: orders.sort((a, b) => {
-            const dateA = new Date(a.completedAt || a.updatedAt);
-            const dateB = new Date(b.completedAt || b.updatedAt);
-            return dateB.getTime() - dateA.getTime();
-          })
-        };
-      });
+      .map(([key, { monthName, orders }]) => ({
+        monthKey: key,
+        monthName,
+        orders: orders.sort((a, b) => {
+          const dateA = new Date(a.completedAt || a.updatedAt);
+          const dateB = new Date(b.completedAt || b.updatedAt);
+          return dateB.getTime() - dateA.getTime();
+        })
+      }));
   }, [orders]);
 
   // Initialize first month as expanded on initial render
@@ -407,13 +402,11 @@ export default function CompletedOrders() {
     selectedOrders.has(order.id)
   );
   
-  // Expand all months
   const expandAllMonths = () => {
     const allMonthKeys = ordersByMonth.map(group => group.monthKey);
     setExpandedMonths(new Set(allMonthKeys));
   };
   
-  // Collapse all months
   const collapseAllMonths = () => {
     setExpandedMonths(new Set());
   };
@@ -577,16 +570,16 @@ export default function CompletedOrders() {
                                 ) : stockReductionHistory[order.id] === 'reduced' ? (
                                   <button
                                     onClick={() => handleRevertStockReduction(order)}
-                                    disabled={loadingStockReduction[order.id]}
+                                    disabled={revertingStockReduction[order.id]}
                                     className={`w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
-                                      ${loadingStockReduction[order.id]
+                                      ${revertingStockReduction[order.id]
                                         ? 'bg-blue-100 text-blue-400 cursor-wait transform-none hover:shadow-none'
                                         : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
                                       }`}
                                     title="Revert stock reduction"
                                   >
                                     <History className="w-4 h-4" />
-                                    {loadingStockReduction[order.id] ? 'Reverting...' : 'Revert Stock'}
+                                    {revertingStockReduction[order.id] ? 'Reverting...' : 'Revert Stock'}
                                   </button>
                                 ) : (
                                   <button
