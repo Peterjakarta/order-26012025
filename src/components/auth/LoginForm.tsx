@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, Shield } from 'lucide-react';
+import { Eye, EyeOff, Shield, Loader2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import MFASetup from './MFASetup';
 
@@ -11,12 +11,92 @@ export default function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showMFASetup, setShowMFASetup] = useState(false);
+  const [recaptchaReady, setRecaptchaReady] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Initialize reCAPTCHA on mount
+  useEffect(() => {
+    let mounted = true;
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 second
+
+    const initializeRecaptcha = async () => {
+      try {
+        // Clear any existing reCAPTCHA
+        if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = undefined;
+        }
+
+        // Create container if it doesn't exist
+        const container = document.getElementById('recaptcha-container');
+        if (!container) {
+          const div = document.createElement('div');
+          div.id = 'recaptcha-container';
+          div.className = 'mt-4 flex justify-center';
+          document.querySelector('form')?.appendChild(div);
+        }
+
+        // Initialize reCAPTCHA
+        await import('../../lib/firebase').then(({ initRecaptcha }) => {
+          if (mounted) {
+            initRecaptcha().then(() => {
+              if (mounted) {
+                setRecaptchaReady(true);
+                setError(null);
+              }
+            }).catch((err) => {
+              console.error('reCAPTCHA initialization error:', err);
+              if (mounted) {
+                setError('Security verification failed to load. Please refresh the page.');
+                if (retryCount < maxRetries) {
+                  retryCount++;
+                  setTimeout(initializeRecaptcha, retryDelay * retryCount); // Exponential backoff
+                }
+              }
+            });
+          }
+        });
+      } catch (err) {
+        console.error('Error initializing reCAPTCHA:', err);
+        if (mounted && retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(initializeRecaptcha, retryDelay * retryCount); // Exponential backoff
+        }
+      }
+    };
+
+    // Delay initialization slightly to ensure DOM is ready
+    setTimeout(initializeRecaptcha, 100);
+
+    return () => {
+      mounted = false;
+      // Clean up reCAPTCHA
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = undefined;
+      }
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate inputs first
+    if (!email || !password) {
+      setError('Please enter both email and password.');
+      return;
+    }
+
+    // Ensure reCAPTCHA is ready
+    if (!recaptchaReady || !window.recaptchaVerifier) {
+      setError('Please wait for security verification to load.');
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
@@ -32,12 +112,28 @@ export default function LoginForm() {
       }
     } catch (err) {
       const error = err as Error;
-      if (error.message.includes('auth/user-not-found')) {
+      if (error.message === 'MFA required') {
+        setShowMFASetup(true);
+      } else if (error.message.includes('auth/user-not-found')) {
         setError('No account found with this email.');
       } else if (error.message.includes('auth/wrong-password')) {
         setError('Incorrect password.');
       } else if (error.message.includes('auth/invalid-email')) {
         setError('Please enter a valid email address.');
+      } else if (error.message.includes('recaptcha')) {
+        setError('Please complete the security verification.');
+        // Re-initialize reCAPTCHA
+        if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = undefined;
+        }
+        setRecaptchaReady(false);
+        // Retry initialization
+        setTimeout(() => {
+          import('../../lib/firebase').then(({ initRecaptcha }) => {
+            initRecaptcha().catch(console.error);
+          });
+        }, 1000);
       } else {
         setError('An error occurred. Please try again.');
       }
@@ -130,6 +226,9 @@ export default function LoginForm() {
                 </div>
               </div>
 
+              {/* reCAPTCHA container */}
+              <div id="recaptcha-container" className="mt-4 flex justify-center" />
+
               {error && (
                 <div className="p-4 bg-red-900/50 text-red-200 border border-red-500/50 rounded-md text-sm">
                   {error}
@@ -138,10 +237,17 @@ export default function LoginForm() {
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full py-2 px-4 bg-gradient-to-r from-yellow-600 to-yellow-800 text-white rounded-lg hover:from-yellow-700 hover:to-yellow-900 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 disabled:opacity-50 shadow-lg shadow-yellow-900/20"
+                disabled={loading || !recaptchaReady}
+                className="w-full py-2 px-4 bg-gradient-to-r from-yellow-600 to-yellow-800 text-white rounded-lg hover:from-yellow-700 hover:to-yellow-900 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 disabled:opacity-50 shadow-lg shadow-yellow-900/20 flex items-center justify-center gap-2"
               >
-                {loading ? 'Signing in...' : 'Sign In'}
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
               </button>
 
               <div className="flex items-center gap-2 text-yellow-400/70 text-sm">

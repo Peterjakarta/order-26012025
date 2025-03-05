@@ -13,9 +13,69 @@ import {
   disableNetwork,
   enableNetwork
 } from 'firebase/firestore';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
 import type { LogEntry } from '../types/types';
+
+// Define collection names
+export const COLLECTIONS = {
+  USERS: 'users',
+  CATEGORIES: 'categories',
+  PRODUCTS: 'products',
+  ORDERS: 'orders',
+  ORDER_ITEMS: 'orderItems',
+  BRANCHES: 'branches',
+  INGREDIENTS: 'ingredients',
+  RECIPES: 'recipes',
+  STOCK: 'stock',
+  STOCK_HISTORY: 'stock_history',
+  STOCK_CATEGORIES: 'stock_categories',
+  STOCK_CATEGORY_ITEMS: 'stock_category_items',
+  LOGS: 'logs'
+};
+
+// Batch operations management
+let currentBatch: ReturnType<typeof writeBatch> | null = null;
+let batchOperations = 0;
+const MAX_BATCH_OPERATIONS = 250; // Reduced for better reliability
+const BATCH_TIMEOUT = 1000; // 1 second timeout
+let batchTimeout: NodeJS.Timeout | null = null;
+
+export function getBatch() {
+  if (!currentBatch || batchOperations >= MAX_BATCH_OPERATIONS) {
+    if (currentBatch) {
+      // Commit existing batch before creating new one
+      const existingBatch = currentBatch;
+      currentBatch = null;
+      existingBatch.commit().catch(console.error);
+    }
+    currentBatch = writeBatch(db);
+    batchOperations = 0;
+    
+    // Set timeout to auto-commit if no new operations
+    if (batchTimeout) {
+      clearTimeout(batchTimeout);
+    }
+    batchTimeout = setTimeout(() => {
+      commitBatchIfNeeded().catch(console.error);
+    }, BATCH_TIMEOUT);
+  }
+  batchOperations++;
+  return currentBatch;
+}
+
+export async function commitBatchIfNeeded() {
+  if (currentBatch && batchOperations > 0) {
+    const batch = currentBatch;
+    currentBatch = null;
+    batchOperations = 0;
+    if (batchTimeout) {
+      clearTimeout(batchTimeout);
+      batchTimeout = null;
+    }
+    await batch.commit();
+  }
+}
 
 // Network status management
 let isOnline = true;
@@ -84,6 +144,79 @@ const db = initializeFirestore(app, firestoreSettings);
 // Initialize Auth
 const auth = getAuth(app);
 
+// Initialize reCAPTCHA verifier
+export async function initRecaptcha() {
+  try {
+    // Wait for container to be available
+    const maxAttempts = 10;
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      const container = document.getElementById('recaptcha-container');
+      if (container) {
+        // Clear any existing verifier
+        if (window.recaptchaVerifier) {
+          await window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = undefined;
+        }
+
+        // Create new verifier
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'normal',
+          callback: () => {
+            console.log('reCAPTCHA verified');
+          },
+          'expired-callback': () => {
+            console.log('reCAPTCHA expired');
+            // Clear and reinitialize on expiry
+            if (window.recaptchaVerifier) {
+              window.recaptchaVerifier.clear();
+              window.recaptchaVerifier = undefined;
+            }
+            initRecaptcha().catch(console.error);
+          }
+        });
+
+        // Force render and wait for completion
+        await window.recaptchaVerifier.render();
+        return;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
+    }
+
+    throw new Error('Recaptcha container not found after multiple attempts');
+
+  } catch (error) {
+    console.error('Error initializing reCAPTCHA:', error);
+    // Attempt cleanup on error
+    if (window.recaptchaVerifier) {
+      await window.recaptchaVerifier.clear();
+      window.recaptchaVerifier = undefined;
+    }
+    throw error;
+  }
+}
+
+// Helper function to create log entries
+export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) {
+  try {
+    if (!isOnline) {
+      console.warn('Skipping log entry creation - offline mode');
+      return;
+    }
+
+    const logsRef = collection(db, COLLECTIONS.LOGS);
+    await addDoc(logsRef, {
+      ...entry,
+      timestamp: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error creating log entry:', error);
+  }
+}
+
 // Initialize persistence
 const initializePersistence = async () => {
   try {
@@ -96,7 +229,6 @@ const initializePersistence = async () => {
       console.warn('Persistence not supported in this browser');
     } else {
       console.error('Error enabling persistence:', err.message);
-      // Log detailed error info but continue - app will work without persistence
       console.debug('Persistence error details:', {
         code: err.code,
         name: err.name,
@@ -120,115 +252,6 @@ window.addEventListener('offline', () => {
   dispatchConnectionEvent('disconnected');
   disableNetwork(db).catch(console.error);
 });
-
-// Batch operations helper (single implementation)
-let currentBatch: ReturnType<typeof writeBatch> | null = null;
-let batchOperations = 0;
-const MAX_BATCH_OPERATIONS = 250; // Reduced for better reliability
-const BATCH_TIMEOUT = 1000; // Reduced to 1 second
-let batchTimeout: NodeJS.Timeout | null = null;
-
-export function getBatch() {
-  if (!currentBatch || batchOperations >= MAX_BATCH_OPERATIONS) {
-    if (currentBatch) {
-      // Commit existing batch before creating new one
-      const existingBatch = currentBatch;
-      currentBatch = null;
-      existingBatch.commit().catch(console.error);
-    }
-    currentBatch = writeBatch(db);
-    batchOperations = 0;
-    
-    // Set timeout to auto-commit if no new operations
-    if (batchTimeout) {
-      clearTimeout(batchTimeout);
-    }
-    batchTimeout = setTimeout(() => {
-      commitBatchIfNeeded().catch(console.error);
-    }, BATCH_TIMEOUT);
-  }
-  batchOperations++;
-  return currentBatch;
-}
-
-export async function commitBatchIfNeeded() {
-  if (currentBatch && batchOperations > 0) {
-    const batch = currentBatch;
-    currentBatch = null;
-    batchOperations = 0;
-    if (batchTimeout) {
-      clearTimeout(batchTimeout);
-      batchTimeout = null;
-    }
-    await batch.commit();
-  }
-}
-
-// Define collection names
-export const COLLECTIONS = {
-  USERS: 'users',
-  CATEGORIES: 'categories',
-  PRODUCTS: 'products',
-  ORDERS: 'orders',
-  ORDER_ITEMS: 'orderItems',
-  BRANCHES: 'branches',
-  INGREDIENTS: 'ingredients',
-  RECIPES: 'recipes',
-  STOCK: 'stock',
-  STOCK_HISTORY: 'stock_history',
-  STOCK_CATEGORIES: 'stock_categories',
-  STOCK_CATEGORY_ITEMS: 'stock_category_items',
-  LOGS: 'logs'
-};
-
-// Helper function to create log entries
-export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) {
-  try {
-    if (!isOnline) {
-      console.warn('Skipping log entry creation - offline mode');
-      return;
-    }
-
-    const logsRef = collection(db, COLLECTIONS.LOGS);
-    await addDoc(logsRef, {
-      ...entry,
-      timestamp: serverTimestamp()
-    });
-  } catch (error) {
-    console.error('Error creating log entry:', error);
-  }
-}
-
-// Helper to handle Firestore errors gracefully
-export function handleFirestoreError(error: any, fallbackMessage: string = 'A database error occurred'): string {
-  console.error('Firestore error:', error);
-  
-  if (!error) return fallbackMessage;
-  
-  // Check for specific error codes
-  if (error.code === 'failed-precondition') {
-    // Often happens with missing indexes
-    return 'The operation cannot be completed at this time. This might be due to missing database indexes.';
-  }
-  
-  if (error.code === 'permission-denied') {
-    return 'You do not have permission to perform this operation.';
-  }
-  
-  if (error.code === 'unavailable') {
-    return 'The service is currently unavailable. Please try again later.';
-  }
-  
-  if (error.code === 'resource-exhausted') {
-    return 'The system is currently overloaded. Please try again later.';
-  }
-  
-  if (error.code === 'unauthenticated') {
-    return 'Your session has expired. Please log in again.';
-  }
-  
-  return error.message || fallbackMessage;
-}
 
 // Initialize persistence
 initializePersistence();

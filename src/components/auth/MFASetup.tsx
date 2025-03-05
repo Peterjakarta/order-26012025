@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Phone, Shield, AlertCircle, Loader2 } from 'lucide-react';
-import { getAuth, RecaptchaVerifier, PhoneAuthProvider, signInWithPhoneNumber } from 'firebase/auth';
+import { getAuth, PhoneAuthProvider, signInWithPhoneNumber } from 'firebase/auth';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { useAuth } from '../../hooks/useAuth';
 
 interface MFASetupProps {
   onComplete: () => void;
@@ -8,6 +10,7 @@ interface MFASetupProps {
 }
 
 export default function MFASetup({ onComplete, onCancel }: MFASetupProps) {
+  const { completeMFASetup } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationId, setVerificationId] = useState<string | null>(null);
@@ -15,29 +18,13 @@ export default function MFASetup({ onComplete, onCancel }: MFASetupProps) {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'phone' | 'code'>('phone');
 
-  useEffect(() => {
-    // Initialize reCAPTCHA verifier
-    const auth = getAuth();
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => {
-          // reCAPTCHA solved
-        },
-        'expired-callback': () => {
-          setError('reCAPTCHA expired. Please try again.');
-        }
-      });
+  const validatePhoneNumber = (number: string) => {
+    const phoneNumber = parsePhoneNumberFromString(number);
+    if (!phoneNumber) {
+      throw new Error('Please enter a valid phone number with country code (e.g., +1234567890)');
     }
-
-    return () => {
-      // Cleanup reCAPTCHA
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
-      }
-    };
-  }, []);
+    return phoneNumber.format('E.164');
+  };
 
   const sendVerificationCode = async () => {
     try {
@@ -45,7 +32,7 @@ export default function MFASetup({ onComplete, onCancel }: MFASetupProps) {
       setLoading(true);
 
       const auth = getAuth();
-      const formattedNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+      const formattedNumber = validatePhoneNumber(phoneNumber);
       
       const confirmationResult = await signInWithPhoneNumber(
         auth,
@@ -57,7 +44,7 @@ export default function MFASetup({ onComplete, onCancel }: MFASetupProps) {
       setStep('code');
     } catch (err) {
       console.error('Error sending verification code:', err);
-      setError('Failed to send verification code. Please check your phone number and try again.');
+      setError(err instanceof Error ? err.message : 'Failed to send verification code. Please check your phone number and try again.');
     } finally {
       setLoading(false);
     }
@@ -68,14 +55,7 @@ export default function MFASetup({ onComplete, onCancel }: MFASetupProps) {
       setError(null);
       setLoading(true);
 
-      const auth = getAuth();
-      const credential = PhoneAuthProvider.credential(verificationId!, verificationCode);
-      
-      // Link the phone credential to the current user
-      const user = auth.currentUser;
-      if (!user) throw new Error('No user found');
-      
-      await user.linkWithCredential(credential);
+      await completeMFASetup(verificationCode);
       onComplete();
     } catch (err) {
       console.error('Error verifying code:', err);
@@ -150,7 +130,7 @@ export default function MFASetup({ onComplete, onCancel }: MFASetupProps) {
               type="text"
               id="code"
               value={verificationCode}
-              onChange={(e) => setVerificationCode(e.target.value)}
+              onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="Enter 6-digit code"
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               maxLength={6}
