@@ -25,12 +25,7 @@ service cloud.firestore {
 
     // Users collection
     match /users/{userId} {
-      allow read: if isAuthenticated() && (
-        isOwner(userId) || 
-        hasPermission('manage_users') ||
-        // Allow read during login verification
-        request.auth.uid == userId
-      );
+      allow read: if isAuthenticated() && (isOwner(userId) || hasPermission('manage_users'));
       allow list: if isAuthenticated() && hasPermission('manage_users');
       allow create: if isAuthenticated() && (
         hasPermission('manage_users') ||
@@ -45,13 +40,13 @@ service cloud.firestore {
 
     // Categories collection
     match /categories/{categoryId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if hasPermission('manage_products');
     }
 
     // Products collection
     match /products/{productId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if hasPermission('manage_products');
     }
 
@@ -66,27 +61,39 @@ service cloud.firestore {
       allow delete: if hasPermission('manage_orders');
     }
 
+    // Products collection
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
+    }
+
+    // Categories collection
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if hasPermission('manage_products');
+    }
+
     // Ingredients collection
     match /ingredients/{ingredientId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if hasPermission('manage_products');
     }
 
     // Recipes collection
     match /recipes/{recipeId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if hasPermission('manage_products');
     }
 
     // Stock collection
     match /stock/{stockId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if hasPermission('manage_products');
     }
 
     // Stock history collection
     match /stock_history/{historyId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow create: if hasPermission('manage_products');
       // Never allow updates or deletes to maintain audit trail
       allow update, delete: if false;
@@ -94,13 +101,13 @@ service cloud.firestore {
 
     // Stock categories collection
     match /stock_categories/{categoryId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if hasPermission('manage_products');
     }
 
     // Stock category items collection
     match /stock_category_items/{itemId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow create, update, delete: if hasPermission('manage_products');
       allow list: if isAuthenticated();
     }
@@ -115,7 +122,7 @@ service cloud.firestore {
 
     // Branches collection
     match /branches/{branchId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
   }
