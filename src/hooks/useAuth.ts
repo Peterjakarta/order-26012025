@@ -13,7 +13,15 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db, auth, createLogEntry, COLLECTIONS } from '../lib/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, UserCredential } from 'firebase/auth';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  UserCredential,
+  PhoneAuthProvider,
+  multiFactor,
+  getMultiFactorResolver,
+  PhoneMultiFactorGenerator
+} from 'firebase/auth';
 import type { User } from '../types/types';
 
 export function useAuth() {
@@ -87,7 +95,7 @@ export function useAuth() {
           category: 'auth'
         });
 
-        return true;
+        return { requiresMFA: false };
       }
 
       // Regular user login
@@ -107,19 +115,39 @@ export function useAuth() {
           permissions: userData.permissions
         };
 
-        setAuthState({ user, isAuthenticated: true });
-        localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
+        // Check if MFA is required
+        const mfaUser = multiFactor(userCredential.user);
+        const requiresMFA = mfaUser.enrolledFactors.length === 0;
 
-        // Create login log entry
-        await createLogEntry({
-          userId: user.id,
-          username: user.email,
-          action: 'User Login',
-          category: 'auth'
-        });
+        if (!requiresMFA) {
+          setAuthState({ user, isAuthenticated: true });
+          localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
 
-        return true;
+          // Create login log entry
+          await createLogEntry({
+            userId: user.id,
+            username: user.email,
+            action: 'User Login',
+            category: 'auth'
+          });
+        }
+
+        return { requiresMFA };
       } catch (err) {
+        if (err.code === 'auth/multi-factor-auth-required') {
+          const resolver = getMultiFactorResolver(auth, err);
+          // Handle MFA verification
+          const phoneInfoOptions = {
+            multiFactorHint: resolver.hints[0],
+            session: resolver.session
+          };
+          const phoneAuthProvider = new PhoneAuthProvider(auth);
+          const verificationId = await phoneAuthProvider.verifyPhoneNumber(phoneInfoOptions, window.recaptchaVerifier);
+          // Store verificationId and resolver for later use
+          localStorage.setItem('mfaVerificationId', verificationId);
+          localStorage.setItem('mfaResolver', JSON.stringify(resolver));
+          throw new Error('MFA required');
+        }
         if (err.code === 'auth/invalid-credential') {
           throw new Error('Invalid email or password. Please try again.');
         } else if (err.code === 'auth/user-not-found') {
