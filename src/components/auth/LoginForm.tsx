@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, Shield, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Shield, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import MFASetup from './MFASetup';
 
@@ -27,7 +27,7 @@ export default function LoginForm() {
       try {
         // Clear any existing reCAPTCHA
         if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.clear();
+          await window.recaptchaVerifier.clear();
           window.recaptchaVerifier = undefined;
         }
 
@@ -54,7 +54,7 @@ export default function LoginForm() {
                 setError('Security verification failed to load. Please refresh the page.');
                 if (retryCount < maxRetries) {
                   retryCount++;
-                  setTimeout(initializeRecaptcha, retryDelay * retryCount); // Exponential backoff
+                  setTimeout(initializeRecaptcha, retryDelay * retryCount);
                 }
               }
             });
@@ -64,7 +64,7 @@ export default function LoginForm() {
         console.error('Error initializing reCAPTCHA:', err);
         if (mounted && retryCount < maxRetries) {
           retryCount++;
-          setTimeout(initializeRecaptcha, retryDelay * retryCount); // Exponential backoff
+          setTimeout(initializeRecaptcha, retryDelay * retryCount);
         }
       }
     };
@@ -85,22 +85,34 @@ export default function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate inputs first
-    if (!email || !password) {
-      setError('Please enter both email and password.');
-      return;
-    }
-
-    // Ensure reCAPTCHA is ready
-    if (!recaptchaReady || !window.recaptchaVerifier) {
-      setError('Please wait for security verification to load.');
-      return;
-    }
-
-    setError(null);
-    setLoading(true);
-
     try {
+      // Input validation
+      if (!email.trim()) {
+        setError('Please enter your email address.');
+        return;
+      }
+
+      if (!password) {
+        setError('Please enter your password.');
+        return;
+      }
+
+      // Email format validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        setError('Please enter a valid email address.');
+        return;
+      }
+
+      // Ensure reCAPTCHA is ready
+      if (!recaptchaReady || !window.recaptchaVerifier) {
+        setError('Please wait for security verification to load.');
+        return;
+      }
+
+      setError(null);
+      setLoading(true);
+
       const { requiresMFA } = await login(email, password);
       
       if (requiresMFA) {
@@ -111,31 +123,44 @@ export default function LoginForm() {
         navigate(from, { replace: true });
       }
     } catch (err) {
-      const error = err as Error;
-      if (error.message === 'MFA required') {
-        setShowMFASetup(true);
-      } else if (error.message.includes('auth/user-not-found')) {
-        setError('No account found with this email.');
-      } else if (error.message.includes('auth/wrong-password')) {
-        setError('Incorrect password.');
-      } else if (error.message.includes('auth/invalid-email')) {
-        setError('Please enter a valid email address.');
-      } else if (error.message.includes('recaptcha')) {
-        setError('Please complete the security verification.');
-        // Re-initialize reCAPTCHA
-        if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.clear();
-          window.recaptchaVerifier = undefined;
+      console.error('Login error:', err);
+      
+      // Handle specific error cases
+      if (err instanceof Error) {
+        if (err.message === 'MFA required') {
+          setShowMFASetup(true);
+          return;
         }
-        setRecaptchaReady(false);
-        // Retry initialization
-        setTimeout(() => {
-          import('../../lib/firebase').then(({ initRecaptcha }) => {
-            initRecaptcha().catch(console.error);
-          });
-        }, 1000);
+
+        if (err.message.includes('auth/user-not-found')) {
+          setError('No account found with this email address.');
+        } else if (err.message.includes('auth/wrong-password')) {
+          setError('Incorrect password. Please try again.');
+        } else if (err.message.includes('auth/invalid-email')) {
+          setError('Please enter a valid email address.');
+        } else if (err.message.includes('auth/too-many-requests')) {
+          setError('Too many failed attempts. Please try again later.');
+        } else if (err.message.includes('auth/network-request-failed')) {
+          setError('Network error. Please check your connection and try again.');
+        } else if (err.message.includes('recaptcha')) {
+          setError('Security verification failed. Please refresh the page and try again.');
+          // Re-initialize reCAPTCHA
+          if (window.recaptchaVerifier) {
+            window.recaptchaVerifier.clear();
+            window.recaptchaVerifier = undefined;
+          }
+          setRecaptchaReady(false);
+          // Retry initialization
+          setTimeout(() => {
+            import('../../lib/firebase').then(({ initRecaptcha }) => {
+              initRecaptcha().catch(console.error);
+            });
+          }, 1000);
+        } else {
+          setError('An error occurred during login. Please try again.');
+        }
       } else {
-        setError('An error occurred. Please try again.');
+        setError('An unexpected error occurred. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -230,8 +255,9 @@ export default function LoginForm() {
               <div id="recaptcha-container" className="mt-4 flex justify-center" />
 
               {error && (
-                <div className="p-4 bg-red-900/50 text-red-200 border border-red-500/50 rounded-md text-sm">
-                  {error}
+                <div className="p-4 bg-red-900/50 text-red-200 border border-red-500/50 rounded-md text-sm flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                  <span>{error}</span>
                 </div>
               )}
 

@@ -32,7 +32,7 @@ export const COLLECTIONS = {
   STOCK_CATEGORIES: 'stock_categories',
   STOCK_CATEGORY_ITEMS: 'stock_category_items',
   LOGS: 'logs'
-};
+} as const;
 
 // Batch operations management
 let currentBatch: ReturnType<typeof writeBatch> | null = null;
