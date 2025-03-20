@@ -66,13 +66,14 @@ async function attemptReconnect() {
   }
 }
 
+// Get Firebase config from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyDnDWBTf_psoWM6WuU4F_WgkMM2OXnpHOY",
-  authDomain: "productioncokelateh.firebaseapp.com",
-  projectId: "productioncokelateh",
-  storageBucket: "productioncokelateh.appspot.com",
-  messagingSenderId: "776169577997",
-  appId: "1:776169577997:web:cf0062bf4fae9e16963f44"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase with Node.js 18 runtime
