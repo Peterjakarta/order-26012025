@@ -1,5 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, RotateCcw, FileSpreadsheet, Calculator, Package2, History, AlertCircle, FileDown, ChevronDown, ChevronRight, Calendar, RefreshCw } from 'lucide-react';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Eye, 
+  EyeOff, 
+  FileDown, 
+  ChevronDown, 
+  Calendar, 
+  RefreshCw, 
+  Edit2, 
+  FileSpreadsheet, 
+  CheckCircle2, 
+  Calculator,
+  AlertCircle
+} from 'lucide-react';
 import { useOrders } from '../../hooks/useOrders';
 import { useStore } from '../../store/StoreContext';
 import { useBranches } from '../../hooks/useBranches';
@@ -9,10 +23,11 @@ import { generateOrderPDF } from '../../utils/pdfGenerator';
 import ConfirmDialog from '../common/ConfirmDialog';
 import IngredientUsageCalculator from './order/IngredientUsageCalculator';
 import { useLocation } from 'react-router-dom';
+import { generateReport, generateReportExcel, generateReportPDF } from '../../utils/reportUtils';
 
 export default function CompletedOrders() {
   const { orders, removeOrder, updateOrderStatus, refreshOrders } = useOrders();
-  const { products, recipes, ingredients, stockLevels, updateStockLevel, stockHistory, refreshStockHistory } = useStore();
+  const { products, recipes, ingredients } = useStore();
   const { branches } = useBranches();
   const location = useLocation();
   const [poNumber, setPoNumber] = useState<string>('');
@@ -21,291 +36,25 @@ export default function CompletedOrders() {
   const [showIngredientCalculator, setShowIngredientCalculator] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [loadingStockReduction, setLoadingStockReduction] = useState<Record<string, boolean>>({});
-  const [revertingStockReduction, setRevertingStockReduction] = useState<Record<string, boolean>>({});
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
-  // Create a lookup map of order IDs that have been reduced
-  const stockReductionHistory = React.useMemo(() => {
-    const latestEntries: Record<string, { type: 'reduced' | 'reverted', timestamp: string }> = {};
-    
-    stockHistory.forEach(entry => {
-      if (!entry.orderId) return;
-      
-      if (entry.changeType !== 'reduction' && entry.changeType !== 'reversion') return;
-      
-      const existingEntry = latestEntries[entry.orderId];
-      if (!existingEntry || new Date(entry.timestamp) > new Date(existingEntry.timestamp)) {
-        latestEntries[entry.orderId] = {
-          type: entry.changeType === 'reduction' ? 'reduced' : 'reverted',
-          timestamp: entry.timestamp
-        };
-      }
-    });
-    
-    const result: Record<string, 'reduced' | 'reverted'> = {};
-    Object.entries(latestEntries).forEach(([orderId, entry]) => {
-      result[orderId] = entry.type;
-    });
-    
-    return result;
-  }, [stockHistory]);
+  const [editingProductionDate, setEditingProductionDate] = useState<{
+    orderId: string;
+    date: string;
+  } | null>(null);
 
-  // Refresh orders and stock history when navigating to this page
-  useEffect(() => {
-    const refreshData = async () => {
-      setIsRefreshing(true);
-      await refreshOrders();
-      await refreshStockHistory();
-      setIsRefreshing(false);
-    };
-    
-    refreshData();
-  }, [refreshOrders, refreshStockHistory, location.pathname]);
-
-  const handleManualRefresh = async () => {
-    setIsRefreshing(true);
-    setError(null);
-    try {
-      await refreshOrders();
-      await refreshStockHistory();
-    } catch (err) {
-      console.error('Error refreshing data:', err);
-      setError('Failed to refresh data. Please try again.');
-    } finally {
-      setTimeout(() => {
-        setIsRefreshing(false);
-      }, 500);
-    }
-  };
-
-  const handleReduceStock = async (order: Order) => {
-    try {
-      setError(null);
-      setSuccess(null);
-      setLoadingStockReduction(prev => ({ ...prev, [order.id]: true }));
-      
-      if (!order || !order.products?.length) {
-        setError('Invalid order data');
-        return;
-      }
-
-      const ingredientUpdates: { ingredientId: string; newQuantity: number }[] = [];
-
-      const invalidProducts = order.products.filter(item => {
-        const recipe = recipes.find(r => r.productId === item.productId);
-        return !recipe;
-      });
-
-      if (invalidProducts.length > 0) {
-        const productNames = invalidProducts
-          .map(item => products.find(p => p.id === item.productId)?.name || 'Unknown Product')
-          .join(', ');
-        setError(`Missing recipes for: ${productNames}. Stock reduction not possible.`);
-        return;
-      }
-
-      for (const item of order.products) {
-        const product = products.find(p => p.id === item.productId);
-        if (!product) continue;
-
-        const recipe = recipes.find(r => r.productId === item.productId);
-        if (!recipe) continue;
-
-        const producedQty = Number(item.producedQuantity) || 0;
-        if (producedQty === 0) {
-          throw new Error(`No produced quantity set for ${product.name}. Please set the produced quantity before reducing stock.`);
-        }
-        
-        const scale = producedQty / recipe.yield;
-        if (isNaN(scale) || !isFinite(scale)) {
-          throw new Error(`Invalid recipe yield for ${product.name}. Please check the recipe configuration.`);
-        }
-
-        for (const ingredient of recipe.ingredients) {
-          if (!ingredient.ingredientId) {
-            console.error('Invalid ingredient data:', ingredient);
-            continue;
-          }
-
-          const stockData = stockLevels[ingredient.ingredientId] || { quantity: 0 };
-          const amountToReduce = Math.ceil(Number(ingredient.amount) * scale);
-          if (isNaN(amountToReduce) || !isFinite(amountToReduce)) {
-            const ingredientData = ingredients.find(i => i.id === ingredient.ingredientId);
-            throw new Error(`Invalid ingredient amount for ${ingredientData?.name || 'Unknown Ingredient'}`);
-          }
-
-          const newQuantity = Math.max(0, stockData.quantity - amountToReduce);
-
-          ingredientUpdates.push({
-            ingredientId: ingredient.ingredientId,
-            newQuantity
-          });
-        }
-      }
-
-      const missingIngredients = ingredientUpdates.filter(update => 
-        !ingredients.find(i => i.id === update.ingredientId)
-      );
-
-      if (missingIngredients.length > 0) {
-        throw new Error('Some ingredients are missing from the database');
-      }
-
-      for (const update of ingredientUpdates) {
-        const stockData = stockLevels[update.ingredientId] || { quantity: 0 };
-        try {
-          await updateStockLevel(update.ingredientId, {
-            quantity: update.newQuantity,
-            minStock: stockData.minStock,
-            orderId: order.id,
-            changeType: 'reduction'
-          });
-        } catch (err) {
-          const ingredientName = ingredients.find(i => i.id === update.ingredientId)?.name || 'Unknown Ingredient';
-          throw new Error(`Failed to update stock for ${ingredientName}`);
-        }
-      }
-
-      await refreshStockHistory();
-      setSuccess('Stock levels have been successfully reduced');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      // Log error with more context
-      console.error('Error reducing stock:', {
-        error: err instanceof Error ? err.message : 'Unknown error',
-        orderId: order.id,
-        products: order.products.map(p => ({
-          id: p.productId,
-          name: products.find(prod => prod.id === p.productId)?.name
-        }))
-      });
-
-      // Set user-friendly error message
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An unexpected error occurred while reducing stock levels. Please try again.');
-      }
-    } finally {
-      setLoadingStockReduction(prev => ({ ...prev, [order.id]: false }));
-    }
-  };
-
-  const handleRevertStockReduction = async (order: Order) => {
-    try {
-      setError(null);
-      setSuccess(null);
-      setRevertingStockReduction(prev => ({ ...prev, [order.id]: true }));
-      
-      if (!order || !order.products?.length) {
-        setError('Invalid order data');
-        return;
-      }
-
-      const invalidProducts = order.products.filter(item => {
-        const recipe = recipes.find(r => r.productId === item.productId);
-        return !recipe;
-      });
-
-      if (invalidProducts.length > 0) {
-        const productNames = invalidProducts
-          .map(item => products.find(p => p.id === item.productId)?.name || 'Unknown Product')
-          .join(', ');
-        setError(`Missing recipes for: ${productNames}. Stock reversion not possible.`);
-        return;
-      }
-
-      const ingredientUpdates: { ingredientId: string; newQuantity: number }[] = [];
-
-      for (const item of order.products) {
-        const product = products.find(p => p.id === item.productId);
-        if (!product) continue;
-
-        const recipe = recipes.find(r => r.productId === item.productId);
-        if (!recipe) continue;
-
-        const producedQty = Number(item.producedQuantity) || 0;
-        if (producedQty === 0) {
-          throw new Error(`No produced quantity set for ${product.name}. Cannot revert stock without produced quantity.`);
-        }
-        
-        const scale = producedQty / recipe.yield;
-        if (isNaN(scale) || !isFinite(scale)) {
-          throw new Error(`Invalid recipe yield for ${product.name}. Please check the recipe configuration.`);
-        }
-
-        for (const ingredient of recipe.ingredients) {
-          if (!ingredient.ingredientId) continue;
-
-          const stockData = stockLevels[ingredient.ingredientId] || { quantity: 0 };
-          const amountToAdd = Math.ceil(Number(ingredient.amount) * scale);
-          if (isNaN(amountToAdd) || !isFinite(amountToAdd)) {
-            const ingredientData = ingredients.find(i => i.id === ingredient.ingredientId);
-            throw new Error(`Invalid ingredient amount for ${ingredientData?.name || 'Unknown Ingredient'}`);
-          }
-
-          const newQuantity = stockData.quantity + amountToAdd;
-
-          ingredientUpdates.push({
-            ingredientId: ingredient.ingredientId,
-            newQuantity
-          });
-        }
-      }
-
-      const missingIngredients = ingredientUpdates.filter(update => 
-        !ingredients.find(i => i.id === update.ingredientId)
-      );
-
-      if (missingIngredients.length > 0) {
-        throw new Error('Some ingredients are missing from the database');
-      }
-
-      for (const update of ingredientUpdates) {
-        const stockData = stockLevels[update.ingredientId] || { quantity: 0 };
-        try {
-          await updateStockLevel(update.ingredientId, {
-            quantity: update.newQuantity,
-            minStock: stockData.minStock,
-            orderId: order.id,
-            changeType: 'reversion'
-          });
-        } catch (err) {
-          const ingredientName = ingredients.find(i => i.id === update.ingredientId)?.name || 'Unknown Ingredient';
-          throw new Error(`Failed to update stock for ${ingredientName}`);
-        }
-      }
-
-      await refreshStockHistory();
-      setSuccess('Stock levels have been successfully reverted');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      // Log error with more context
-      console.error('Error reverting stock reduction:', {
-        error: err instanceof Error ? err.message : 'Unknown error',
-        orderId: order.id,
-        products: order.products.map(p => ({
-          id: p.productId,
-          name: products.find(prod => prod.id === p.productId)?.name
-        }))
-      });
-
-      // Set user-friendly error message
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An unexpected error occurred while reverting stock levels. Please try again.');
-      }
-    } finally {
-      setRevertingStockReduction(prev => ({ ...prev, [order.id]: false }));
-    }
-  };
-
-  // Group orders by month
   const ordersByMonth = React.useMemo(() => {
-    const completedOrders = orders.filter(order => order.status === 'completed');
+    const completedOrders = orders
+      .filter(order => order.status === 'completed')
+      .sort((a, b) => {
+        const dateA = new Date(a.completedAt || a.updatedAt);
+        const dateB = new Date(b.completedAt || b.updatedAt);
+        return dateB.getTime() - dateA.getTime();
+      });
     
     const grouped = completedOrders.reduce((acc, order) => {
       const completedDate = new Date(order.completedAt || order.updatedAt);
@@ -331,20 +80,15 @@ export default function CompletedOrders() {
       .map(([key, { monthName, orders }]) => ({
         monthKey: key,
         monthName,
-        orders: orders.sort((a, b) => {
-          const dateA = new Date(a.completedAt || a.updatedAt);
-          const dateB = new Date(b.completedAt || b.updatedAt);
-          return dateB.getTime() - dateA.getTime();
-        })
+        orders
       }));
   }, [orders]);
 
-  // Initialize first month as expanded on initial render
   useEffect(() => {
     if (ordersByMonth.length > 0 && expandedMonths.size === 0) {
       setExpandedMonths(new Set([ordersByMonth[0].monthKey]));
     }
-  }, [ordersByMonth, expandedMonths]);
+  }, [ordersByMonth]);
 
   const toggleMonth = (monthKey: string) => {
     setExpandedMonths(prev => {
@@ -356,6 +100,34 @@ export default function CompletedOrders() {
       }
       return next;
     });
+  };
+
+  useEffect(() => {
+    const initializeData = async () => {
+      if (!hasInitialized) {
+        setIsRefreshing(true);
+        await refreshOrders();
+        setIsRefreshing(false);
+        setHasInitialized(true);
+      }
+    };
+    
+    initializeData();
+  }, [refreshOrders, hasInitialized]);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    setError(null);
+    try {
+      await refreshOrders();
+    } catch (err) {
+      console.error('Error refreshing data:', err);
+      setError('Failed to refresh data. Please try again.');
+    } finally {
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 500);
+    }
   };
 
   const handleUpdateStatus = async (
@@ -398,6 +170,48 @@ export default function CompletedOrders() {
     });
   };
 
+  const handleUpdateProductionDate = async (orderId: string, newDate: string) => {
+    try {
+      setError(null);
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      await updateOrderStatus(orderId, 'completed', undefined, undefined, undefined, undefined, newDate);
+      setEditingProductionDate(null);
+      setSuccess('Production date updated successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error updating production date:', err);
+      setError('Failed to update production date');
+    }
+  };
+
+  const handleGenerateReport = () => {
+    try {
+      let filteredOrders = orders.filter(order => order.status === 'completed');
+      if (startDate && endDate) {
+        filteredOrders = filteredOrders.filter(order => {
+          const orderDate = new Date(order.completedAt || order.updatedAt);
+          return orderDate >= new Date(startDate) && orderDate <= new Date(endDate);
+        });
+      }
+
+      const reportData = generateReport(filteredOrders, products, recipes, ingredients);
+
+      const wb = generateReportExcel(reportData, products, ingredients, startDate, endDate);
+      saveWorkbook(wb, 'production-report.xlsx');
+
+      const doc = generateReportPDF(reportData, products, ingredients, startDate, endDate);
+      doc.save('production-report.pdf');
+
+      setSuccess('Reports generated successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error generating reports:', err);
+      setError('Failed to generate reports');
+    }
+  };
+
   const selectedOrdersData = orders.filter(order => 
     selectedOrders.has(order.id)
   );
@@ -424,48 +238,57 @@ export default function CompletedOrders() {
             </span>
           )}
         </div>
-        <div className="flex flex-col gap-2">
-          {error && (
-            <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <p>{error}</p>
-            </div>
-          )}
-          {success && (
-            <div className="bg-green-50 text-green-600 p-4 rounded-lg flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-              <p>{success}</p>
-            </div>
-          )}
-        </div>
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-3 py-1.5 border rounded-md"
+            />
+            <span>to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="px-3 py-1.5 border rounded-md"
+            />
+            <button
+              onClick={handleGenerateReport}
+              disabled={!startDate || !endDate}
+              className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:opacity-50"
+            >
+              <FileDown className="w-4 h-4" />
+              Generate Report
+            </button>
+          </div>
           {selectedOrders.size > 0 && (
             <button
               onClick={() => setShowIngredientCalculator(true)}
-              className="w-52 h-10 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-md hover:bg-pink-700"
+              className="inline-flex items-center px-3 py-1.5 text-sm bg-pink-500 text-white rounded-md hover:bg-pink-600"
             >
-              <Calculator className="w-4 h-4" />
-              Calculate Ingredients ({selectedOrders.size})
+              <Calculator className="w-4 h-4 mr-1" />
+              Calculate ({selectedOrders.size})
             </button>
           )}
           <div className="flex items-center gap-3">
             <button
               onClick={handleManualRefresh}
               disabled={isRefreshing}
-              className="w-32 h-10 flex items-center justify-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md disabled:opacity-50"
+              className="inline-flex items-center px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <button
               onClick={expandAllMonths}
-              className="w-32 h-10 flex items-center justify-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+              className="inline-flex items-center px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50"
             >
               Expand All
             </button>
             <button
               onClick={collapseAllMonths}
-              className="w-32 h-10 flex items-center justify-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+              className="inline-flex items-center px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50"
             >
               Collapse All
             </button>
@@ -486,6 +309,20 @@ export default function CompletedOrders() {
         </div>
       </div>
 
+      {error && (
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" />
+          <p>{error}</p>
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 text-green-600 p-4 rounded-lg flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5" />
+          <p>{success}</p>
+        </div>
+      )}
+
       {ordersByMonth.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <p className="text-gray-500">No completed orders yet</p>
@@ -499,7 +336,7 @@ export default function CompletedOrders() {
               <div key={monthGroup.monthKey} className="bg-white rounded-lg shadow-sm overflow-hidden">
                 <button
                   onClick={() => toggleMonth(monthGroup.monthKey)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                  className="w-full px-4 py-3 bg-white flex items-center justify-between hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     {isExpanded ? (
@@ -536,72 +373,76 @@ export default function CompletedOrders() {
                             onUpdateStatus={handleUpdateStatus}
                             selected={selectedOrders.has(order.id)}
                             extraActions={
-                              <div className="flex gap-2">
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <div className="flex items-center gap-2 mr-4">
+                                  <span className="text-sm text-gray-600">
+                                    Production Date: 
+                                  </span>
+                                  {editingProductionDate?.orderId === order.id ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="date"
+                                        value={editingProductionDate.date}
+                                        onChange={(e) => setEditingProductionDate({
+                                          orderId: order.id,
+                                          date: e.target.value
+                                        })}
+                                        className="px-2 py-1 border rounded-md text-sm"
+                                      />
+                                      <button
+                                        onClick={() => handleUpdateProductionDate(
+                                          order.id,
+                                          editingProductionDate.date
+                                        )}
+                                        className="px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600"
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingProductionDate(null)}
+                                        className="px-2 py-1 text-sm border rounded-md hover:bg-gray-50"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm">
+                                        {order.completedAt ? new Date(order.completedAt).toLocaleDateString() : 'Not set'}
+                                      </span>
+                                      <button
+                                        onClick={() => setEditingProductionDate({
+                                          orderId: order.id,
+                                          date: order.completedAt?.split('T')[0] || new Date().toISOString().split('T')[0]
+                                        })}
+                                        className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                                        title="Edit production date"
+                                      >
+                                        <Edit2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+
                                 <button
                                   onClick={() => handleDownloadExcel(order)}
-                                  className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-md hover:from-indigo-600 hover:to-blue-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
-                                  title="Download Excel"
+                                  className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-500 text-white rounded-md hover:bg-indigo-600"
                                 >
-                                  <FileSpreadsheet className="w-4 h-4" />
+                                  <FileSpreadsheet className="w-4 h-4 mr-1" />
                                   Excel
                                 </button>
                                 <button
                                   onClick={() => handleDownloadPDF(order)}
-                                  className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-purple-500 to-violet-500 text-white rounded-md hover:from-purple-600 hover:to-violet-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
-                                  title="Download PDF"
+                                  className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600"
                                 >
-                                  <FileDown className="w-4 h-4" />
+                                  <FileDown className="w-4 h-4 mr-1" />
                                   PDF
                                 </button>
-                                {!stockReductionHistory[order.id] || stockReductionHistory[order.id] === 'reverted' ? (
-                                  <button
-                                    onClick={() => handleReduceStock(order)}
-                                    disabled={loadingStockReduction[order.id]}
-                                    className={`w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
-                                      ${loadingStockReduction[order.id]
-                                        ? 'bg-green-100 text-green-400 cursor-wait transform-none hover:shadow-none'
-                                        : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:from-emerald-600 hover:to-green-600'
-                                      }`}
-                                    title="Reduce ingredient stock"
-                                  >
-                                    <Package2 className="w-4 h-4" />
-                                    {loadingStockReduction[order.id] ? 'Reducing...' : 'Reduce Stock'}
-                                  </button>
-                                ) : stockReductionHistory[order.id] === 'reduced' ? (
-                                  <button
-                                    onClick={() => handleRevertStockReduction(order)}
-                                    disabled={revertingStockReduction[order.id]}
-                                    className={`w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
-                                      ${revertingStockReduction[order.id]
-                                        ? 'bg-blue-100 text-blue-400 cursor-wait transform-none hover:shadow-none'
-                                        : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
-                                      }`}
-                                    title="Revert stock reduction"
-                                  >
-                                    <History className="w-4 h-4" />
-                                    {revertingStockReduction[order.id] ? 'Reverting...' : 'Revert Stock'}
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleReduceStock(order)}
-                                    disabled={loadingStockReduction[order.id]}
-                                    className={`w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500
-                                      ${loadingStockReduction[order.id]
-                                        ? 'bg-green-100 text-green-400 cursor-wait transform-none hover:shadow-none'
-                                        : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:from-emerald-600 hover:to-green-600'
-                                      }`}
-                                    title="Reduce ingredient stock"
-                                  >
-                                    <Package2 className="w-4 h-4" />
-                                    {loadingStockReduction[order.id] ? 'Reducing...' : 'Reduce Stock'}
-                                  </button>
-                                )}
                                 <button
                                   onClick={() => setReopeningOrder(order.id)}
-                                  className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md hover:from-amber-600 hover:to-orange-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
-                                  title="Reopen order for production"
+                                  className="inline-flex items-center px-3 py-1.5 text-sm bg-amber-500 text-white rounded-md hover:bg-amber-600"
                                 >
-                                  <RotateCcw className="w-4 h-4" />
+                                  <ChevronLeft className="w-4 h-4 mr-1" />
                                   Reopen
                                 </button>
                               </div>

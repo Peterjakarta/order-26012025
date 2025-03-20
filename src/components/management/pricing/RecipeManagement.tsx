@@ -15,6 +15,7 @@ export default function RecipeManagement() {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [expandedRecipes, setExpandedRecipes] = useState<Set<string>>(new Set());
   const [justCopied, setJustCopied] = useState<string | null>(null);
+  const [justCopiedIngredients, setJustCopiedIngredients] = useState<string | null>(null);
 
   const handleSubmit = async (data: Omit<Recipe, 'id'>) => {
     try {
@@ -42,9 +43,25 @@ export default function RecipeManagement() {
       notes: recipe.notes || ''
     });
     
-    // Show "Copied" indicator briefly
     setJustCopied(recipe.id);
     setTimeout(() => setJustCopied(null), 2000);
+  };
+
+  const handleCopyIngredients = (recipe: Recipe) => {
+    try {
+      // Format ingredients for copying
+      const ingredientText = recipe.ingredients.map(item => 
+        `${item.ingredientId}|${item.amount}`
+      ).join('\n');
+
+      navigator.clipboard.writeText(ingredientText);
+      
+      setJustCopiedIngredients(recipe.id);
+      setTimeout(() => setJustCopiedIngredients(null), 2000);
+    } catch (err) {
+      console.error('Error copying ingredients:', err);
+      alert('Failed to copy ingredients to clipboard');
+    }
   };
 
   // Group recipes by category
@@ -120,7 +137,7 @@ export default function RecipeManagement() {
           const categoryKey = `category-${categoryId}`;
           
           return (
-            <div key={categoryKey} className="bg-white shadow-sm rounded-lg overflow-hidden">
+            <div key={categoryKey} className="bg-white rounded-lg shadow-sm overflow-hidden">
               <button
                 onClick={() => setExpandedCategory(isExpanded ? null : categoryId)}
                 className="w-full px-4 py-3 bg-white flex items-center justify-between hover:bg-gray-50 transition-colors"
@@ -174,6 +191,13 @@ export default function RecipeManagement() {
                               >
                                 <Calculator className="w-4 h-4" />
                                 Calculate
+                              </button>
+                              <button
+                                onClick={() => handleCopyIngredients(recipe)}
+                                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                              >
+                                <Copy className="w-4 h-4" />
+                                {justCopiedIngredients === recipe.id ? 'Ingredients Copied!' : 'Copy Ingredients'}
                               </button>
                               <button
                                 onClick={() => handleCopyRecipe(recipe)}

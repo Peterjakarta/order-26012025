@@ -8,17 +8,22 @@ import {
   serverTimestamp, 
   addDoc,
   getFirestore,
-  initializeFirestore,
   enableIndexedDbPersistence,
   disableNetwork,
-  enableNetwork
+  enableNetwork,
+  setLogLevel
 } from 'firebase/firestore';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
 import type { LogEntry } from '../types/types';
 
+// Enable more detailed logging in development
+if (import.meta.env.DEV) {
+  setLogLevel('debug');
+}
+
 // Network status management
-let isOnline = true;
+let isOnline = navigator.onLine;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY = 3000; // 3 seconds
@@ -36,7 +41,7 @@ function dispatchConnectionEvent(status: 'connected' | 'disconnected' | 'reconne
   }));
 }
 
-// Reconnection handler
+// Reconnection handler with improved error handling
 async function attemptReconnect() {
   if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
     console.warn('Max reconnection attempts reached');
@@ -45,6 +50,7 @@ async function attemptReconnect() {
   }
 
   try {
+    console.log(`Attempting to reconnect (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})...`);
     await enableNetwork(db);
     isOnline = true;
     dispatchConnectionEvent('connected');
@@ -54,49 +60,48 @@ async function attemptReconnect() {
   } catch (err) {
     reconnectAttempts++;
     const delay = RECONNECT_DELAY * Math.pow(RECONNECT_BACKOFF_FACTOR, reconnectAttempts - 1);
-    console.warn(`Reconnection attempt ${reconnectAttempts} failed, retrying in ${delay}ms`);
+    console.warn(`Reconnection attempt ${reconnectAttempts} failed, retrying in ${delay}ms`, err);
     dispatchConnectionEvent('reconnecting');
     setTimeout(attemptReconnect, delay);
   }
 }
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAFc0V_u1m2AbrW7tkR525Wj-tUwlUEOBw",
-  authDomain: "cokelateh-a7b9d.firebaseapp.com", 
-  projectId: "cokelateh-a7b9d",
-  storageBucket: "cokelateh-a7b9d.firebasestorage.app",
-  messagingSenderId: "873783861603",
-  appId: "1:873783861603:web:c13e7b7b63adb19c90f356"
+  apiKey: "AIzaSyDnDWBTf_psoWM6WuU4F_WgkMM2OXnpHOY",
+  authDomain: "productioncokelateh.firebaseapp.com",
+  projectId: "productioncokelateh",
+  storageBucket: "productioncokelateh.appspot.com",
+  messagingSenderId: "776169577997",
+  appId: "1:776169577997:web:cf0062bf4fae9e16963f44"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase with Node.js 18 runtime
+const app = initializeApp({
+  ...firebaseConfig,
+  // Explicitly set Node.js runtime version
+  functions: {
+    runtime: 'nodejs18'
+  }
+});
 
-// Initialize Firestore with settings
-const firestoreSettings = {
-  cacheSizeBytes: 50 * 1024 * 1024, // 50MB cache
-  experimentalForceLongPolling: true,
-  ignoreUndefinedProperties: true
-};
-
-const db = initializeFirestore(app, firestoreSettings);
+// Initialize Firestore with default settings
+const db = getFirestore(app);
 
 // Initialize Auth
 const auth = getAuth(app);
 
-// Initialize persistence
+// Initialize persistence with improved error handling
 const initializePersistence = async () => {
   try {
     await enableIndexedDbPersistence(db);
     console.log('Persistence enabled successfully');
-  } catch (err) {
+  } catch (err: any) {
     if (err.code === 'failed-precondition') {
       console.warn('Multiple tabs detected - persistence enabled in first tab only');
     } else if (err.code === 'unimplemented') {
       console.warn('Persistence not supported in this browser');
     } else {
       console.error('Error enabling persistence:', err.message);
-      // Log detailed error info but continue - app will work without persistence
       console.debug('Persistence error details:', {
         code: err.code,
         name: err.name,
@@ -106,32 +111,41 @@ const initializePersistence = async () => {
   }
 };
 
+// Improved online/offline handlers
 window.addEventListener('online', () => {
-  console.log('Reconnecting to Firestore...');
-  isOnline = true;
-  dispatchConnectionEvent('reconnecting');
-  reconnectAttempts = 0;
-  attemptReconnect();
+  console.log('Browser reports online status');
+  if (!isOnline) {
+    console.log('Reconnecting to Firestore...');
+    isOnline = true;
+    dispatchConnectionEvent('reconnecting');
+    reconnectAttempts = 0;
+    attemptReconnect();
+  }
 });
 
-window.addEventListener('offline', () => {
-  console.log('Disconnecting from Firestore due to offline...');
+window.addEventListener('offline', async () => {
+  console.log('Browser reports offline status');
   isOnline = false;
   dispatchConnectionEvent('disconnected');
-  disableNetwork(db).catch(console.error);
+  try {
+    console.log('Disabling Firestore network connection...');
+    await disableNetwork(db);
+    console.log('Network disabled successfully');
+  } catch (err) {
+    console.error('Error disabling network:', err);
+  }
 });
 
-// Batch operations helper (single implementation)
+// Batch operations helper
 let currentBatch: ReturnType<typeof writeBatch> | null = null;
 let batchOperations = 0;
-const MAX_BATCH_OPERATIONS = 250; // Reduced for better reliability
-const BATCH_TIMEOUT = 1000; // Reduced to 1 second
+const MAX_BATCH_OPERATIONS = 250;
+const BATCH_TIMEOUT = 1000;
 let batchTimeout: NodeJS.Timeout | null = null;
 
 export function getBatch() {
   if (!currentBatch || batchOperations >= MAX_BATCH_OPERATIONS) {
     if (currentBatch) {
-      // Commit existing batch before creating new one
       const existingBatch = currentBatch;
       currentBatch = null;
       existingBatch.commit().catch(console.error);
@@ -139,7 +153,6 @@ export function getBatch() {
     currentBatch = writeBatch(db);
     batchOperations = 0;
     
-    // Set timeout to auto-commit if no new operations
     if (batchTimeout) {
       clearTimeout(batchTimeout);
     }
@@ -164,7 +177,7 @@ export async function commitBatchIfNeeded() {
   }
 }
 
-// Define collection names
+// Collection names
 export const COLLECTIONS = {
   USERS: 'users',
   CATEGORIES: 'categories',
@@ -179,7 +192,7 @@ export const COLLECTIONS = {
   STOCK_CATEGORIES: 'stock_categories',
   STOCK_CATEGORY_ITEMS: 'stock_category_items',
   LOGS: 'logs'
-};
+} as const;
 
 // Helper function to create log entries
 export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) {
@@ -199,38 +212,7 @@ export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) 
   }
 }
 
-// Helper to handle Firestore errors gracefully
-export function handleFirestoreError(error: any, fallbackMessage: string = 'A database error occurred'): string {
-  console.error('Firestore error:', error);
-  
-  if (!error) return fallbackMessage;
-  
-  // Check for specific error codes
-  if (error.code === 'failed-precondition') {
-    // Often happens with missing indexes
-    return 'The operation cannot be completed at this time. This might be due to missing database indexes.';
-  }
-  
-  if (error.code === 'permission-denied') {
-    return 'You do not have permission to perform this operation.';
-  }
-  
-  if (error.code === 'unavailable') {
-    return 'The service is currently unavailable. Please try again later.';
-  }
-  
-  if (error.code === 'resource-exhausted') {
-    return 'The system is currently overloaded. Please try again later.';
-  }
-  
-  if (error.code === 'unauthenticated') {
-    return 'Your session has expired. Please log in again.';
-  }
-  
-  return error.message || fallbackMessage;
-}
-
-// Initialize persistence
-initializePersistence();
+// Initialize persistence and export
+initializePersistence().catch(console.error);
 
 export { db, auth };

@@ -109,6 +109,7 @@ export function generateOrderWithRecipesPDF(order: Order, products: Product[], r
 
   return doc;
 }
+
 interface StockChecklistCategory {
   categoryName: string;
   ingredients: {
@@ -448,7 +449,7 @@ export function generateOrderPDF(order: Order, products: Product[], poNumber?: s
 
     const mouldInfo = calculateMouldCount(product.category, item.quantity);
     const showMould = isBonBonCategory(product.category) || isPralinesCategory(product.category);
-    const expiryDate = order.completedAt ? calculateExpiryDate(order.completedAt, product.category) : null;
+    const expiryDate = order.completedAt ? calculateExpiryDate(order.completedAt) : null;
 
     return [
       product.name,

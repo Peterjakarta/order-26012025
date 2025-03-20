@@ -9,7 +9,7 @@
   # Directory with built assets (for Vite)
   publish = "dist"
 
-# Set Node.js version
+# Set Node.js version to 18
 [build.environment]
   NODE_VERSION = "18"
   NPM_FLAGS = "--legacy-peer-deps"

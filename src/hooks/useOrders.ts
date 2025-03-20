@@ -96,12 +96,12 @@ export function useOrders() {
             }
           });
 
-        // Log detailed information about the sync
-        console.log(`Orders sync complete:
-          - Total orders: ${ordersData.length}
-          - Parse errors: ${parseErrors}
-          - Timestamp: ${new Date().toISOString()}`
-        );
+          // Log detailed information about the sync
+          console.log(`Orders sync complete:
+            - Total orders: ${ordersData.length}
+            - Parse errors: ${parseErrors}
+            - Timestamp: ${new Date().toISOString()}`
+          );
 
           // Sort orders by date for consistent display
           ordersData.sort((a, b) => 
@@ -239,13 +239,13 @@ export function useOrders() {
     producedQuantities?: Record<string, number>,
     stockQuantities?: Record<string, number>,
     rejectQuantities?: Record<string, number>,
-    rejectNotes?: Record<string, string>
+    rejectNotes?: Record<string, string>,
+    productionDate?: string
   ) => {
     try {
       const orderRef = doc(db, COLLECTIONS.ORDERS, orderId);
       const orderDoc = orders.find(o => o.id === orderId);
       if (!orderDoc) throw new Error('Order not found');
-      console.log('Updating order status:', orderId, status);
 
       const updateData: any = {
         updatedAt: serverTimestamp()
@@ -265,11 +265,11 @@ export function useOrders() {
         updateData.products = updatedProducts;
       }
 
-      // Only update status and completedAt if status is changing to completed
-      if (status === 'completed' && orderDoc.status !== 'completed') {
+      // Update status and completedAt/productionDate
+      if (status === 'completed') {
         updateData.status = status;
-        updateData.completedAt = serverTimestamp();
-      } else if (status !== 'completed') {
+        updateData.completedAt = productionDate ? new Date(productionDate) : serverTimestamp();
+      } else {
         updateData.status = status;
         // Clear completedAt if moving back from completed
         if (orderDoc.status === 'completed') {

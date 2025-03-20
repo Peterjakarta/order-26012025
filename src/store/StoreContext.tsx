@@ -16,7 +16,7 @@ import {
   limit,
   getDoc
 } from 'firebase/firestore';
-import { db, COLLECTIONS, getBatch, commitBatchIfNeeded, getNetworkStatus, handleFirestoreError } from '../lib/firebase';
+import { db, COLLECTIONS, getBatch, commitBatchIfNeeded, getNetworkStatus } from '../lib/firebase';
 import { categories as initialCategories } from '../data/categories';
 import type { Product, ProductCategory, CategoryData, Ingredient, Recipe, StockLevel, StockHistory, StockCategory } from '../types/types';
 import { auth } from '../lib/firebase';
@@ -44,7 +44,7 @@ interface StoreContextType extends StoreState {
   addIngredient: (ingredient: Omit<Ingredient, 'id'>) => Promise<void>;
   updateIngredient: (id: string, ingredient: Omit<Ingredient, 'id'>) => Promise<void>;
   deleteIngredient: (id: string) => Promise<void>;
-  updateIngredientCategories: (ingredientId: string, categoryIds: string[]) => Promise<void>;
+  updateIngredientCategories: (categoryId: string, ingredientIds: string[]) => Promise<void>;
   updateStockLevel: (ingredientId: string, data: { 
     quantity: number;
     minStock?: number;
@@ -93,31 +93,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     stockReductionHistory: {} as Record<string, boolean>
   }));
 
-  // Subscribe to stock reduction history from Firebase
-  useEffect(() => {
-    const q = query(collection(db, COLLECTIONS.STOCK_HISTORY));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const reductionHistory: Record<string, boolean> = {};
-      
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.orderId && data.changeType === 'reduction') {
-          reductionHistory[data.orderId] = true;
-        }
-      });
-      
-      setState(prev => ({ ...prev, stockReductionHistory: reductionHistory }));
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Subscribe to stock history from Firebase
   const refreshStockHistory = useCallback(async () => {
     try {
       console.log('Manually refreshing stock history...');
-      // Get the most recent 200 entries to ensure we have the latest data
       const q = query(
         collection(db, COLLECTIONS.STOCK_HISTORY),
         orderBy('timestamp', 'desc'),
@@ -144,69 +122,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.stockHistory]);
 
-  useEffect(() => {
-    const q = query(
-      collection(db, COLLECTIONS.STOCK_HISTORY),
-      orderBy('timestamp', 'desc'),
-      limit(100)
-    );
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const historyData: StockHistory[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        historyData.push({
-          id: doc.id,
-          ...data,
-          timestamp: data.timestamp?.toDate?.()?.toISOString() || new Date().toISOString()
-        } as StockHistory);
-      });
-      setState(prev => ({ ...prev, stockHistory: historyData }));
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Subscribe to stock levels from Firebase
-  useEffect(() => {
-    const q = query(collection(db, COLLECTIONS.STOCK));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const stockData: Record<string, StockLevel> = {};
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        stockData[doc.id] = {
-          quantity: data.quantity || 0,
-          minStock: data.minStock,
-          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
-        };
-      });
-      setState(prev => ({ ...prev, stockLevels: stockData }));
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Subscribe to stock categories from Firebase
-  useEffect(() => {
-    const q = query(collection(db, COLLECTIONS.STOCK_CATEGORIES), orderBy('name'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const categoriesData: StockCategory[] = [];
-      snapshot.forEach((doc) => {
-        categoriesData.push({
-          id: doc.id,
-          ...doc.data(),
-          created_at: doc.data().created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
-          updated_at: doc.data().updated_at?.toDate?.()?.toISOString() || new Date().toISOString()
-        } as StockCategory);
-      });
-      setState(prev => ({ ...prev, stockCategories: categoriesData }));
-    });
-
-    return () => unsubscribe();
-  }, []);
-
   const updateStockLevel = useCallback(async (ingredientId: string, data: {
     quantity: number;
     minStock?: number;
@@ -214,276 +129,66 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     changeType?: 'reduction' | 'reversion' | 'manual';
   }) => {
     try {
-      // Skip update if offline
       if (!getNetworkStatus()) {
         throw new Error('Cannot update stock while offline');
       }
 
-      // Performance optimization: Skip validation for manual updates
-      if (data.changeType === 'manual') {
-        const stockRef = doc(db, COLLECTIONS.STOCK, ingredientId);
-        const currentStock = state.stockLevels[ingredientId]?.quantity || 0;
-        const batch = getBatch();
-        
-        // Round values before saving
-        const newQuantity = Math.ceil(Math.max(0, Number(data.quantity)));
-        const minStock = data.minStock === undefined ? undefined : Math.ceil(Math.max(0, Number(data.minStock)));
-
-        batch.set(stockRef, {
-          quantity: newQuantity,
-          ...(minStock !== undefined && { minStock }),
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-
-        // Add history entry
-        const historyRef = doc(collection(db, COLLECTIONS.STOCK_HISTORY));
-        batch.set(historyRef, {
-          ingredientId,
-          previousQuantity: currentStock,
-          newQuantity,
-          changeAmount: newQuantity - currentStock,
-          changeType: 'manual',
-          timestamp: serverTimestamp(),
-          userId: auth.currentUser?.uid || 'system'
-        });
-
-        await commitBatchIfNeeded();
-        // Refresh history after manual update
-        await refreshStockHistory();
-        return;
-      }
-
-      // Validate input data
-      if (typeof data.quantity !== 'number' || !Number.isFinite(data.quantity)) {
-        throw new Error('Invalid quantity value');
-      }
-
-      if (data.minStock !== undefined && 
-          (typeof data.minStock !== 'number' || !Number.isFinite(data.minStock))) {
-        throw new Error('Invalid minimum stock value');
-      }
-
-      // Validate ingredient exists first
       const ingredientRef = doc(db, COLLECTIONS.INGREDIENTS, ingredientId);
       const ingredientDoc = await getDoc(ingredientRef);
       if (!ingredientDoc.exists()) {
         throw new Error('Ingredient not found');
       }
 
-      // Get current stock level first
       const stockRef = doc(db, COLLECTIONS.STOCK, ingredientId);
       const stockDoc = await getDoc(stockRef);
       const currentStock = stockDoc.exists() ? stockDoc.data().quantity || 0 : 0;
       
-      // Round quantities up to whole numbers
       const newQuantity = Math.ceil(Math.max(0, Number(data.quantity)));
       const minStock = data.minStock === undefined ? undefined : Math.ceil(Math.max(0, Number(data.minStock)));
       
-      // Validate the change amount (increased limit for large operations)
-      if (data.changeType !== 'manual') {
-        const changeAmount = Math.abs(newQuantity - currentStock);
-        if (changeAmount > 9999999) { // Allow up to 7 digits
-          throw new Error('Stock change amount exceeds system limits (max 9,999,999). For larger changes, please contact support.');
-        }
+      const changeAmount = newQuantity - currentStock;
+      if (Math.abs(changeAmount) > 9999999) {
+        throw new Error('Stock change amount exceeds system limits (max 9,999,999)');
       }
 
-      // Create batch for atomic updates
-      const batch = getBatch();
+      const batch = writeBatch(db);
       
-      // Update stock level
-      const stockData = {
+      batch.set(stockRef, {
         quantity: newQuantity,
         ...(minStock !== undefined && { minStock }),
         updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      const historyRef = doc(collection(db, COLLECTIONS.STOCK_HISTORY));
+      const historyData = {
+        ingredientId,
+        previousQuantity: currentStock,
+        newQuantity,
+        changeAmount,
+        changeType: data.changeType || 'manual',
+        timestamp: serverTimestamp(),
+        userId: auth.currentUser?.uid || 'system',
+        ...(data.orderId && { orderId: data.orderId })
       };
-      batch.set(stockRef, stockData, { merge: true });
-      
-      // Add history entry if this is a stock change
-      if (data.changeType) {
-        const historyRef = doc(collection(db, COLLECTIONS.STOCK_HISTORY));
-        const changeAmount = Math.ceil(newQuantity - currentStock);
-        
-        const historyData = {
-          ingredientId,
-          previousQuantity: currentStock,
-          newQuantity: newQuantity,
-          changeAmount: changeAmount,
-          changeType: data.changeType,
-          timestamp: serverTimestamp(),
-          userId: auth.currentUser?.uid || 'system'
-        };
 
-        // Only add orderId if it exists
-        if (data.orderId) {
-          Object.assign(historyData, { orderId: data.orderId });
-        }
+      batch.set(historyRef, historyData);
+      
+      await batch.commit();
 
-        batch.set(historyRef, historyData);
-      }
-      
-      await commitBatchIfNeeded();
-      
-      // Refresh history after a significant operation like reduction or reversion
       if (data.changeType === 'reduction' || data.changeType === 'reversion') {
         await refreshStockHistory();
       }
+
+      return true;
     } catch (error) {
-      // Log detailed error information
       console.error('Error updating stock level:', {
         ingredientId,
         data,
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack
-        } : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
       throw error;
     }
-  }, [state.stockLevels, refreshStockHistory]);
-
-  const getStockHistory = useCallback(async (ingredientId?: string) => {
-    try {
-      // Check if we're offline
-      if (!getNetworkStatus()) {
-        // Return cached history data if offline
-        let filteredHistory = state.stockHistory;
-        if (ingredientId) {
-          filteredHistory = state.stockHistory.filter(h => h.ingredientId === ingredientId);
-        }
-        return filteredHistory;
-      }
-
-      // IMPORTANT: We need to completely avoid using composite queries with 'where' and 'orderBy'
-      // together, as they require explicit index creation.
-      // Instead, we'll use two different simple query strategies:
-      
-      // Strategy 1: Just get all history and filter in memory if ingredientId is provided
-      // This avoids index issues but isn't efficient for large datasets
-      if (ingredientId) {
-        try {
-          const simpleQuery = query(
-            collection(db, COLLECTIONS.STOCK_HISTORY),
-            where('ingredientId', '==', ingredientId)
-          );
-          
-          const snapshot = await getDocs(simpleQuery);
-          const historyEntries = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            timestamp: doc.data().timestamp?.toDate?.()?.toISOString() || new Date().toISOString()
-          })) as StockHistory[];
-          
-          // Sort in memory (since we can't use orderBy with where without an index)
-          return historyEntries.sort((a, b) => 
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-          );
-        } catch (queryError) {
-          console.error('Error executing stock history query:', queryError);
-          // Fallback to the cached history and filter in memory
-          return state.stockHistory.filter(h => h.ingredientId === ingredientId);
-        }
-      }
-      
-      // Strategy 2: For all history, just use orderBy without where
-      // This should always work without special indexes
-      try {
-        const simpleQuery = query(
-          collection(db, COLLECTIONS.STOCK_HISTORY),
-          orderBy('timestamp', 'desc'),
-          limit(200) // Increased limit to capture more history
-        );
-        
-        const snapshot = await getDocs(simpleQuery);
-        return snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          timestamp: doc.data().timestamp?.toDate?.()?.toISOString() || new Date().toISOString()
-        })) as StockHistory[];
-      } catch (queryError) {
-        console.error('Error executing stock history query:', queryError);
-        // Return cached data
-        return state.stockHistory;
-      }
-    } catch (error) {
-      console.error('Error getting stock history:', error);
-      // Return cached data on any error
-      if (ingredientId) {
-        return state.stockHistory.filter(h => h.ingredientId === ingredientId);
-      }
-      return state.stockHistory;
-    }
-  }, [state.stockHistory]);
-
-  // Subscribe to categories from Firebase
-  useEffect(() => {
-    const q = query(collection(db, COLLECTIONS.CATEGORIES), orderBy('order', 'asc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const categoriesData: Record<ProductCategory, CategoryData> = {};
-      const categoryOrder: ProductCategory[] = [];
-      
-      snapshot.forEach((doc) => {
-        const data = doc.data() as CategoryData & { order: number };
-        categoriesData[doc.id] = {
-          name: data.name
-        };
-        categoryOrder.push(doc.id);
-      });
-
-      setState(prev => ({
-        ...prev,
-        categories: categoriesData,
-        categoryOrder
-      }));
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Subscribe to products from Firebase
-  useEffect(() => {
-    const q = query(collection(db, COLLECTIONS.PRODUCTS), orderBy('name'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const productsData: Product[] = [];
-      snapshot.forEach((doc) => {
-        productsData.push({ id: doc.id, ...doc.data() } as Product);
-      });
-      setState(prev => ({ ...prev, products: productsData }));
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Subscribe to ingredients from Firebase
-  useEffect(() => {
-    const q = query(collection(db, COLLECTIONS.INGREDIENTS), orderBy('name'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const ingredientsData: Ingredient[] = [];
-      snapshot.forEach((doc) => {
-        ingredientsData.push({ id: doc.id, ...doc.data() } as Ingredient);
-      });
-      setState(prev => ({ ...prev, ingredients: ingredientsData }));
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Subscribe to recipes from Firebase
-  useEffect(() => {
-    const q = query(collection(db, COLLECTIONS.RECIPES), orderBy('name'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const recipesData: Recipe[] = [];
-      snapshot.forEach((doc) => {
-        recipesData.push({ id: doc.id, ...doc.data() } as Recipe);
-      });
-      setState(prev => ({ ...prev, recipes: recipesData }));
-    });
-
-    return () => unsubscribe();
-  }, []);
+  }, [refreshStockHistory]);
 
   const addProduct = useCallback(async (productData: Omit<Product, 'id'>) => {
     try {
@@ -553,10 +258,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     try {
       const batch = writeBatch(db);
       
-      // Delete the category
       batch.delete(doc(db, COLLECTIONS.CATEGORIES, category));
       
-      // Delete all products in the category
       const productsQuery = query(
         collection(db, COLLECTIONS.PRODUCTS), 
         where('category', '==', category)
@@ -646,42 +349,94 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const updateIngredientCategories = useCallback(async (ingredientId: string, categoryIds: string[]) => {
+  const updateIngredientCategories = useCallback(async (categoryId: string, ingredientIds: string[]) => {
     try {
-      // Get reference to the ingredient-category relationships
-      const batch = getBatch();
+      const batch = writeBatch(db);
       
-      // Delete existing relationships
       const q = query(
         collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS),
-        where('ingredient_id', '==', ingredientId)
+        where('category_id', '==', categoryId)
       );
-      try {
-        const snapshot = await getDocs(q);
-        snapshot.forEach(doc => {
-          batch.delete(doc.ref);
+      
+      const snapshot = await getDocs(q);
+      snapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      for (const ingredientId of ingredientIds) {
+        const docRef = doc(collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS));
+        batch.set(docRef, {
+          category_id: categoryId,
+          ingredient_id: ingredientId,
+          created_at: serverTimestamp()
         });
-      
-        // Add new relationships
-        for (const categoryId of categoryIds) {
-          const docRef = doc(collection(db, COLLECTIONS.STOCK_CATEGORY_ITEMS));
-          batch.set(docRef, {
-            category_id: categoryId,
-            ingredient_id: ingredientId,
-            created_at: serverTimestamp()
-          });
-        }
-      
-        await commitBatchIfNeeded();
-      } catch (err) {
-        console.error('Error updating ingredient categories:', err);
-        throw new Error('Failed to update ingredient categories. Please try again.');
       }
+
+      await batch.commit();
     } catch (error) {
       console.error('Error updating ingredient categories:', error);
       throw error;
     }
   }, []);
+
+  const getStockHistory = useCallback(async (ingredientId?: string) => {
+    try {
+      if (!getNetworkStatus()) {
+        let filteredHistory = state.stockHistory;
+        if (ingredientId) {
+          filteredHistory = state.stockHistory.filter(h => h.ingredientId === ingredientId);
+        }
+        return filteredHistory;
+      }
+
+      if (ingredientId) {
+        try {
+          const simpleQuery = query(
+            collection(db, COLLECTIONS.STOCK_HISTORY),
+            where('ingredientId', '==', ingredientId)
+          );
+          
+          const snapshot = await getDocs(simpleQuery);
+          const historyEntries = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate?.()?.toISOString() || new Date().toISOString()
+          })) as StockHistory[];
+          
+          return historyEntries.sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+        } catch (queryError) {
+          console.error('Error executing stock history query:', queryError);
+          return state.stockHistory.filter(h => h.ingredientId === ingredientId);
+        }
+      }
+      
+      try {
+        const simpleQuery = query(
+          collection(db, COLLECTIONS.STOCK_HISTORY),
+          orderBy('timestamp', 'desc'),
+          limit(200)
+        );
+        
+        const snapshot = await getDocs(simpleQuery);
+        return snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          timestamp: doc.data().timestamp?.toDate?.()?.toISOString() || new Date().toISOString()
+        })) as StockHistory[];
+      } catch (queryError) {
+        console.error('Error executing stock history query:', queryError);
+        return state.stockHistory;
+      }
+    } catch (error) {
+      console.error('Error getting stock history:', error);
+      if (ingredientId) {
+        return state.stockHistory.filter(h => h.ingredientId === ingredientId);
+      }
+      return state.stockHistory;
+    }
+  }, [state.stockHistory]);
 
   const addRecipe = useCallback(async (recipeData: Omit<Recipe, 'id'>) => {
     try {
@@ -718,6 +473,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const getProductsByCategory = useCallback((category: string) => {
+    return state.products.filter(p => p.category === category);
+  }, [state.products]);
+
   const addStockCategory = useCallback(async (data: { name: string; description?: string }) => {
     try {
       await addDoc(collection(db, COLLECTIONS.STOCK_CATEGORIES), {
@@ -731,10 +490,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const updateStockCategory = useCallback(async (
-    id: string,
-    data: { name: string; description?: string }
-  ) => {
+  const updateStockCategory = useCallback(async (id: string, data: { name: string; description?: string }) => {
     try {
       const categoryRef = doc(db, COLLECTIONS.STOCK_CATEGORIES, id);
       await updateDoc(categoryRef, {
@@ -756,9 +512,133 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const getProductsByCategory = useCallback((category: string) => {
-    return state.products.filter(p => p.category === category);
-  }, [state.products]);
+  useEffect(() => {
+    const q = query(
+      collection(db, COLLECTIONS.STOCK_HISTORY),
+      orderBy('timestamp', 'desc'),
+      limit(100)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const historyData: StockHistory[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        historyData.push({
+          id: doc.id,
+          ...data,
+          timestamp: data.timestamp?.toDate?.()?.toISOString() || new Date().toISOString()
+        } as StockHistory);
+      });
+      setState(prev => ({ ...prev, stockHistory: historyData }));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, COLLECTIONS.STOCK));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const stockData: Record<string, StockLevel> = {};
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        stockData[doc.id] = {
+          quantity: data.quantity || 0,
+          minStock: data.minStock,
+          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
+        };
+      });
+      setState(prev => ({ ...prev, stockLevels: stockData }));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, COLLECTIONS.STOCK_CATEGORIES), orderBy('name'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const categoriesData: StockCategory[] = [];
+      snapshot.forEach((doc) => {
+        categoriesData.push({
+          id: doc.id,
+          ...doc.data(),
+          created_at: doc.data().created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+          updated_at: doc.data().updated_at?.toDate?.()?.toISOString() || new Date().toISOString()
+        } as StockCategory);
+      });
+      setState(prev => ({ ...prev, stockCategories: categoriesData }));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, COLLECTIONS.CATEGORIES), orderBy('order', 'asc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const categoriesData: Record<ProductCategory, CategoryData> = {};
+      const categoryOrder: ProductCategory[] = [];
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data() as CategoryData & { order: number };
+        categoriesData[doc.id] = {
+          name: data.name
+        };
+        categoryOrder.push(doc.id);
+      });
+
+      setState(prev => ({
+        ...prev,
+        categories: categoriesData,
+        categoryOrder
+      }));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, COLLECTIONS.PRODUCTS), orderBy('name'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const productsData: Product[] = [];
+      snapshot.forEach((doc) => {
+        productsData.push({ id: doc.id, ...doc.data() } as Product);
+      });
+      setState(prev => ({ ...prev, products: productsData }));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, COLLECTIONS.INGREDIENTS), orderBy('name'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const ingredientsData: Ingredient[] = [];
+      snapshot.forEach((doc) => {
+        ingredientsData.push({ id: doc.id, ...doc.data() } as Ingredient);
+      });
+      setState(prev => ({ ...prev, ingredients: ingredientsData }));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, COLLECTIONS.RECIPES), orderBy('name'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const recipesData: Recipe[] = [];
+      snapshot.forEach((doc) => {
+        recipesData.push({ id: doc.id, ...doc.data() } as Recipe);
+      });
+      setState(prev => ({ ...prev, recipes: recipesData }));
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const value = {
     ...state,

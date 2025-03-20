@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package2, Plus, Edit2, AlertCircle, Save, X, History, FileSpreadsheet, ChevronDown, ChevronRight, ClipboardList } from 'lucide-react';
+import { Package2, Plus, Edit2, AlertCircle, Save, X, History, FileSpreadsheet, ChevronDown, ChevronRight, ClipboardList, Upload, RefreshCw } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
 import { useDebounce } from '../../../hooks/useDebounce';
 import { getNetworkStatus } from '../../../lib/firebase';
@@ -8,15 +8,10 @@ import { generateExcelData, saveWorkbook } from '../../../utils/excelGenerator';
 import { generateStockChecklistPDF } from '../../../utils/pdfGenerator';
 import StockHistory from './StockHistory';
 import StockCategories from './StockCategories';
+import BulkStockImport from './BulkStockImport';
 import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { COLLECTIONS } from '../../../lib/firebase';
-
-interface StockEntry {
-  ingredientId: string;
-  quantity: number;
-  minStock?: number;
-}
 
 export default function IngredientStock() {
   const { ingredients, stockLevels, updateStockLevel, stockCategories, updateIngredientCategories } = useStore();
@@ -32,6 +27,24 @@ export default function IngredientStock() {
   const [pendingUpdates, setPendingUpdates] = useState<Record<string, number>>({});
   const [lastSaveTime, setLastSaveTime] = useState<Record<string, number>>({});
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<StockCategory | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Initialize local stock levels from Firestore data
+  useEffect(() => {
+    const initialLevels: Record<string, number> = {};
+    
+    // Initialize stock levels for all ingredients
+    ingredients.forEach(ingredient => {
+      const stockData = stockLevels[ingredient.id] || { quantity: 0 };
+      initialLevels[ingredient.id] = stockData.quantity;
+    });
+    
+    setLocalStockLevels(initialLevels);
+    setIsInitialized(true);
+  }, [ingredients, stockLevels]);
 
   // Load category-ingredient relationships
   useEffect(() => {
@@ -61,15 +74,6 @@ export default function IngredientStock() {
 
     loadCategoryIngredients();
   }, []);
-
-  // Initialize local stock levels from Firestore data
-  useEffect(() => {
-    const initialLevels: Record<string, number> = {};
-    Object.entries(stockLevels).forEach(([id, data]) => {
-      initialLevels[id] = data.quantity;
-    });
-    setLocalStockLevels(initialLevels);
-  }, [stockLevels]);
 
   const debouncedUpdate = useDebounce(async (
     ingredientId: string,
@@ -440,25 +444,48 @@ export default function IngredientStock() {
     return null;
   };
 
+  if (!isInitialized) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-gray-500">Loading stock levels...</div>
+      </div>
+    );
+  }
+
+  if (ingredients.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 space-y-4">
+        <div className="text-gray-500">No ingredients found.</div>
+        <div className="text-sm text-gray-400">
+          Add ingredients in the Ingredients section to manage stock levels.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
           <Package2 className="w-6 h-6" />
           <h2 className="text-xl font-semibold">Ingredient Stock</h2>
-        </div>
+          {isRefreshing && (
+            <span className="text-sm text-gray-500 flex items-center ml-2">
+              <RefreshCw className="w-4 h-4 animate-spin mr-1" />
+              Refreshing...
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={handleDownloadChecklist}
+            onClick={() => handleDownloadChecklist()}
             className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
           >
             <ClipboardList className="w-4 h-4" />
             Download Checklist
           </button>
           <button
-            onClick={handleDownloadExcel}
+            onClick={() => handleDownloadExcel()}
             className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -492,11 +519,11 @@ export default function IngredientStock() {
 
           return (
             <div key={category.id} className="bg-white rounded-lg shadow-sm border">
-              <button
-                onClick={() => setExpandedCategory(expandedCategory === category.id ? null : category.id)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
+              <div className="flex justify-between items-center px-4 py-3">
+                <button
+                  onClick={() => setExpandedCategory(expandedCategory === category.id ? null : category.id)}
+                  className="flex items-center gap-3 hover:bg-gray-50 p-2 -ml-2 rounded-md transition-colors"
+                >
                   {isExpanded ? (
                     <ChevronDown className="w-5 h-5 text-gray-500" />
                   ) : (
@@ -504,15 +531,23 @@ export default function IngredientStock() {
                   )}
                   <div className="text-left">
                     <h3 className="font-medium text-gray-900">{category.name}</h3>
-                    <p className="text-sm text-gray-500 text-left">
+                    <p className="text-sm text-gray-500">
                       {filteredIngredients.length} ingredients
                     </p>
                   </div>
-                </div>
-                {category.description && (
-                  <p className="text-sm text-gray-500">{category.description}</p>
-                )}
-              </button>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setSelectedCategory(category);
+                    setShowBulkImport(true);
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50"
+                >
+                  <Upload className="w-4 h-4" />
+                  Bulk Import
+                </button>
+              </div>
 
               {isExpanded && (
                 <div className="border-t">
@@ -547,125 +582,125 @@ export default function IngredientStock() {
                           const minStock = stockData.minStock;
                           const warning = getLowStockWarning(ingredient, stockData.quantity || 0);
 
-                      return (
-                        <tr
-                          key={ingredient.id}
-                          className={`${warning ? 'bg-yellow-50' : ''} hover:bg-gray-50`}
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div>
-                                <div className="text-sm font-medium text-gray-900">
-                                  {ingredient.name}
-                                </div>
-                                {warning && (
-                                  <div className="flex items-center gap-1 text-red-600 text-xs mt-1">
-                                    <AlertCircle className="w-3 h-3" />
-                                    {warning}
+                          return (
+                            <tr
+                              key={ingredient.id}
+                              className={`${warning ? 'bg-yellow-50' : ''} hover:bg-gray-50`}
+                            >
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {ingredient.name}
+                                    </div>
+                                    {warning && (
+                                      <div className="flex items-center gap-1 text-red-600 text-xs mt-1">
+                                        <AlertCircle className="w-3 h-3" />
+                                        {warning}
+                                      </div>
+                                    )}
                                   </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    value={(localStockLevels[ingredient.id] ?? currentStock) || ''}
+                                    onChange={(e) => {
+                                      const value = parseInt(e.target.value);
+                                      if (!isNaN(value) && value >= 0) {
+                                        handleUpdateStock(ingredient.id, value);
+                                      }
+                                    }}
+                                    min="0"
+                                    step="1"
+                                    className={`w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
+                                      warning ? 'border-red-300 bg-red-50' : ''
+                                    }`}
+                                    title="Enter stock quantity"
+                                    maxLength={10}
+                                    style={{ appearance: 'textfield' }}
+                                  />
+                                  <span className="text-sm text-gray-500">{ingredient.unit}</span>
+                                  {editingStock.has(ingredient.id) && (
+                                    <button
+                                      onClick={() => handleSaveStock(ingredient.id)}
+                                      disabled={saving.has(ingredient.id)}
+                                      className="px-2 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300 flex items-center gap-1"
+                                    >
+                                      <Save className="w-3 h-3" />
+                                      {saving.has(ingredient.id) ? 'Saving...' : 'Save'}
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {editingMinStock === ingredient.id ? (
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      value={minStockInput}
+                                      onChange={(e) => setMinStockInput(e.target.value)}
+                                      min="0"
+                                      className="w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                                      placeholder="Enter min"
+                                    />
+                                    <button
+                                      onClick={() => handleMinStockSubmit(ingredient.id)}
+                                      className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                    >
+                                      <Save className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setEditingMinStock(null);
+                                        setMinStockInput('');
+                                      }}
+                                      className="p-1 text-gray-400 hover:bg-gray-50 rounded"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-sm text-gray-900">
+                                    {minStock !== undefined ? `${minStock} ${ingredient.unit}` : '-'}
+                                  </span>
                                 )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                value={(localStockLevels[ingredient.id] ?? currentStock) || ''}
-                                onChange={(e) => {
-                                  const value = parseInt(e.target.value);
-                                  if (!isNaN(value) && value >= 0) {
-                                    handleUpdateStock(ingredient.id, value);
-                                  }
-                                }}
-                                min="0"
-                                step="1"
-                                className={`w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
-                                  warning ? 'border-red-300 bg-red-50' : ''
-                                }`}
-                                title="Enter stock quantity"
-                                maxLength={10}
-                                style={{ appearance: 'textfield' }}
-                              />
-                              <span className="text-sm text-gray-500">{ingredient.unit}</span>
-                              {editingStock.has(ingredient.id) && (
-                                <button
-                                  onClick={() => handleSaveStock(ingredient.id)}
-                                  disabled={saving.has(ingredient.id)}
-                                  className="px-2 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300 flex items-center gap-1"
-                                >
-                                  <Save className="w-3 h-3" />
-                                  {saving.has(ingredient.id) ? 'Saving...' : 'Save'}
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {editingMinStock === ingredient.id ? (
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  value={minStockInput}
-                                  onChange={(e) => setMinStockInput(e.target.value)}
-                                  min="0"
-                                  className="w-24 px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                                  placeholder="Enter min"
-                                />
-                                <button
-                                  onClick={() => handleMinStockSubmit(ingredient.id)}
-                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
-                                >
-                                  <Save className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingMinStock(null);
-                                    setMinStockInput('');
-                                  }}
-                                  className="p-1 text-gray-400 hover:bg-gray-50 rounded"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-sm text-gray-900">
-                                {minStock !== undefined ? `${minStock} ${ingredient.unit}` : '-'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {ingredient.packageSize} {ingredient.packageUnit}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatIDR(ingredient.price)} / {ingredient.packageUnit}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => {
-                                  setSelectedIngredient(ingredient.id);
-                                  setShowHistory(true);
-                                }}
-                                className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-                                title="View history"
-                              >
-                                <History className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingMinStock(ingredient.id);
-                                  setMinStockInput(minStock?.toString() || '');
-                                }}
-                                className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-                                title="Set minimum stock"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {ingredient.packageSize} {ingredient.packageUnit}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {formatIDR(ingredient.price)} / {ingredient.packageUnit}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedIngredient(ingredient.id);
+                                      setShowHistory(true);
+                                    }}
+                                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                                    title="View history"
+                                  >
+                                    <History className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingMinStock(ingredient.id);
+                                      setMinStockInput(minStock?.toString() || '');
+                                    }}
+                                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                                    title="Set minimum stock"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -676,6 +711,21 @@ export default function IngredientStock() {
         })}
       </div>
       
+      {/* Bulk Import Modal */}
+      {showBulkImport && selectedCategory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <BulkStockImport
+              category={selectedCategory}
+              onClose={() => {
+                setShowBulkImport(false);
+                setSelectedCategory(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Stock History Modal */}
       {showHistory && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">

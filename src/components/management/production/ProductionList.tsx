@@ -375,79 +375,36 @@ export default function ProductionList({
               const isExpanded = expandedOrders.has(order.id);
               
               return (
-                <div key={order.id} className="bg-gray-50 rounded-lg p-4 space-y-4">
-                  <div className="flex justify-between items-start">
-                    <button
-                      onClick={() => toggleOrderExpanded(order.id)}
-                      className="flex items-center gap-3 hover:bg-white/50 p-2 rounded-md -ml-2 transition-colors"
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="w-5 h-5 text-gray-500" />
-                      ) : (
-                        <ChevronRight className="w-5 h-5 text-gray-500" />
-                      )}
-                      <div>
-                        <div className="flex items-center gap-3 mb-1">
-                          <span className={`px-2 py-0.5 rounded-md text-sm ${styles.base}`}>
-                            {branch?.name}
-                          </span>
-                          <span className="text-sm text-gray-500">
-                            #{order.id.slice(0, 8)}
-                          </span>
+                <div key={order.id} className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-start justify-between">
+                      <button
+                        onClick={() => toggleOrderExpanded(order.id)}
+                        className="flex items-center gap-3 hover:bg-white/50 p-2 rounded-md transition-colors"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="w-5 h-5 text-gray-500" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5 text-gray-500" />
+                        )}
+                        <div>
+                          <div className="flex items-center gap-3 mb-1">
+                            <span className={`px-2 py-0.5 rounded-md text-sm ${styles.base}`}>
+                              {branch?.name}
+                            </span>
+                            <span className="text-sm text-gray-500">
+                              #{order.id.slice(0, 8)}
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-600 text-left">
+                            <p>Ordered by: {order.orderedBy}</p>
+                            <p>Order Date: {new Date(order.orderDate).toLocaleDateString()}</p>
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-600 text-left">
-                          <p>Ordered by: {order.orderedBy}</p>
-                          <p>Order Date: {new Date(order.orderDate).toLocaleDateString()}</p>
-                        </div>
-                      </div>
-                    </button>
-                    <div className="flex items-center gap-4">
-                      {onRemove && (
-                        <button
-                          onClick={() => onRemove(order.id)}
-                          className="w-40 h-12 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-500 text-white rounded-md hover:from-red-600 hover:to-rose-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
-                        >
-                          Remove from Production
-                        </button>
-                      )}
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => handleDownloadExcel(order)}
-                          className="w-36 h-12 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md hover:from-amber-600 hover:to-orange-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
-                        >
-                          <FileSpreadsheet className="w-4 h-4" />
-                          Excel
-                        </button>
-                        <button
-                          onClick={() => handleDownloadPDF(order)}
-                          className="w-36 h-12 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-md hover:from-indigo-600 hover:to-blue-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
-                        >
-                          <FileDown className="w-4 h-4" />
-                          PDF
-                        </button>
-                        <button
-                          onClick={() => handleDownloadChecklist(order)}
-                          className="w-36 h-12 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-md hover:from-pink-600 hover:to-rose-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
-                        >
-                          <ClipboardCheck className="w-4 h-4" />
-                          Checklist
-                        </button>
-                        <button
-                          onClick={() => handleDownloadRecipes(order)}
-                          className="w-36 h-12 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-violet-500 text-white rounded-md hover:from-purple-600 hover:to-violet-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
-                        >
-                          <FileDown className="w-4 h-4" />
-                          Recipes
-                        </button>
-                        <button
-                          onClick={() => setCompletingOrder(order)}
-                          className="w-40 h-12 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-500 text-white rounded-md hover:from-cyan-600 hover:to-teal-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          Complete Order
-                        </button>
-                      </div>
-                      <div className="text-sm">
+                      </button>
+
+                      {/* Production Dates */}
+                      <div className="flex items-center gap-2">
                         {isEditing ? (
                           <div className="bg-white p-4 rounded-lg border shadow-sm space-y-4">
                             <div className="grid sm:grid-cols-2 gap-4">
@@ -479,7 +436,7 @@ export default function ProductionList({
                             <div className="flex justify-end gap-2">
                               <button
                                 onClick={() => setEditingDates(null)}
-                                className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                                className="px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50"
                               >
                                 <X className="w-4 h-4" />
                                 Cancel
@@ -487,7 +444,7 @@ export default function ProductionList({
                               <button
                                 onClick={() => handleSchedule(order.id)}
                                 disabled={!dates?.start || !dates?.end}
-                                className="flex items-center gap-2 px-3 py-1 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:bg-pink-300"
+                                className="px-3 py-1.5 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:bg-pink-300"
                               >
                                 <Calendar className="w-4 h-4" />
                                 Update Schedule
@@ -495,58 +452,108 @@ export default function ProductionList({
                             </div>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-4">
-                            <div>
-                              <div className="text-gray-600">
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm text-gray-600">
+                              <div>
                                 Production: {new Date(order.productionStartDate!).toLocaleDateString()} 
                                 {' - '} 
                                 {new Date(order.productionEndDate!).toLocaleDateString()}
                               </div>
-                              <div className="text-gray-600">
+                              <div>
                                 Delivery: {new Date(order.deliveryDate).toLocaleDateString()}
                               </div>
                             </div>
                             <button
                               onClick={() => handleEditDates(order)}
-                              className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                              className="px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50"
                             >
-                              <Edit2 className="w-4 h-4" />
-                              Edit Dates
+                              <Edit2 className="w-4 h-4 mr-1" />
+                              Edit
                             </button>
                           </div>
                         )}
                       </div>
                     </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleDownloadExcel(order)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-500 text-white rounded-md hover:bg-indigo-600"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 mr-1" />
+                        Excel
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPDF(order)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600"
+                      >
+                        <FileDown className="w-4 h-4 mr-1" />
+                        PDF
+                      </button>
+                      <button
+                        onClick={() => handleDownloadChecklist(order)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-pink-500 text-white rounded-md hover:bg-pink-600"
+                      >
+                        <ClipboardCheck className="w-4 h-4 mr-1" />
+                        List
+                      </button>
+                      <button
+                        onClick={() => handleDownloadRecipes(order)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-violet-500 text-white rounded-md hover:bg-violet-600"
+                      >
+                        <FileDown className="w-4 h-4 mr-1" />
+                        Recipe
+                      </button>
+                      <button
+                        onClick={() => setCompletingOrder(order)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-cyan-500 text-white rounded-md hover:bg-cyan-600"
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-1" />
+                        Complete
+                      </button>
+                      {onRemove && (
+                        <button
+                          onClick={() => onRemove(order.id)}
+                          className="inline-flex items-center px-3 py-1.5 text-sm bg-red-500 text-white rounded-md hover:bg-red-600"
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Products */}
-                  {isExpanded && <div className="space-y-2">
-                    {order.products.map(item => {
-                      const product = products.find(p => p.id === item.productId);
-                      if (!product) return null;
+                  {isExpanded && (
+                    <div className="mt-4 space-y-2">
+                      {order.products.map(item => {
+                        const product = products.find(p => p.id === item.productId);
+                        if (!product) return null;
 
-                      const mouldInfo = calculateMouldCount(product.category, item.quantity);
-                      const showMould = isBonBonCategory(product.category) || isPralinesCategory(product.category);
+                        const mouldInfo = calculateMouldCount(product.category, item.quantity);
+                        const showMould = isBonBonCategory(product.category) || isPralinesCategory(product.category);
 
-                      return (
-                        <div key={item.productId} className="flex justify-between items-center text-sm">
-                          <span>{product.name}</span>
-                          <div className="flex items-center gap-4">
-                            <span className="font-medium">
-                              {item.quantity} {product.unit}
-                            </span>
-                            {showMould && (
-                              <span className={`${
-                                isBonBonCategory(product.category) ? 'text-pink-600' : 'text-blue-600'
-                              } font-medium`}>
-                                {mouldInfo}
+                        return (
+                          <div key={item.productId} className="flex justify-between items-center text-sm">
+                            <span>{product.name}</span>
+                            <div className="flex items-center gap-4">
+                              <span className="font-medium">
+                                {item.quantity} {product.unit}
                               </span>
-                            )}
+                              {showMould && (
+                                <span className={`${
+                                  isBonBonCategory(product.category) ? 'text-pink-600' : 'text-blue-600'
+                                } font-medium`}>
+                                  {mouldInfo}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}

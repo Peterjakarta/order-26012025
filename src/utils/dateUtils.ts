@@ -74,24 +74,9 @@ export function isValidDeliveryDate(date: string, branchId?: string): boolean {
   return deliveryDate >= minDate && !isWeekend(deliveryDate);
 }
 
-export function calculateExpiryDate(productionDate: string, category: string): Date {
+export function calculateExpiryDate(productionDate: string): Date {
   const date = new Date(productionDate);
-  const lowerCategory = category.toLowerCase();
-
-  // 28 days for chocolate confections
-  if (
-    lowerCategory.includes('bonbon') ||
-    lowerCategory.includes('praline')
-  ) {
-    date.setDate(date.getDate() + 28);
-  }
-  // 1 year for bars and dragees
-  else if (
-    lowerCategory.includes('bar') ||
-    lowerCategory.includes('dragee')
-  ) {
-    date.setFullYear(date.getFullYear() + 1);
-  }
-
+  // Set expiry to 21 days from production date
+  date.setDate(date.getDate() + 21);
   return date;
 }

@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui
 import PasswordChange from './PasswordChange';
 import UserManagement from './UserManagement';
 import BackupRestore from './BackupRestore';
+import DataMigration from './DataMigration';
 import VersionInfo from './VersionInfo';
 import { useAuth } from '../../../hooks/useAuth';
 
@@ -20,6 +21,7 @@ export default function Settings() {
         <TabsList>
           <TabsTrigger value="password">Change Password</TabsTrigger>
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
+          <TabsTrigger value="migration">Data Migration</TabsTrigger>
           <TabsTrigger value="version">Version Info</TabsTrigger>
           {canManageUsers && (
             <TabsTrigger value="users">User Management</TabsTrigger>
@@ -28,13 +30,19 @@ export default function Settings() {
 
         <TabsContent value="password">
           <div className="bg-white p-6 rounded-lg shadow-sm">
-          <PasswordChange />
+            <PasswordChange />
           </div>
         </TabsContent>
 
         <TabsContent value="backup">
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <BackupRestore />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="migration">
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            <DataMigration />
           </div>
         </TabsContent>
 
@@ -47,7 +55,7 @@ export default function Settings() {
         {canManageUsers && (
           <TabsContent value="users">
             <div className="bg-white p-6 rounded-lg shadow-sm">
-            <UserManagement />
+              <UserManagement />
             </div>
           </TabsContent>
         )}

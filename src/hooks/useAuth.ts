@@ -21,7 +21,6 @@ export function useAuth() {
     user: User | null;
     isAuthenticated: boolean;
   }>(() => {
-    // Check for stored auth on init
     const stored = localStorage.getItem('auth');
     if (stored) {
       try {
@@ -35,7 +34,6 @@ export function useAuth() {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      // Validate inputs
       if (!email || !password) {
         throw new Error('Email and password are required');
       }
@@ -45,28 +43,22 @@ export function useAuth() {
         let userCredential: UserCredential;
         
         try {
-          // Try to sign in first
           userCredential = await signInWithEmailAndPassword(auth, email, password);
-        } catch (err) {
-          // If admin doesn't exist, create it
+        } catch (err: any) {
           if (err.code === 'auth/user-not-found') {
             userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            
+            // Create admin document
+            await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
+              email,
+              role: 'admin',
+              permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders'],
+              created_at: serverTimestamp(),
+              updated_at: serverTimestamp()
+            });
           } else {
             throw err;
           }
-        }
-
-        // Get or create admin document
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
-        
-        if (!userDoc.exists()) {
-          await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
-            email,
-            role: 'admin',
-            permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders'],
-            created_at: serverTimestamp(),
-            updated_at: serverTimestamp()
-          });
         }
 
         const user = {
@@ -79,7 +71,6 @@ export function useAuth() {
         setAuthState({ user, isAuthenticated: true });
         localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
         
-        // Create login log entry
         await createLogEntry({
           userId: user.id,
           username: user.email,
@@ -93,13 +84,22 @@ export function useAuth() {
       // Regular user login
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // Get user document
         const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
-
+        
+        // If user document doesn't exist, create it with default staff permissions
         if (!userDoc.exists()) {
-          throw new Error('User account not found. Please contact an administrator.');
+          await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
+            email,
+            role: 'staff',
+            permissions: ['create_orders'],
+            created_at: serverTimestamp(),
+            updated_at: serverTimestamp()
+          });
         }
 
-        const userData = userDoc.data();
+        const userData = userDoc.exists() ? userDoc.data() : { role: 'staff', permissions: ['create_orders'] };
         const user = {
           id: userCredential.user.uid,
           email: userCredential.user.email || '',
@@ -110,7 +110,6 @@ export function useAuth() {
         setAuthState({ user, isAuthenticated: true });
         localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
 
-        // Create login log entry
         await createLogEntry({
           userId: user.id,
           username: user.email,
@@ -119,7 +118,7 @@ export function useAuth() {
         });
 
         return true;
-      } catch (err) {
+      } catch (err: any) {
         if (err.code === 'auth/invalid-credential') {
           throw new Error('Invalid email or password. Please try again.');
         } else if (err.code === 'auth/user-not-found') {
@@ -128,9 +127,8 @@ export function useAuth() {
           throw new Error('Incorrect password.');
         } else if (err.code === 'auth/too-many-requests') {
           throw new Error('Too many failed attempts. Please try again later.');
-        } else {
-          throw err;
         }
+        throw err;
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -139,7 +137,6 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(() => {
-    // Create logout log entry if user exists
     if (authState.user) {
       createLogEntry({
         userId: authState.user.id,
@@ -149,10 +146,7 @@ export function useAuth() {
       });
     }
 
-    setAuthState({
-      user: null,
-      isAuthenticated: false
-    });
+    setAuthState({ user: null, isAuthenticated: false });
     localStorage.removeItem('auth');
     window.location.href = '/login';
   }, [authState.user]);
@@ -163,10 +157,8 @@ export function useAuth() {
 
   const getUsers = useCallback(async () => {
     try {
-      // Check if user has permission to manage users
-      if (!authState.user?.permissions.includes('manage_users')) {
-        console.error('User does not have permission to manage users');
-        return [];
+      if (!hasPermission('manage_users')) {
+        throw new Error('You do not have permission to manage users');
       }
 
       const usersRef = collection(db, COLLECTIONS.USERS);
@@ -179,14 +171,10 @@ export function useAuth() {
         permissions: doc.data().permissions
       }));
     } catch (error) {
-      if (error.code === 'permission-denied') {
-        console.error('Permission denied: User does not have access to manage users');
-      } else {
-        console.error('Error getting users:', error);
-      }
-      return [];
+      console.error('Error getting users:', error);
+      throw error;
     }
-  }, [authState.user?.permissions]);
+  }, [hasPermission]);
 
   const addUser = useCallback(async (
     email: string,
@@ -195,7 +183,6 @@ export function useAuth() {
     permissions: string[]
   ) => {
     try {
-      // Validate email and password
       if (!email || !password) {
         throw new Error('Email and password are required');
       }
@@ -204,10 +191,8 @@ export function useAuth() {
         throw new Error('Password must be at least 8 characters');
       }
 
-      // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
-      // Add user to Firestore
       await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
         email,
         role,
@@ -216,7 +201,6 @@ export function useAuth() {
         updated_at: serverTimestamp()
       });
 
-      // Create log entry
       await createLogEntry({
         userId: userCredential.user.uid,
         username: email,
@@ -239,7 +223,6 @@ export function useAuth() {
     }
   ) => {
     try {
-      // Find user by email
       const usersRef = collection(db, COLLECTIONS.USERS);
       const q = query(usersRef, where('email', '==', email));
       const snapshot = await getDocs(q);
@@ -250,14 +233,12 @@ export function useAuth() {
 
       const userDoc = snapshot.docs[0];
 
-      // Update user in Firestore
       await updateDoc(userDoc.ref, {
         role: data.role,
         permissions: data.permissions,
         updated_at: serverTimestamp()
       });
 
-      // Update auth state if this is the current user
       if (authState.user?.email === email) {
         setAuthState(prev => ({
           ...prev,
@@ -278,7 +259,6 @@ export function useAuth() {
 
   const removeUser = useCallback(async (email: string) => {
     try {
-      // Find user by email
       const usersRef = collection(db, COLLECTIONS.USERS);
       const q = query(usersRef, where('email', '==', email));
       const snapshot = await getDocs(q);
@@ -288,8 +268,6 @@ export function useAuth() {
       }
 
       const userDoc = snapshot.docs[0];
-
-      // Delete from Firestore
       await deleteDoc(userDoc.ref);
 
       return true;
