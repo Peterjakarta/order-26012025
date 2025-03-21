@@ -23,19 +23,13 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Users collection
+    // Users collection - Allow read for authentication
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || hasPermission('manage_users'));
-      allow list: if isAuthenticated() && hasPermission('manage_users');
-      allow create: if isAuthenticated() && (
-        hasPermission('manage_users') ||
-        (isOwner(userId) && !request.resource.data.role == 'admin')
-      );
-      allow update: if isAuthenticated() && (
+      allow read: if true; // Allow read for authentication
+      allow write: if isAuthenticated() && (
         hasPermission('manage_users') ||
         (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions']))
       );
-      allow delete: if isAuthenticated() && hasPermission('manage_users') && !isOwner(userId);
     }
 
     // Categories collection
@@ -101,9 +95,9 @@ service cloud.firestore {
       allow write: if isAuthenticated() && hasPermission('manage_products');
     }
 
-    // Logs collection
+    // Logs collection - Allow read for authentication
     match /logs/{logId} {
-      allow read: if isAuthenticated() && hasPermission('manage_users');
+      allow read: if true; // Allow read for authentication
       allow create: if isAuthenticated();
       allow update, delete: if false; // Logs are immutable
     }

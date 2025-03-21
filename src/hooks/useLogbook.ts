@@ -17,41 +17,47 @@ export function useLogbook() {
     setLoading(true);
     setError(null);
 
-    const q = query(
-      collection(db, COLLECTIONS.LOGS),
-      orderBy('timestamp', 'desc'),
-      limit(ENTRIES_PER_PAGE)
-    );
+    try {
+      const q = query(
+        collection(db, COLLECTIONS.LOGS),
+        orderBy('timestamp', 'desc'),
+        limit(ENTRIES_PER_PAGE)
+      );
 
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const logEntries: LogEntry[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          logEntries.push({
-            id: doc.id,
-            timestamp: data.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
-            userId: data.userId,
-            username: data.username,
-            action: data.action,
-            details: data.details,
-            category: data.category
+      const unsubscribe = onSnapshot(q, 
+        (snapshot) => {
+          const logEntries: LogEntry[] = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            logEntries.push({
+              id: doc.id,
+              timestamp: data.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
+              userId: data.userId,
+              username: data.username,
+              action: data.action,
+              details: data.details,
+              category: data.category
+            });
           });
-        });
-        setEntries(logEntries);
-        setLastEntry(snapshot.docs[snapshot.docs.length - 1]);
-        setHasMore(snapshot.docs.length === ENTRIES_PER_PAGE);
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
-        console.error('Error fetching logs:', err);
-        setError('Failed to load log entries');
-        setLoading(false);
-      }
-    );
+          setEntries(logEntries);
+          setLastEntry(snapshot.docs[snapshot.docs.length - 1]);
+          setHasMore(snapshot.docs.length === ENTRIES_PER_PAGE);
+          setLoading(false);
+          setError(null);
+        },
+        (err) => {
+          console.error('Error fetching logs:', err);
+          setError('Failed to load log entries. Please try again.');
+          setLoading(false);
+        }
+      );
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    } catch (err) {
+      console.error('Error setting up logs subscription:', err);
+      setError('Failed to connect to logs. Please check your connection.');
+      setLoading(false);
+    }
   }, []);
 
   const loadMore = useCallback(async () => {
@@ -84,9 +90,10 @@ export function useLogbook() {
       setEntries(prev => [...prev, ...newEntries]);
       setLastEntry(snapshot.docs[snapshot.docs.length - 1]);
       setHasMore(snapshot.docs.length === ENTRIES_PER_PAGE);
+      setError(null);
     } catch (err) {
       console.error('Error loading more logs:', err);
-      setError('Failed to load more entries');
+      setError('Failed to load more entries. Please try again.');
     }
   }, [lastEntry, hasMore]);
 
@@ -140,9 +147,10 @@ export function useLogbook() {
       setEntries(filteredEntries);
       setHasMore(false); // Disable pagination for filtered results
       setLoading(false);
+      setError(null);
     } catch (err) {
       console.error('Error filtering logs:', err);
-      setError('Failed to filter entries');
+      setError('Failed to filter entries. Please try again.');
       setLoading(false);
     }
   }, []);
