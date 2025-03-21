@@ -22,6 +22,23 @@ if (import.meta.env.DEV) {
   setLogLevel('debug');
 }
 
+// Validate required environment variables
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID'
+];
+
+const missingEnvVars = requiredEnvVars.filter(varName => !import.meta.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('Missing required environment variables:', missingEnvVars);
+  throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
+}
+
 // Network status management
 let isOnline = navigator.onLine;
 let reconnectAttempts = 0;
@@ -73,17 +90,15 @@ const firebaseConfig = {
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
-};
-
-// Initialize Firebase with Node.js 18 runtime
-const app = initializeApp({
-  ...firebaseConfig,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
   // Explicitly set Node.js runtime version
   functions: {
     runtime: 'nodejs18'
   }
-});
+};
+
+// Initialize Firebase with Node.js 18 runtime
+const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with default settings
 const db = getFirestore(app);
@@ -136,47 +151,6 @@ window.addEventListener('offline', async () => {
     console.error('Error disabling network:', err);
   }
 });
-
-// Batch operations helper
-let currentBatch: ReturnType<typeof writeBatch> | null = null;
-let batchOperations = 0;
-const MAX_BATCH_OPERATIONS = 250;
-const BATCH_TIMEOUT = 1000;
-let batchTimeout: NodeJS.Timeout | null = null;
-
-export function getBatch() {
-  if (!currentBatch || batchOperations >= MAX_BATCH_OPERATIONS) {
-    if (currentBatch) {
-      const existingBatch = currentBatch;
-      currentBatch = null;
-      existingBatch.commit().catch(console.error);
-    }
-    currentBatch = writeBatch(db);
-    batchOperations = 0;
-    
-    if (batchTimeout) {
-      clearTimeout(batchTimeout);
-    }
-    batchTimeout = setTimeout(() => {
-      commitBatchIfNeeded().catch(console.error);
-    }, BATCH_TIMEOUT);
-  }
-  batchOperations++;
-  return currentBatch;
-}
-
-export async function commitBatchIfNeeded() {
-  if (currentBatch && batchOperations > 0) {
-    const batch = currentBatch;
-    currentBatch = null;
-    batchOperations = 0;
-    if (batchTimeout) {
-      clearTimeout(batchTimeout);
-      batchTimeout = null;
-    }
-    await batch.commit();
-  }
-}
 
 // Collection names
 export const COLLECTIONS = {
