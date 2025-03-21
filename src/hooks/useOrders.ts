@@ -117,13 +117,13 @@ export function useOrders() {
         (err) => {
           if (!isMounted) return;
           console.error('Error fetching orders:', err);
-          setError('Failed to load orders. Please check your permissions and try again.');
+          setError('Failed to load orders. Please refresh the page or check your connection.');
           setLoading(false);
         }
       );
     } catch (err) {
       console.error('Error setting up orders subscription:', err);
-      setError('Failed to connect to database. Please check your connection and permissions.');
+      setError('Failed to connect to database. Please refresh the page.');
       setLoading(false);
     }
 
