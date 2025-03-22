@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Package, Plus, Edit2, Trash2, Copy } from 'lucide-react';
+import { Package, Plus, Edit2, Trash2, Copy, Upload } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import ProductForm from './ProductForm';
+import BulkProductImport from './product-form/BulkProductImport';
 import type { Product } from '../../types/types';
 
 export default function ProductManagement() {
@@ -10,6 +11,7 @@ export default function ProductManagement() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [copyingProduct, setCopyingProduct] = useState<Product | null>(null);
   const [justCopied, setJustCopied] = useState<string | null>(null);
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   const handleSubmit = async (data: Omit<Product, 'id'>) => {
     try {
@@ -47,14 +49,29 @@ export default function ProductManagement() {
           <Package className="w-6 h-6" />
           Products
         </h2>
-        <button
-          onClick={() => setIsAddingProduct(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
-        >
-          <Plus className="w-4 h-4" />
-          Add Product
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowBulkImport(true)}
+            className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            <Upload className="w-4 h-4" />
+            Bulk Import
+          </button>
+          <button
+            onClick={() => setIsAddingProduct(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
+          >
+            <Plus className="w-4 h-4" />
+            Add Product
+          </button>
+        </div>
       </div>
+
+      {showBulkImport && (
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <BulkProductImport onComplete={() => setShowBulkImport(false)} />
+        </div>
+      )}
 
       {isAddingProduct && (
         <ProductForm

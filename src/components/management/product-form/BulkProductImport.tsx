@@ -1,40 +1,88 @@
 import React, { useState } from 'react';
 import { Upload, AlertCircle, Copy, Check } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
-import type { Product } from '../../../types/types';
+import type { Product, ProductCategory } from '../../../types/types';
 
 interface BulkProductImportProps {
   category?: string;
   onComplete: () => void;
 }
 
-const EXAMPLE_DATA = `Dark Chocolate Truffles
-Milk Chocolate Bars
-Classic Pralines
-Champagne Truffles
-Single Origin Dark Bars`;
+// Example CSV with exact column names
+const EXAMPLE_CSV = `Name,Description,Unit,Min Order,Price,Show Price,Show Description,Show Unit,Show Min Order,Quantity Step
+Dark Chocolate Truffles,Premium dark chocolate truffles,boxes,5,24.99,true,true,true,true,
+Milk Chocolate Bars,Creamy milk chocolate bars,cases,3,19.99,true,false,true,false,
+Classic Pralines,Belgian-style pralines,boxes,4,27.99,true,true,true,true,
+Champagne Truffles,Marc de Champagne truffles,boxes,5,29.99,true,true,true,true,
+Single Origin Dark Bar,Madagascar 85% dark chocolate,cases,3,22.99,true,true,true,false,`;
 
-export default function BulkProductImport({ category, onComplete }: BulkProductImportProps) {
-  const { addProduct } = useStore();
+export default function BulkProductImport({ category: initialCategory, onComplete }: BulkProductImportProps) {
+  const { addProduct, categories } = useStore();
   const [error, setError] = useState<string>('');
   const [importing, setImporting] = useState(false);
-  const [pastedData, setPastedData] = useState('');
+  const [csvData, setCsvData] = useState('');
   const [copied, setCopied] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory || '');
 
   const handleCopyExample = () => {
-    navigator.clipboard.writeText(EXAMPLE_DATA);
+    navigator.clipboard.writeText(EXAMPLE_CSV);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const validateHeaders = (headers: string[]): string[] | Error => {
+    // These must match EXACTLY with the CSV headers
+    const REQUIRED_HEADERS = [
+      'Name',
+      'Description',
+      'Unit',
+      'Min Order',
+      'Price',
+      'Show Price',
+      'Show Description',
+      'Show Unit',
+      'Show Min Order'
+    ];
+
+    // Check for missing headers - exact match required
+    const missingHeaders = REQUIRED_HEADERS.filter(required => 
+      !headers.includes(required)
+    );
+
+    if (missingHeaders.length > 0) {
+      throw new Error(
+        `Missing required columns: ${missingHeaders.join(', ')}. \n` +
+        `Required columns are: ${REQUIRED_HEADERS.join(', ')}`
+      );
+    }
+
+    return headers;
+  };
+
+  const parseBoolean = (value: string): boolean => {
+    const lowered = value.toLowerCase().trim();
+    return lowered === 'true' || lowered === 'yes' || lowered === '1';
+  };
+
+  const parseNumber = (value: string, fieldName: string): number => {
+    const cleanValue = value.replace(/[^0-9.-]/g, '');
+    const number = parseFloat(cleanValue);
+    
+    if (isNaN(number)) {
+      throw new Error(`Invalid ${fieldName}: ${value}`);
+    }
+    
+    return number;
+  };
+
   const handleImport = async () => {
-    if (!category) {
-      setError('Category is required');
+    if (!selectedCategory) {
+      setError('Please select a category');
       return;
     }
 
-    if (!pastedData.trim()) {
-      setError('Please enter at least one product name');
+    if (!csvData.trim()) {
+      setError('Please enter CSV data');
       return;
     }
 
@@ -42,34 +90,60 @@ export default function BulkProductImport({ category, onComplete }: BulkProductI
       setImporting(true);
       setError('');
 
-      const lines = pastedData.split('\n')
-        .map(line => line.trim())
-        .filter(Boolean);
-      
-      // Process each line sequentially to maintain order
-      for (const name of lines) {
+      // Split CSV into lines and parse headers
+      const lines = csvData.trim().split('\n').map(line => line.trim());
+      const headers = lines[0].split(',').map(header => header.trim());
+
+      // Validate headers
+      validateHeaders(headers);
+
+      // Process each line (skip header)
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        const values = line.split(',').map(val => val.trim());
+        
+        // Validate line has correct number of columns
+        if (values.length !== headers.length) {
+          throw new Error(`Line ${i + 1} has incorrect number of columns`);
+        }
+
+        // Create object from headers and values
+        const data = headers.reduce((obj, header, index) => {
+          obj[header] = values[index];
+          return obj;
+        }, {} as Record<string, string>);
+
+        // Create product data with validation
         const productData: Omit<Product, 'id'> = {
-          name,
-          category,
-          description: '',
-          unit: 'pcs', // Default unit
-          minOrder: 1,
-          price: 0,
-          showPrice: false,
-          showDescription: false,
-          showUnit: true,
-          showMinOrder: false,
-          quantityStep: category.toLowerCase().includes('bonbon') ? 28 : undefined // Set default step for bonbons
+          name: data['Name'],
+          category: selectedCategory as ProductCategory,
+          description: data['Description'] || '',
+          unit: data['Unit'] || 'pcs',
+          minOrder: parseNumber(data['Min Order'] || '1', 'Min Order'),
+          price: parseNumber(data['Price'] || '0', 'Price'),
+          quantityStep: data['Quantity Step'] ? parseNumber(data['Quantity Step'], 'Quantity Step') : undefined,
+          showPrice: parseBoolean(data['Show Price']),
+          showDescription: parseBoolean(data['Show Description']),
+          showUnit: parseBoolean(data['Show Unit']),
+          showMinOrder: parseBoolean(data['Show Min Order'])
         };
 
+        // Validate required fields
+        if (!productData.name) {
+          throw new Error(`Line ${i + 1}: Product name is required`);
+        }
+
+        // Add product
         await addProduct(productData);
       }
 
-      setPastedData('');
+      setCsvData('');
       onComplete();
     } catch (err) {
       console.error('Import error:', err);
-      setError('Failed to import products. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to import products');
     } finally {
       setImporting(false);
     }
@@ -79,16 +153,39 @@ export default function BulkProductImport({ category, onComplete }: BulkProductI
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Import Products
+          Bulk Import Products
         </label>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm text-gray-500">
-            Enter one product name per line
-          </p>
+
+        {/* Category Selection */}
+        <div className="mb-4">
+          <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+            Category <span className="text-red-500">*</span>
+          </label>
+          <select
+            id="category"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+            required
+          >
+            <option value="">Select Category</option>
+            {Object.entries(categories).map(([key, { name }]) => (
+              <option key={key} value={key}>{name}</option>
+            ))}
+          </select>
+        </div>
+
+        <p className="text-sm text-gray-500 mb-2">
+          Paste your CSV data with the following columns:
+          <br />
+          <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono">
+            Name, Description, Unit, Min Order, Price, Show Price, Show Description, Show Unit, Show Min Order, Quantity Step
+          </code>
+        </p>
+        <div className="flex items-center justify-end mb-2">
           <button
             onClick={handleCopyExample}
             className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-            title="Copy example format"
           >
             {copied ? (
               <>
@@ -106,10 +203,10 @@ export default function BulkProductImport({ category, onComplete }: BulkProductI
 
         <div className="relative">
           <textarea
-            value={pastedData}
-            onChange={(e) => setPastedData(e.target.value)}
-            placeholder="Enter product names here..."
-            className="w-full h-32 p-2 border rounded-md font-mono text-sm"
+            value={csvData}
+            onChange={(e) => setCsvData(e.target.value)}
+            className="w-full h-64 p-2 border rounded-md font-mono text-sm"
+            placeholder="Paste CSV data here..."
           />
         </div>
       </div>
@@ -124,7 +221,7 @@ export default function BulkProductImport({ category, onComplete }: BulkProductI
       <div className="flex justify-end">
         <button
           onClick={handleImport}
-          disabled={importing || !pastedData.trim()}
+          disabled={importing || !csvData.trim() || !selectedCategory}
           className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:bg-pink-300"
         >
           <Upload className="w-4 h-4" />
