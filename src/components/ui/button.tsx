@@ -2,13 +2,10 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success' | 'gradient';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
   size?: 'sm' | 'md' | 'lg';
   icon?: React.ReactNode;
-  iconPosition?: 'left' | 'right';
   loading?: boolean;
-  active?: boolean;
-  rounded?: 'default' | 'full' | 'none';
 }
 
 export function Button({
@@ -16,15 +13,12 @@ export function Button({
   variant = 'primary',
   size = 'md',
   icon,
-  iconPosition = 'left',
   loading,
-  active,
-  rounded = 'default',
   className = '',
   disabled,
   ...props
 }: ButtonProps) {
-  const baseStyles = 'relative inline-flex items-center justify-center font-medium transition-all duration-200 ease-in-out';
+  const baseStyles = 'inline-flex items-center justify-center font-medium transition-all duration-200';
   
   const sizeStyles = {
     sm: 'px-3 py-1.5 text-sm gap-1.5',
@@ -32,68 +26,38 @@ export function Button({
     lg: 'px-6 py-3 text-lg gap-2.5'
   };
 
-  const roundedStyles = {
-    default: 'rounded-lg',
-    full: 'rounded-full',
-    none: 'rounded-none'
-  };
-
   const variantStyles = {
-    primary: `bg-gradient-to-r from-pink-600 to-purple-600 text-white hover:from-pink-700 hover:to-purple-700 
-      hover:shadow-lg hover:shadow-pink-500/20 active:shadow-none active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed 
-      disabled:hover:shadow-none disabled:active:scale-100`,
-    
-    secondary: `bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-900
-      hover:shadow-sm active:bg-gray-100 disabled:bg-gray-50 disabled:text-gray-400 disabled:border-gray-200`,
-    
-    outline: `border border-pink-500 text-pink-600 hover:bg-pink-50 hover:text-pink-700 
-      active:bg-pink-100 disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-transparent`,
-    
-    ghost: `bg-transparent hover:bg-gray-100 text-gray-700 hover:text-gray-900 disabled:text-gray-400 disabled:hover:bg-transparent`,
-    
-    danger: `bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-700 hover:to-rose-700 
-      hover:shadow-lg hover:shadow-red-500/20 active:shadow-none active:scale-[0.98] disabled:opacity-70`,
-    
-    success: `bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700 
-      hover:shadow-lg hover:shadow-green-500/20 active:shadow-none active:scale-[0.98] disabled:opacity-70`,
-      
-    gradient: `bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white
-      hover:shadow-lg hover:shadow-purple-500/30 active:shadow-none active:scale-[0.98] 
-      hover:from-pink-600 hover:via-purple-600 hover:to-indigo-600 disabled:opacity-70`
+    primary: 'bg-pink-600 text-white hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:ring-offset-2',
+    secondary: 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2',
+    outline: 'border border-gray-300 text-gray-700 hover:bg-gray-50',
+    ghost: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2',
+    success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2'
   };
 
-  // Handle active state styling
-  const activeStyles = active ? 'ring-2 ring-offset-2 ring-pink-500 shadow-lg' : '';
-
-  // Loading state
-  const isLoading = loading || false;
-  
-  // Disable button if loading
-  const isDisabled = disabled || isLoading;
+  const styles = [
+    baseStyles,
+    sizeStyles[size],
+    variantStyles[variant],
+    'rounded-md',
+    disabled ? 'opacity-50 cursor-not-allowed' : '',
+    className
+  ].join(' ');
 
   return (
     <button
-      className={`${baseStyles} ${sizeStyles[size]} ${roundedStyles[rounded]} ${variantStyles[variant]} ${activeStyles} ${className} ${isLoading ? 'cursor-wait' : ''}`}
-      disabled={isDisabled}
+      className={styles}
+      disabled={disabled || loading}
       {...props}
     >
-      {isLoading && (
-        <span className="absolute inset-0 flex items-center justify-center">
-          <Loader2 className="w-5 h-5 animate-spin" />
-        </span>
+      {loading ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : (
+        <>
+          {icon && <span className="inline-flex">{icon}</span>}
+          {children}
+        </>
       )}
-      
-      <span className={`flex items-center gap-2 ${isLoading ? 'opacity-0' : 'opacity-100'}`}>
-        {icon && iconPosition === 'left' && (
-          <span className="inline-flex">{icon}</span>
-        )}
-        
-        {children}
-        
-        {icon && iconPosition === 'right' && (
-          <span className="inline-flex">{icon}</span>
-        )}
-      </span>
     </button>
   );
 }

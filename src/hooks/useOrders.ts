@@ -10,12 +10,14 @@ import {
   updateDoc,
   serverTimestamp,
   where,
-  getDocs
+  getDocs,
+  writeBatch,
+  getDoc
 } from 'firebase/firestore';
 import { db, COLLECTIONS } from '../lib/firebase';
 import { generateOrderNumber } from '../utils/orderUtils';
 import { branches } from '../data/branches';
-import type { Order } from '../types/types';
+import type { Order, Recipe } from '../types/types';
 
 export function useOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -88,7 +90,8 @@ export function useOrders() {
                 updatedAt: updatedAt.toISOString(),
                 completedAt: completedAt?.toISOString(),
                 productionStartDate: data.productionStartDate,
-                productionEndDate: data.productionEndDate
+                productionEndDate: data.productionEndDate,
+                stockReduced: data.stockReduced || false
               } as Order);
             } catch (err) {
               console.error('Error parsing order:', doc.id, err);
@@ -287,6 +290,92 @@ export function useOrders() {
     }
   }, [orders]);
 
+  const updateStockReduction = useCallback(async (orderId: string, reduced: boolean) => {
+    try {
+      const orderDoc = orders.find(o => o.id === orderId);
+      if (!orderDoc) throw new Error('Order not found');
+
+      // First get all recipes for the products in the order
+      const recipesSnapshot = await getDocs(collection(db, COLLECTIONS.RECIPES));
+      const recipes = recipesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Recipe[];
+
+      const batch = writeBatch(db);
+      
+      // Update order status
+      const orderRef = doc(db, COLLECTIONS.ORDERS, orderId);
+      batch.update(orderRef, {
+        stockReduced: reduced,
+        updatedAt: serverTimestamp()
+      });
+
+      // Track all ingredient changes
+      const ingredientChanges: Record<string, { amount: number, previousQuantity: number }> = {};
+
+      // Calculate ingredient usage based on recipes
+      for (const product of orderDoc.products) {
+        const recipe = recipes.find(r => r.productId === product.productId);
+        if (!recipe) {
+          console.warn(`No recipe found for product ${product.productId}`);
+          continue;
+        }
+
+        const scale = (product.producedQuantity || product.quantity) / recipe.yield;
+
+        // Calculate ingredient amounts
+        for (const ingredient of recipe.ingredients) {
+          const scaledAmount = Math.ceil(ingredient.amount * scale);
+          const changeAmount = reduced ? -scaledAmount : scaledAmount;
+
+          if (!ingredientChanges[ingredient.ingredientId]) {
+            // Get current stock level
+            const stockRef = doc(db, COLLECTIONS.STOCK, ingredient.ingredientId);
+            const stockDoc = await getDoc(stockRef);
+            const currentStock = stockDoc.exists() ? stockDoc.data().quantity || 0 : 0;
+
+            ingredientChanges[ingredient.ingredientId] = {
+              amount: changeAmount,
+              previousQuantity: currentStock
+            };
+          } else {
+            ingredientChanges[ingredient.ingredientId].amount += changeAmount;
+          }
+        }
+      }
+
+      // Apply all ingredient changes
+      for (const [ingredientId, change] of Object.entries(ingredientChanges)) {
+        const newStock = Math.max(0, change.previousQuantity + change.amount);
+        
+        // Update stock level
+        const stockRef = doc(db, COLLECTIONS.STOCK, ingredientId);
+        batch.set(stockRef, {
+          quantity: newStock,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        // Add stock history entry
+        const historyRef = doc(collection(db, COLLECTIONS.STOCK_HISTORY));
+        batch.set(historyRef, {
+          ingredientId,
+          previousQuantity: change.previousQuantity,
+          newQuantity: newStock,
+          changeAmount: change.amount,
+          changeType: reduced ? 'reduction' : 'reversion',
+          orderId,
+          timestamp: serverTimestamp()
+        });
+      }
+
+      await batch.commit();
+      
+      // Force refresh after updating
+      setRefreshCounter(prev => prev + 1);
+    } catch (error) {
+      console.error('Error updating stock reduction:', error);
+      throw error instanceof Error ? error : new Error('Failed to update stock reduction status');
+    }
+  }, [orders]);
+
   const updateOrderProduction = useCallback(async (
     orderId: string,
     startDate: string,
@@ -324,6 +413,7 @@ export function useOrders() {
     removeOrder,
     updateOrderStatus,
     updateOrderProduction,
+    updateStockReduction,
     refreshOrders
   };
 }
