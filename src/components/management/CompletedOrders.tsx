@@ -51,6 +51,7 @@ export default function CompletedOrders() {
     orderId: string;
     date: string;
   } | null>(null);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   const ordersByMonth = React.useMemo(() => {
     const completedOrders = orders
@@ -144,22 +145,35 @@ export default function CompletedOrders() {
   };
 
   const handleDownloadExcel = (order: Order) => {
-    const wb = generateOrderExcel(order, products, poNumber);
-    saveWorkbook(wb, `order-${order.orderNumber || order.id.slice(0, 8)}.xlsx`);
+    try {
+      const wb = generateOrderExcel(order, products, poNumber);
+      saveWorkbook(wb, `order-${order.orderNumber || order.id.slice(0, 8)}.xlsx`);
+    } catch (err) {
+      console.error('Error generating Excel:', err);
+      setError('Failed to generate Excel file');
+    }
   };
 
   const handleDownloadPDF = (order: Order) => {
-    const doc = generateOrderPDF(order, products, poNumber);
-    doc.save(`order-${order.orderNumber || order.id.slice(0, 8)}.pdf`);
+    try {
+      const doc = generateOrderPDF(order, products, poNumber);
+      doc.save(`order-${order.orderNumber || order.id.slice(0, 8)}.pdf`);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      setError('Failed to generate PDF file');
+    }
   };
 
-  const handleReopenOrder = async (orderId: string) => {
+  const handleReopenOrder = async (order: Order) => {
     try {
-      await updateOrderStatus(orderId, 'pending');
+      setError(null);
+      await updateOrderStatus(order.id, 'pending');
       setReopeningOrder(null);
-    } catch (error) {
-      console.error('Error reopening order:', error);
-      alert('Failed to reopen order. Please try again.');
+      setSuccess('Order reopened successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error reopening order:', err);
+      setError('Failed to reopen order');
     }
   };
 
@@ -232,23 +246,55 @@ export default function CompletedOrders() {
   const selectedOrdersData = orders.filter(order => 
     selectedOrders.has(order.id)
   );
-  
-  const expandAllMonths = () => {
-    const allMonthKeys = ordersByMonth.map(group => group.monthKey);
-    setExpandedMonths(new Set(allMonthKeys));
-  };
-  
-  const collapseAllMonths = () => {
-    setExpandedMonths(new Set());
-  };
 
-  const handlePrint = (order: Order) => {
-    // Implementation for print functionality
-  };
-
-  const handleEmail = (order: Order) => {
-    // Implementation for email functionality
-  };
+  const extraActions = (order: Order) => (
+    <div className="flex flex-wrap gap-2 items-center">
+      <div className="flex items-center gap-2 mr-4">
+        <span className="text-sm text-gray-600">Production Date:</span>
+        {editingProductionDate?.orderId === order.id ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={editingProductionDate.date}
+              onChange={(e) => setEditingProductionDate({
+                orderId: order.id,
+                date: e.target.value
+              })}
+              className="px-2 py-1 border rounded-md text-sm"
+            />
+            <button
+              onClick={() => handleUpdateProductionDate(order.id, editingProductionDate.date)}
+              className="px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setEditingProductionDate(null)}
+              className="px-2 py-1 text-sm border rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-sm">
+              {order.completedAt ? new Date(order.completedAt).toLocaleDateString() : 'Not set'}
+            </span>
+            <button
+              onClick={() => setEditingProductionDate({
+                orderId: order.id,
+                date: order.completedAt?.split('T')[0] || new Date().toISOString().split('T')[0]
+              })}
+              className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+              title="Edit production date"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -336,14 +382,14 @@ export default function CompletedOrders() {
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-2">
         {ordersByMonth.map(monthGroup => {
-          const isExpanded = expandedMonths.has(monthGroup.monthKey);
+          const isExpanded = expandedCategory === monthGroup.monthKey;
           
           return (
             <div key={monthGroup.monthKey} className="bg-white rounded-lg shadow-sm overflow-hidden">
               <button
-                onClick={() => toggleMonth(monthGroup.monthKey)}
+                onClick={() => setExpandedCategory(isExpanded ? null : monthGroup.monthKey)}
                 className="w-full px-4 py-3 bg-white flex items-center justify-between hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center gap-3">
@@ -363,14 +409,17 @@ export default function CompletedOrders() {
               </button>
               
               {isExpanded && (
-                <div className="p-4 pt-0 space-y-4 border-t">
+                <div className="border-t">
                   {monthGroup.orders.map(order => (
                     <div key={order.id} className="relative">
                       <div className="absolute left-4 top-4 z-10">
                         <input
                           type="checkbox"
                           checked={selectedOrders.has(order.id)}
-                          onChange={() => handleToggleSelect(order.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelect(order.id);
+                          }}
                           className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
                         />
                       </div>
@@ -379,94 +428,12 @@ export default function CompletedOrders() {
                           order={order} 
                           onRemove={() => removeOrder(order.id)}
                           onUpdateStatus={handleUpdateStatus}
+                          onDownloadExcel={handleDownloadExcel}
+                          onDownloadPDF={handleDownloadPDF}
+                          onReopen={() => setReopeningOrder(order.id)}
                           selected={selectedOrders.has(order.id)}
-                          extraActions={
-                            <div className="flex flex-wrap gap-2 items-center">
-                              <div className="flex items-center gap-2 mr-4">
-                                <span className="text-sm text-gray-600">
-                                  Production Date: 
-                                </span>
-                                {editingProductionDate?.orderId === order.id ? (
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="date"
-                                      value={editingProductionDate.date}
-                                      onChange={(e) => setEditingProductionDate({
-                                        orderId: order.id,
-                                        date: e.target.value
-                                      })}
-                                      className="px-2 py-1 border rounded-md text-sm"
-                                    />
-                                    <button
-                                      onClick={() => handleUpdateProductionDate(
-                                        order.id,
-                                        editingProductionDate.date
-                                      )}
-                                      className="px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600"
-                                    >
-                                      Save
-                                    </button>
-                                    <button
-                                      onClick={() => setEditingProductionDate(null)}
-                                      className="px-2 py-1 text-sm border rounded-md hover:bg-gray-50"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm">
-                                      {order.completedAt ? new Date(order.completedAt).toLocaleDateString() : 'Not set'}
-                                    </span>
-                                    <button
-                                      onClick={() => setEditingProductionDate({
-                                        orderId: order.id,
-                                        date: order.completedAt?.split('T')[0] || new Date().toISOString().split('T')[0]
-                                      })}
-                                      className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-                                      title="Edit production date"
-                                    >
-                                      <Edit2 className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-
-                              <button
-                                onClick={() => handleToggleStockReduction(order.id, order.stockReduced || false)}
-                                className={`inline-flex items-center px-3 py-1.5 text-sm rounded-md ${
-                                  order.stockReduced
-                                    ? 'bg-amber-500 text-white hover:bg-amber-600'
-                                    : 'bg-emerald-500 text-white hover:bg-emerald-600'
-                                }`}
-                              >
-                                <Scale className="w-4 h-4 mr-1" />
-                                {order.stockReduced ? 'Revert Stock' : 'Reduce Stock'}
-                              </button>
-
-                              <button
-                                onClick={() => handleDownloadExcel(order)}
-                                className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-500 text-white rounded-md hover:bg-indigo-600"
-                              >
-                                <FileSpreadsheet className="w-4 h-4 mr-1" />
-                                Excel
-                              </button>
-                              <button
-                                onClick={() => handleDownloadPDF(order)}
-                                className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600"
-                              >
-                                <FileDown className="w-4 h-4 mr-1" />
-                                PDF
-                              </button>
-                              <button
-                                onClick={() => setReopeningOrder(order.id)}
-                                className="inline-flex items-center px-3 py-1.5 text-sm bg-amber-500 text-white rounded-md hover:bg-amber-600"
-                              >
-                                <ChevronLeft className="w-4 h-4 mr-1" />
-                                Reopen
-                              </button>
-                            </div>
-                          }
+                          onToggleStock={handleToggleStockReduction}
+                          extraActions={extraActions}
                         />
                       </div>
                     </div>

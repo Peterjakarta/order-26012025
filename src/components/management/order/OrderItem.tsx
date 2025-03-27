@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Calendar, FileDown, FileSpreadsheet, Scale, ChevronLeft, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileDown, FileSpreadsheet, Scale, ChevronLeft, Trash2 } from 'lucide-react';
 import type { Order } from '../../../types/types';
 import OrderDetails from './OrderDetails';
 import OrderProducts from './OrderProducts';
@@ -14,6 +14,9 @@ interface OrderItemProps {
   selected?: boolean;
   onSelect?: () => void;
   extraActions?: React.ReactNode;
+  onDownloadExcel?: (order: Order) => void;
+  onDownloadPDF?: (order: Order) => void;
+  onReopen?: (order: Order) => void;
 }
 
 export default function OrderItem({ 
@@ -23,10 +26,26 @@ export default function OrderItem({
   onToggleStock,
   selected,
   onSelect,
-  extraActions
+  extraActions,
+  onDownloadExcel,
+  onDownloadPDF,
+  onReopen
 }: OrderItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const styles = getBranchStyles(order.branchId);
+
+  const handleHeaderClick = (e: React.MouseEvent) => {
+    // Only toggle if clicking the header area, not buttons
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input')) {
+      return;
+    }
+    setIsExpanded(!isExpanded);
+  };
+
+  const handleButtonClick = (e: React.MouseEvent, callback?: () => void) => {
+    e.stopPropagation();
+    callback?.();
+  };
 
   return (
     <div className={`bg-white rounded-lg shadow-sm border overflow-hidden transition-all duration-200 ${
@@ -35,7 +54,7 @@ export default function OrderItem({
       {/* Collapsible Header */}
       <div 
         className="p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={handleHeaderClick}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -67,10 +86,7 @@ export default function OrderItem({
           <div className="flex items-center gap-2">
             {onToggleStock && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleStock(order.id, order.stockReduced || false);
-                }}
+                onClick={(e) => handleButtonClick(e, () => onToggleStock(order.id, order.stockReduced || false))}
                 className={`btn-primary flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors ${
                   order.stockReduced
                     ? 'bg-amber-500 hover:bg-amber-600'
@@ -84,10 +100,7 @@ export default function OrderItem({
 
             <div className="flex items-center gap-2">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  /* Handle Excel */
-                }}
+                onClick={(e) => handleButtonClick(e, () => onDownloadExcel?.(order))}
                 className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm bg-indigo-500 hover:bg-indigo-600 text-white rounded-md"
               >
                 <FileSpreadsheet className="w-4 h-4" />
@@ -95,10 +108,7 @@ export default function OrderItem({
               </button>
 
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  /* Handle PDF */
-                }}
+                onClick={(e) => handleButtonClick(e, () => onDownloadPDF?.(order))}
                 className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-500 hover:bg-purple-600 text-white rounded-md"
               >
                 <FileDown className="w-4 h-4" />
@@ -106,10 +116,7 @@ export default function OrderItem({
               </button>
 
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  /* Handle Reopen */
-                }}
+                onClick={(e) => handleButtonClick(e, () => onReopen?.(order))}
                 className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-md"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -117,10 +124,7 @@ export default function OrderItem({
               </button>
 
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemove();
-                }}
+                onClick={(e) => handleButtonClick(e, onRemove)}
                 className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm bg-red-500 hover:bg-red-600 text-white rounded-md"
                 title="Remove order"
               >
@@ -129,12 +133,6 @@ export default function OrderItem({
               </button>
             </div>
           </div>
-        </div>
-
-        {/* Production Date - Always visible */}
-        <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
-          <Calendar className="w-4 h-4" />
-          <span>Production Date: {order.completedAt ? new Date(order.completedAt).toLocaleDateString() : 'Not set'}</span>
         </div>
       </div>
 

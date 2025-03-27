@@ -5,6 +5,9 @@ import { useOrders } from '../../hooks/useOrders';
 import { useBranches } from '../../hooks/useBranches';
 import OrderItem from './order/OrderItem';
 import { useOrderActions } from '../../hooks/useOrderActions';
+import { generateOrderExcel, saveWorkbook } from '../../utils/excelGenerator';
+import { generateOrderPDF } from '../../utils/pdfGenerator';
+import { getBranchStyles } from '../../utils/branchStyles';
 
 export default function OrderList() {
   const { orders, loading, error, removeOrder, updateOrderStatus, refreshOrders } = useOrders();
@@ -73,6 +76,24 @@ export default function OrderList() {
     });
   };
 
+  const handleDownloadExcel = (order: Order) => {
+    try {
+      const wb = generateOrderExcel(order, orders);
+      saveWorkbook(wb, `order-${order.id.slice(0, 8)}.xlsx`);
+    } catch (err) {
+      console.error('Error generating Excel:', err);
+    }
+  };
+
+  const handleDownloadPDF = (order: Order) => {
+    try {
+      const doc = generateOrderPDF(order, orders);
+      doc.save(`order-${order.id.slice(0, 8)}.pdf`);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+    }
+  };
+
   const handleScheduleProduction = (orderId: string) => {
     navigate(`/management/production/${orderId}`);
   };
@@ -104,19 +125,6 @@ export default function OrderList() {
       </div>
     );
   }
-
-  const getBranchStyles = (branchId: string) => {
-    switch (branchId) {
-      case 'seseduh':
-        return 'bg-blue-100 text-blue-800';
-      case '2go':
-        return 'bg-green-100 text-green-800';
-      case 'external':
-        return 'bg-purple-100 text-purple-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
 
   return (
     <div className="space-y-4">
@@ -168,7 +176,10 @@ export default function OrderList() {
                   <input
                     type="checkbox"
                     checked={selectedOrders.has(order.id)}
-                    onChange={() => handleToggleSelect(order.id)}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleToggleSelect(order.id);
+                    }}
                     className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
                   />
                 </div>
@@ -177,21 +188,36 @@ export default function OrderList() {
                     order={order} 
                     onRemove={() => removeOrder(order.id)}
                     onUpdateStatus={handleUpdateStatus}
-                    onScheduleProduction={handleScheduleProduction}
+                    onDownloadExcel={handleDownloadExcel}
+                    onDownloadPDF={handleDownloadPDF}
                     selected={selectedOrders.has(order.id)}
                     extraActions={
                       <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded-md text-sm ${branchStyles}`}>
+                        <span className={`px-2 py-0.5 rounded-md text-sm ${branchStyles.base}`}>
                           {branch?.name}
                         </span>
-                        <button
-                          onClick={() => downloadPDF(order)}
-                          className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md hover:from-amber-600 hover:to-orange-600 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
-                          title="Download PDF"
-                        >
-                          <FileDown className="w-4 h-4" />
-                          PDF
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadExcel(order);
+                            }}
+                            className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-indigo-500 hover:bg-indigo-600 text-white rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                          >
+                            <FileDown className="w-4 h-4" />
+                            Excel
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadPDF(order);
+                            }}
+                            className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-purple-500 hover:bg-purple-600 text-white rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                          >
+                            <FileDown className="w-4 h-4" />
+                            PDF
+                          </button>
+                        </div>
                       </div>
                     }
                   />
