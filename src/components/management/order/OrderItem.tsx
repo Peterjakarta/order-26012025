@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Calendar, FileDown, FileSpreadsheet, Scale, ChevronLeft } from 'lucide-react';
+import { ChevronDown, ChevronRight, Calendar, FileDown, FileSpreadsheet, Scale, ChevronLeft, Trash2 } from 'lucide-react';
 import type { Order } from '../../../types/types';
 import OrderDetails from './OrderDetails';
 import OrderProducts from './OrderProducts';
@@ -114,6 +114,18 @@ export default function OrderItem({
               >
                 <ChevronLeft className="w-4 h-4" />
                 Reopen
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove();
+                }}
+                className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm bg-red-500 hover:bg-red-600 text-white rounded-md"
+                title="Remove order"
+              >
+                <Trash2 className="w-4 h-4" />
+                Remove
               </button>
             </div>
           </div>
