@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Tag, Plus, Trash2, GripVertical, Upload } from 'lucide-react';
+import { Tag, Plus, Trash2, GripVertical, Upload, FileSpreadsheet } from 'lucide-react';
 import { useCategories } from '../../hooks/useCategories';
 import { useStore } from '../../store/StoreContext';
 import CategoryForm from './CategoryForm';
@@ -7,10 +7,11 @@ import AddCategoryForm from './AddCategoryForm';
 import CategoryProducts from './category/CategoryProducts';
 import BulkCategoryImport from './category/BulkCategoryImport';
 import type { ProductCategory } from '../../types/types';
+import { generateCategoriesExcel, saveWorkbook } from '../../utils/excelGenerator';
 
 export default function CategoryManagement() {
   const { categories, updateCategory, deleteCategory } = useCategories();
-  const { categoryOrder, reorderCategories } = useStore();
+  const { categoryOrder, reorderCategories, products } = useStore();
   const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [isBulkImporting, setIsBulkImporting] = useState(false);
@@ -56,6 +57,23 @@ export default function CategoryManagement() {
 
     setDraggedCategory(null);
   };
+  
+  const handleExportToExcel = () => {
+    try {
+      // Count products in each category
+      const productsCount: Record<string, number> = {};
+      categoryOrder.forEach(categoryId => {
+        productsCount[categoryId] = products.filter(p => p.category === categoryId).length;
+      });
+      
+      // Pass all products to include detailed product information
+      const wb = generateCategoriesExcel(categories, categoryOrder, productsCount, products);
+      saveWorkbook(wb, 'categories-with-products.xlsx');
+    } catch (error) {
+      console.error('Error exporting categories:', error);
+      alert('Failed to export categories. Please try again.');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -65,6 +83,13 @@ export default function CategoryManagement() {
           Categories
         </h2>
         <div className="flex gap-2">
+          <button
+            onClick={handleExportToExcel}
+            className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Export to Excel
+          </button>
           <button
             onClick={() => setIsBulkImporting(true)}
             className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Edit2, Trash2, Upload, Copy, Check, Package2, FolderEdit } from 'lucide-react';
+import { Plus, Edit2, Trash2, Upload, Copy, Check, Package2, FolderEdit, FileSpreadsheet } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
 import { auth, db } from '../../../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -10,9 +10,10 @@ import ProductToIngredient from './ProductToIngredient';
 import { formatIDR } from '../../../utils/currencyFormatter';
 import { collection, getDocs, query } from 'firebase/firestore';
 import { COLLECTIONS } from '../../../lib/firebase';
+import { generateIngredientsExcel, saveWorkbook } from '../../../utils/excelGenerator';
 
 export default function IngredientManagement() {
-  const { ingredients, stockCategories, addIngredient, updateIngredient, deleteIngredient, updateIngredientCategories } = useStore();
+  const { ingredients, stockCategories, addIngredient, updateIngredient, deleteIngredient, updateIngredientCategories, stockLevels } = useStore();
   const [isAddingIngredient, setIsAddingIngredient] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
@@ -131,11 +132,28 @@ export default function IngredientManagement() {
     }
   };
 
+  const handleExportToExcel = () => {
+    try {
+      const wb = generateIngredientsExcel(ingredients, stockLevels, stockCategories, selectedCategories);
+      saveWorkbook(wb, 'ingredients-list.xlsx');
+    } catch (error) {
+      console.error('Error exporting ingredients:', error);
+      alert('Failed to export ingredients. Please try again.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">Ingredients</h2>
         <div className="flex gap-2">
+          <button
+            onClick={handleExportToExcel}
+            className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Export to Excel
+          </button>
           <button
             onClick={() => setShowProductImport(true)}
             className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"

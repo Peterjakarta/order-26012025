@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Package, Plus, Edit2, Trash2, Copy, Upload } from 'lucide-react';
+import { Package, Plus, Edit2, Trash2, Copy, Upload, FileSpreadsheet } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import ProductForm from './ProductForm';
 import BulkProductImport from './product-form/BulkProductImport';
 import type { Product } from '../../types/types';
+import { generateProductsExcel, saveWorkbook } from '../../utils/excelGenerator';
 
 export default function ProductManagement() {
-  const { products, addProduct, updateProduct, deleteProduct } = useStore();
+  const { products, addProduct, updateProduct, deleteProduct, categories } = useStore();
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [copyingProduct, setCopyingProduct] = useState<Product | null>(null);
@@ -42,6 +43,16 @@ export default function ProductManagement() {
     setTimeout(() => setJustCopied(null), 2000);
   };
 
+  const handleExportToExcel = () => {
+    try {
+      const wb = generateProductsExcel(products, categories);
+      saveWorkbook(wb, 'products-list.xlsx');
+    } catch (error) {
+      console.error('Error exporting products:', error);
+      alert('Failed to export products. Please try again.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -50,6 +61,13 @@ export default function ProductManagement() {
           Products
         </h2>
         <div className="flex gap-2">
+          <button
+            onClick={handleExportToExcel}
+            className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Export to Excel
+          </button>
           <button
             onClick={() => setShowBulkImport(true)}
             className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
