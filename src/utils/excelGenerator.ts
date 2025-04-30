@@ -1,10 +1,11 @@
 import { utils, writeFile, WorkBook } from 'xlsx';
-import type { Order, Product, Ingredient, StockLevel, StockCategory } from '../types/types';
+import type { Order, Product, Ingredient, StockLevel, StockCategory, Recipe } from '../types/types';
 import { getBranchName } from '../data/branches';
 import { calculateMouldCount } from './mouldCalculations';
 import { calculateExpiryDate } from './dateUtils';
 import { isBonBonCategory, isPralinesCategory } from './quantityUtils';
 import { formatIDR } from './currencyFormatter';
+import { calculateRecipeCost } from './recipeCalculations';
 
 // Function to generate Excel for orders
 export function generateOrderExcel(order: Order, products: Product[], poNumber?: string) {
@@ -74,6 +75,233 @@ export function generateOrderExcel(order: Order, products: Product[], poNumber?:
 
   // Add worksheet to workbook
   utils.book_append_sheet(wb, ws, 'Order Details');
+
+  return wb;
+}
+
+// Function to generate Excel for recipes (batch export)
+export function generateRecipesExcel(
+  recipes: Recipe[],
+  products: Product[],
+  ingredients: Ingredient[],
+  categories: Record<string, { name: string }>
+) {
+  // Create workbook
+  const wb = utils.book_new();
+
+  // Create summary worksheet with all recipes
+  const summaryHeaderRows = [
+    ['Recipes Summary'],
+    ['Generated on:', new Date().toLocaleString()],
+    [''],
+    ['Recipe Name', 'Category', 'Product', 'Yield', 'Yield Unit', 'Base Cost', 'Labor Cost', 'Packaging Cost', 'Total Cost', 'Unit Cost']
+  ];
+
+  // Create recipe rows for summary sheet
+  const recipeRows = recipes.map(recipe => {
+    const product = products.find(p => p.id === recipe.productId);
+    const categoryName = categories[recipe.category]?.name || recipe.category;
+    
+    // Calculate costs
+    const baseCost = calculateRecipeCost(recipe, ingredients);
+    const laborCost = recipe.laborCost || 0;
+    const packagingCost = recipe.packagingCost || 0;
+    const totalCost = baseCost + laborCost + packagingCost;
+    const unitCost = recipe.yield > 0 ? totalCost / recipe.yield : 0;
+    
+    return [
+      recipe.name,
+      categoryName,
+      product?.name || 'Unknown Product',
+      recipe.yield,
+      recipe.yieldUnit,
+      formatIDR(baseCost),
+      formatIDR(laborCost),
+      formatIDR(packagingCost),
+      formatIDR(totalCost),
+      formatIDR(unitCost)
+    ];
+  });
+
+  // Combine all rows for summary
+  const allSummaryRows = [...summaryHeaderRows, ...recipeRows];
+  const wsSummary = utils.aoa_to_sheet(allSummaryRows);
+
+  // Set column widths for summary
+  const summaryColWidths = [
+    { wch: 40 }, // Recipe Name
+    { wch: 20 }, // Category
+    { wch: 40 }, // Product
+    { wch: 10 }, // Yield
+    { wch: 10 }, // Yield Unit
+    { wch: 15 }, // Base Cost
+    { wch: 15 }, // Labor Cost
+    { wch: 15 }, // Packaging Cost
+    { wch: 15 }, // Total Cost
+    { wch: 15 }  // Unit Cost
+  ];
+  wsSummary['!cols'] = summaryColWidths;
+
+  // Add summary worksheet
+  utils.book_append_sheet(wb, wsSummary, 'All Recipes');
+  
+  // Create individual worksheets for each recipe with detailed information
+  recipes.forEach(recipe => {
+    // Skip if invalid recipe or no ingredients
+    if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) return;
+    
+    const product = products.find(p => p.id === recipe.productId);
+    const categoryName = categories[recipe.category]?.name || recipe.category;
+    
+    // Calculate costs
+    const baseCost = calculateRecipeCost(recipe, ingredients);
+    const laborCost = recipe.laborCost || 0;
+    const packagingCost = recipe.packagingCost || 0;
+    const totalCost = baseCost + laborCost + packagingCost;
+    const unitCost = recipe.yield > 0 ? totalCost / recipe.yield : 0;
+    
+    // Create recipe header
+    const recipeHeaderRows = [
+      [recipe.name],
+      ['Category:', categoryName],
+      ['Product:', product?.name || 'Unknown Product'],
+      ['Yield:', `${recipe.yield} ${recipe.yieldUnit}`],
+      [''],
+      ['Ingredients']
+    ];
+    
+    // Add ingredients table header
+    recipeHeaderRows.push(['Name', 'Amount', 'Unit', 'Unit Price', 'Cost']);
+    
+    // Add ingredients rows
+    const ingredientRows = recipe.ingredients.map(item => {
+      const ingredient = ingredients.find(i => i.id === item.ingredientId);
+      if (!ingredient) return [];
+      
+      const unitPrice = ingredient.price / ingredient.packageSize;
+      const cost = unitPrice * item.amount;
+      
+      return [
+        ingredient.name,
+        item.amount,
+        ingredient.unit,
+        formatIDR(unitPrice),
+        formatIDR(cost)
+      ];
+    }).filter(row => row.length > 0);
+    
+    // Add cost summary
+    const costSummaryRows = [
+      [''],
+      ['Cost Summary'],
+      ['Base Cost:', formatIDR(baseCost)],
+      ['Labor Cost:', formatIDR(laborCost)],
+      ['Packaging Cost:', formatIDR(packagingCost)],
+      ['Total Cost:', formatIDR(totalCost)],
+      [`Cost per ${recipe.yieldUnit}:`, formatIDR(unitCost)]
+    ];
+    
+    // Add notes if present
+    const notesRows = recipe.notes ? [
+      [''],
+      ['Notes:'],
+      [recipe.notes]
+    ] : [];
+    
+    // Combine all rows
+    const allRecipeRows = [
+      ...recipeHeaderRows,
+      ...ingredientRows,
+      ...costSummaryRows,
+      ...notesRows
+    ];
+    
+    // Create worksheet
+    const wsRecipe = utils.aoa_to_sheet(allRecipeRows);
+    
+    // Set column widths
+    const recipeColWidths = [
+      { wch: 40 }, // Name/Label
+      { wch: 15 }, // Amount/Value
+      { wch: 15 }, // Unit
+      { wch: 20 }, // Unit Price
+      { wch: 20 }  // Cost
+    ];
+    wsRecipe['!cols'] = recipeColWidths;
+    
+    // Add worksheet - use safe sheet name (max 31 chars)
+    const safeRecipeName = recipe.name.length > 25 
+      ? recipe.name.substring(0, 25) + "..."
+      : recipe.name;
+      
+    utils.book_append_sheet(wb, wsRecipe, safeRecipeName);
+  });
+  
+  // Create category-based worksheets
+  const recipesByCategory = recipes.reduce((acc, recipe) => {
+    const categoryId = recipe.category;
+    if (!acc[categoryId]) {
+      acc[categoryId] = [];
+    }
+    acc[categoryId].push(recipe);
+    return acc;
+  }, {} as Record<string, Recipe[]>);
+  
+  // Create a worksheet for each category
+  Object.entries(recipesByCategory).forEach(([categoryId, categoryRecipes]) => {
+    const categoryName = categories[categoryId]?.name || categoryId;
+    
+    // Category header
+    const categoryHeader = [
+      [`${categoryName} Recipes`],
+      ['Generated on:', new Date().toLocaleString()],
+      [''],
+      ['Recipe Name', 'Product', 'Yield', 'Total Cost', 'Unit Cost', 'Ingredients Count']
+    ];
+    
+    // Create recipe rows for this category
+    const categoryRows = categoryRecipes.map(recipe => {
+      const product = products.find(p => p.id === recipe.productId);
+      
+      // Calculate costs
+      const baseCost = calculateRecipeCost(recipe, ingredients);
+      const laborCost = recipe.laborCost || 0;
+      const packagingCost = recipe.packagingCost || 0;
+      const totalCost = baseCost + laborCost + packagingCost;
+      const unitCost = recipe.yield > 0 ? totalCost / recipe.yield : 0;
+      
+      return [
+        recipe.name,
+        product?.name || 'Unknown Product',
+        `${recipe.yield} ${recipe.yieldUnit}`,
+        formatIDR(totalCost),
+        formatIDR(unitCost),
+        recipe.ingredients.length
+      ];
+    });
+    
+    // Create worksheet
+    const wsCategory = utils.aoa_to_sheet([...categoryHeader, ...categoryRows]);
+    
+    // Set column widths
+    const categoryColWidths = [
+      { wch: 40 }, // Recipe Name
+      { wch: 40 }, // Product
+      { wch: 15 }, // Yield
+      { wch: 15 }, // Total Cost
+      { wch: 15 }, // Unit Cost
+      { wch: 15 }  // Ingredients Count
+    ];
+    wsCategory['!cols'] = categoryColWidths;
+    
+    // Ensure category name is valid as worksheet name (max 31 chars)
+    const safeCategoryName = categoryName.length > 25 
+      ? categoryName.substring(0, 25) + "..." 
+      : categoryName;
+    
+    // Add worksheet
+    utils.book_append_sheet(wb, wsCategory, safeCategoryName);
+  });
 
   return wb;
 }
@@ -359,6 +587,169 @@ export function generateIngredientsExcel(
       // Add worksheet
       utils.book_append_sheet(wb, wsCategory, safeCategoryName);
     }
+  });
+  
+  return wb;
+}
+
+// Function to generate Excel for selected recipes
+export function generateSelectedRecipesExcel(
+  selectedRecipes: Recipe[],
+  allRecipes: Recipe[],
+  products: Product[],
+  ingredients: Ingredient[],
+  categories: Record<string, { name: string }>
+) {
+  // Create workbook
+  const wb = utils.book_new();
+
+  // Create summary worksheet with selected recipes
+  const summaryHeaderRows = [
+    ['Selected Recipes Summary'],
+    ['Generated on:', new Date().toLocaleString()],
+    ['Selected Recipes:', selectedRecipes.length.toString()],
+    [''],
+    ['Recipe Name', 'Category', 'Product', 'Yield', 'Yield Unit', 'Base Cost', 'Labor Cost', 'Packaging Cost', 'Total Cost', 'Unit Cost']
+  ];
+
+  // Create recipe rows for summary sheet
+  const recipeRows = selectedRecipes.map(recipe => {
+    const product = products.find(p => p.id === recipe.productId);
+    const categoryName = categories[recipe.category]?.name || recipe.category;
+    
+    // Calculate costs
+    const baseCost = calculateRecipeCost(recipe, ingredients);
+    const laborCost = recipe.laborCost || 0;
+    const packagingCost = recipe.packagingCost || 0;
+    const totalCost = baseCost + laborCost + packagingCost;
+    const unitCost = recipe.yield > 0 ? totalCost / recipe.yield : 0;
+    
+    return [
+      recipe.name,
+      categoryName,
+      product?.name || 'Unknown Product',
+      recipe.yield,
+      recipe.yieldUnit,
+      formatIDR(baseCost),
+      formatIDR(laborCost),
+      formatIDR(packagingCost),
+      formatIDR(totalCost),
+      formatIDR(unitCost)
+    ];
+  });
+
+  // Combine all rows for summary
+  const allSummaryRows = [...summaryHeaderRows, ...recipeRows];
+  const wsSummary = utils.aoa_to_sheet(allSummaryRows);
+
+  // Set column widths for summary
+  const summaryColWidths = [
+    { wch: 40 }, // Recipe Name
+    { wch: 20 }, // Category
+    { wch: 40 }, // Product
+    { wch: 10 }, // Yield
+    { wch: 10 }, // Yield Unit
+    { wch: 15 }, // Base Cost
+    { wch: 15 }, // Labor Cost
+    { wch: 15 }, // Packaging Cost
+    { wch: 15 }, // Total Cost
+    { wch: 15 }  // Unit Cost
+  ];
+  wsSummary['!cols'] = summaryColWidths;
+
+  // Add summary worksheet
+  utils.book_append_sheet(wb, wsSummary, 'Selected Recipes');
+  
+  // Create individual worksheets for each selected recipe with detailed information
+  selectedRecipes.forEach(recipe => {
+    // Skip if invalid recipe or no ingredients
+    if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) return;
+    
+    const product = products.find(p => p.id === recipe.productId);
+    const categoryName = categories[recipe.category]?.name || recipe.category;
+    
+    // Calculate costs
+    const baseCost = calculateRecipeCost(recipe, ingredients);
+    const laborCost = recipe.laborCost || 0;
+    const packagingCost = recipe.packagingCost || 0;
+    const totalCost = baseCost + laborCost + packagingCost;
+    const unitCost = recipe.yield > 0 ? totalCost / recipe.yield : 0;
+    
+    // Create recipe header
+    const recipeHeaderRows = [
+      [recipe.name],
+      ['Category:', categoryName],
+      ['Product:', product?.name || 'Unknown Product'],
+      ['Yield:', `${recipe.yield} ${recipe.yieldUnit}`],
+      [''],
+      ['Ingredients']
+    ];
+    
+    // Add ingredients table header
+    recipeHeaderRows.push(['Name', 'Amount', 'Unit', 'Unit Price', 'Cost']);
+    
+    // Add ingredients rows
+    const ingredientRows = recipe.ingredients.map(item => {
+      const ingredient = ingredients.find(i => i.id === item.ingredientId);
+      if (!ingredient) return [];
+      
+      const unitPrice = ingredient.price / ingredient.packageSize;
+      const cost = unitPrice * item.amount;
+      
+      return [
+        ingredient.name,
+        item.amount,
+        ingredient.unit,
+        formatIDR(unitPrice),
+        formatIDR(cost)
+      ];
+    }).filter(row => row.length > 0);
+    
+    // Add cost summary
+    const costSummaryRows = [
+      [''],
+      ['Cost Summary'],
+      ['Base Cost:', formatIDR(baseCost)],
+      ['Labor Cost:', formatIDR(laborCost)],
+      ['Packaging Cost:', formatIDR(packagingCost)],
+      ['Total Cost:', formatIDR(totalCost)],
+      [`Cost per ${recipe.yieldUnit}:`, formatIDR(unitCost)]
+    ];
+    
+    // Add notes if present
+    const notesRows = recipe.notes ? [
+      [''],
+      ['Notes:'],
+      [recipe.notes]
+    ] : [];
+    
+    // Combine all rows
+    const allRecipeRows = [
+      ...recipeHeaderRows,
+      ...ingredientRows,
+      ...costSummaryRows,
+      ...notesRows
+    ];
+    
+    // Create worksheet
+    const wsRecipe = utils.aoa_to_sheet(allRecipeRows);
+    
+    // Set column widths
+    const recipeColWidths = [
+      { wch: 40 }, // Name/Label
+      { wch: 15 }, // Amount/Value
+      { wch: 15 }, // Unit
+      { wch: 20 }, // Unit Price
+      { wch: 20 }  // Cost
+    ];
+    wsRecipe['!cols'] = recipeColWidths;
+    
+    // Add worksheet - use safe sheet name (max 31 chars)
+    const safeRecipeName = recipe.name.length > 25 
+      ? recipe.name.substring(0, 25) + "..."
+      : recipe.name;
+      
+    utils.book_append_sheet(wb, wsRecipe, safeRecipeName);
   });
   
   return wb;

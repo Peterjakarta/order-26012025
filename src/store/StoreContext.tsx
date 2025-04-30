@@ -41,7 +41,7 @@ interface StoreContextType extends StoreState {
   deleteCategory: (category: ProductCategory) => Promise<void>;
   reorderCategories: (newOrder: ProductCategory[]) => Promise<void>;
   reorderProducts: (categoryId: string, newOrder: string[]) => Promise<void>;
-  addIngredient: (ingredient: Omit<Ingredient, 'id'>) => Promise<void>;
+  addIngredient: (ingredient: Omit<Ingredient, 'id'>) => Promise<string>;
   updateIngredient: (id: string, ingredient: Omit<Ingredient, 'id'>) => Promise<void>;
   deleteIngredient: (id: string) => Promise<void>;
   updateIngredientCategories: (categoryId: string, ingredientIds: string[]) => Promise<void>;
@@ -314,13 +314,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const addIngredient = useCallback(async (ingredientData: Omit<Ingredient, 'id'>) => {
+  const addIngredient = useCallback(async (ingredientData: Omit<Ingredient, 'id'>): Promise<string> => {
     try {
-      await addDoc(collection(db, COLLECTIONS.INGREDIENTS), {
+      // First check if an ingredient with the same name already exists
+      const q = query(
+        collection(db, COLLECTIONS.INGREDIENTS),
+        where('name', '==', ingredientData.name)
+      );
+      
+      const snapshot = await getDocs(q);
+      
+      // If ingredient exists, return its ID
+      if (!snapshot.empty) {
+        return snapshot.docs[0].id;
+      }
+      
+      // Otherwise create a new ingredient
+      const docRef = await addDoc(collection(db, COLLECTIONS.INGREDIENTS), {
         ...ingredientData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      
+      return docRef.id;
     } catch (error) {
       console.error('Error adding ingredient:', error);
       throw error;

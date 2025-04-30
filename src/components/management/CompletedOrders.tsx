@@ -164,9 +164,14 @@ export default function CompletedOrders() {
     }
   };
 
-  const handleReopenOrder = async (order: Order) => {
+  const handleReopenOrder = async (orderId: string) => {
     try {
       setError(null);
+      const order = orders.find(o => o.id === orderId);
+      if (!order) {
+        setError('Order not found');
+        return;
+      }
       await updateOrderStatus(order.id, 'pending');
       setReopeningOrder(null);
       setSuccess('Order reopened successfully');
