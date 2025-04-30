@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, Upload, Star, Trash2, Plus, X, Check, AlertCircle, FileText, ClipboardList, PlusCircle } from 'lucide-react';
+import { Calendar, Upload, Star, Trash2, Plus, X, Check, AlertCircle, FileText, ClipboardList, PlusCircle, Image } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../hooks/useAuth';
-import { RDProduct } from '../../types/rd-types';
-import QuantitySelector from '../product/QuantitySelector';
-import { ProductCategory } from '../../types/types';
+import { RDProduct, RDCategory } from '../../types/rd-types';
 import Beaker from '../common/BeakerIcon';
 
 interface RecipeIngredient {
@@ -17,12 +15,19 @@ interface RDProductFormProps {
   onSubmit: (data: Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => Promise<void>;
   onCancel: () => void;
   initialCategory?: string;
+  rdCategories?: RDCategory[];
 }
 
-export default function RDProductForm({ product, onSubmit, onCancel, initialCategory }: RDProductFormProps) {
+export default function RDProductForm({ 
+  product, 
+  onSubmit, 
+  onCancel, 
+  initialCategory, 
+  rdCategories = []
+}: RDProductFormProps) {
   const { categories, ingredients } = useStore();
   const { user } = useAuth();
-  const [selectedCategory, setSelectedCategory] = useState<ProductCategory | ''>(product?.category || initialCategory || '');
+  const [selectedCategory, setSelectedCategory] = useState<string>(product?.category || initialCategory || '');
   const [images, setImages] = useState<string[]>(product?.imageUrls || []);
   const [imageUrl, setImageUrl] = useState('');
   const [status, setStatus] = useState<RDProduct['status']>(product?.status || 'planning');
@@ -32,7 +37,10 @@ export default function RDProductForm({ product, onSubmit, onCancel, initialCate
   );
   const [targetDate, setTargetDate] = useState(product?.targetProductionDate || '');
   const [error, setError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropzoneRef = useRef<HTMLDivElement>(null);
   
   // Recipe ingredients state
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(
@@ -40,6 +48,7 @@ export default function RDProductForm({ product, onSubmit, onCancel, initialCate
   );
   const [selectedIngredient, setSelectedIngredient] = useState('');
   const [ingredientAmount, setIngredientAmount] = useState('');
+  const [activeTab, setActiveTab] = useState<'url' | 'upload'>('upload'); // Default to upload tab
 
   // Autofocus the first input field when the form appears
   useEffect(() => {
@@ -52,16 +61,103 @@ export default function RDProductForm({ product, onSubmit, onCancel, initialCate
     return () => clearTimeout(timer);
   }, []);
 
+  // Setup drag-and-drop functionality
+  useEffect(() => {
+    const dropzone = dropzoneRef.current;
+    if (!dropzone) return;
+    
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('bg-cyan-50', 'border-cyan-500');
+    };
+    
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('bg-cyan-50', 'border-cyan-500');
+    };
+    
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('bg-cyan-50', 'border-cyan-500');
+      
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        handleFiles(e.dataTransfer.files);
+      }
+    };
+    
+    dropzone.addEventListener('dragover', handleDragOver);
+    dropzone.addEventListener('dragleave', handleDragLeave);
+    dropzone.addEventListener('drop', handleDrop);
+    
+    return () => {
+      dropzone.removeEventListener('dragover', handleDragOver);
+      dropzone.removeEventListener('dragleave', handleDragLeave);
+      dropzone.removeEventListener('drop', handleDrop);
+    };
+  }, []);
+
+  const handleFiles = (files: FileList) => {
+    setError(null);
+    setUploadSuccess(false);
+    
+    const file = files[0]; // Handle only first file for now
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select a valid image file (JPEG, PNG, GIF, WebP)');
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+    if (file.size > maxSize) {
+      setError(`File size should be less than 5MB (current: ${(file.size / (1024 * 1024)).toFixed(1)}MB)`);
+      return;
+    }
+    
+    // Read the file as a data URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target && typeof e.target.result === 'string') {
+        setImages(prevImages => [...prevImages, e.target.result]);
+        setUploadSuccess(true);
+        setTimeout(() => setUploadSuccess(false), 3000);
+      }
+    };
+    reader.onerror = () => {
+      setError('Failed to read image file');
+    };
+    reader.readAsDataURL(file);
+    
+    // Reset the file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const addImage = () => {
     if (!imageUrl.trim()) return;
+    setError(null);
+    setUploadSuccess(false);
     
     // Validate URL
     try {
       new URL(imageUrl);
       setImages([...images, imageUrl.trim()]);
       setImageUrl('');
+      setUploadSuccess(true);
+      setTimeout(() => setUploadSuccess(false), 3000);
     } catch (e) {
       setError('Please enter a valid URL');
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(e.target.files);
     }
   };
 
@@ -124,7 +220,7 @@ export default function RDProductForm({ product, onSubmit, onCancel, initialCate
         return;
       }
 
-      const category = formData.get('category') as ProductCategory;
+      const category = formData.get('category') as string;
       if (!category) {
         setError('Category is required');
         return;
@@ -173,12 +269,28 @@ export default function RDProductForm({ product, onSubmit, onCancel, initialCate
     }
   };
 
+  // Combine standard categories with R&D categories for the dropdown
+  const allCategories = {
+    ...categories,
+    ...rdCategories.reduce((acc, cat) => ({
+      ...acc,
+      [cat.id]: { name: cat.name }
+    }), {})
+  };
+
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-8 bg-white p-6 rounded-lg shadow-sm">
       {error && (
         <div className="flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <p>{error}</p>
+        </div>
+      )}
+
+      {uploadSuccess && (
+        <div className="flex items-center gap-2 p-4 bg-green-50 text-green-700 rounded-lg">
+          <Check className="w-5 h-5 flex-shrink-0" />
+          <p>Image added successfully!</p>
         </div>
       )}
 
@@ -237,14 +349,26 @@ export default function RDProductForm({ product, onSubmit, onCancel, initialCate
               id="category"
               name="category"
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as ProductCategory)}
+              onChange={(e) => setSelectedCategory(e.target.value)}
               required
               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
             >
               <option value="">Select Category</option>
-              {Object.entries(categories).map(([key, { name }]) => (
-                <option key={key} value={key}>{name}</option>
-              ))}
+              {/* Production Categories */}
+              <optgroup label="Production Categories">
+                {Object.entries(categories).map(([key, { name }]) => (
+                  <option key={key} value={key}>{name}</option>
+                ))}
+              </optgroup>
+              
+              {/* Test Categories */}
+              {rdCategories.length > 0 && (
+                <optgroup label="Test Categories">
+                  {rdCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 
@@ -562,46 +686,106 @@ export default function RDProductForm({ product, onSubmit, onCancel, initialCate
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
               Product Images
             </label>
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="Enter image URL"
-                  className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                />
-                <button
-                  type="button"
-                  onClick={addImage}
-                  className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
+            
+            {/* Tabs for image source */}
+            <div className="flex border-b mb-4">
+              <button
+                type="button"
+                onClick={() => setActiveTab('upload')}
+                className={`px-4 py-2 ${activeTab === 'upload' ? 'text-cyan-600 border-b-2 border-cyan-600 font-medium' : 'text-gray-600 hover:text-gray-800'}`}
+              >
+                Upload Image
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('url')}
+                className={`px-4 py-2 ${activeTab === 'url' ? 'text-cyan-600 border-b-2 border-cyan-600 font-medium' : 'text-gray-600 hover:text-gray-800'}`}
+              >
+                Image URL
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {activeTab === 'url' ? (
+                /* URL Input */
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="Enter image URL"
+                    className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={addImage}
+                    className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add URL
+                  </button>
+                </div>
+              ) : (
+                /* File Upload Dropzone */
+                <div 
+                  ref={dropzoneRef}
+                  className="border-2 border-dashed rounded-lg p-6 transition-colors duration-300 hover:bg-cyan-50 hover:border-cyan-500"
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  <Plus className="w-4 h-4" />
-                  Add
-                </button>
-              </div>
+                  <div className="flex flex-col items-center text-center">
+                    <Image className="w-16 h-16 mb-4 text-cyan-600" />
+                    <h4 className="text-lg font-medium text-gray-700 mb-2">Click or drag image here</h4>
+                    <p className="text-gray-500 text-sm mb-4 max-w-md">
+                      Upload your product images directly from your computer. Supported formats: JPEG, PNG, GIF, WebP (max 5MB)
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-4 py-2 bg-cyan-50 text-cyan-700 border border-cyan-200 rounded-lg font-medium hover:bg-cyan-100 transition-colors"
+                    >
+                      Choose File
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      id="imageUpload"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      aria-label="Upload image"
+                    />
+                  </div>
+                </div>
+              )}
 
+              {/* Image Gallery */}
               {images.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-                  {images.map((url, index) => (
-                    <div key={index} className="relative group rounded-lg overflow-hidden border">
-                      <img 
-                        src={url} 
-                        alt={`Product image ${index + 1}`} 
-                        className="w-full h-32 object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Uploaded Images ({images.length})</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
+                    {images.map((url, index) => (
+                      <div key={index} className="relative group">
+                        <div className="h-32 rounded-lg border overflow-hidden bg-gray-100">
+                          <img 
+                            src={url} 
+                            alt={`Product image ${index + 1}`} 
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                          aria-label="Remove image"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

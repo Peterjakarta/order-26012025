@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { GraduationCap, Tag, Settings, FileText, Sparkles } from 'lucide-react';
 import RDProductManagement from '../components/development/RDProductManagement';
@@ -75,7 +75,7 @@ export default function Development() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {authorizedMenuItems.map((item) => (
           <Link
             key={item.path}
