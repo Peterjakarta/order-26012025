@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 
 export default function Header() {
   const location = useLocation();
-  const { logout, hasPermission } = useAuth();
+  const { logout, hasPermission, user } = useAuth();
   
   return (
     <header className="bg-gradient-to-r from-purple-600 to-pink-600 shadow-md">
@@ -32,6 +32,11 @@ export default function Header() {
                 {hasPermission('manage_orders') && (
                   <NavLink to="/management" current={location.pathname.includes("/management")}>
                     Management
+                  </NavLink>
+                )}
+                {hasPermission('manage_products') && (
+                  <NavLink to="/development" current={location.pathname.includes("/development")}>
+                    Development
                   </NavLink>
                 )}
               </nav>

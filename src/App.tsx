@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import OrderForm from './components/OrderForm';
 import Management from './pages/Management';
+import Development from './pages/Development';
 import LoginForm from './components/auth/LoginForm';
 import RequireAuth from './components/auth/RequireAuth';
 import { StoreProvider } from './store/StoreContext';
@@ -27,6 +28,14 @@ export default function App() {
               element={
                 <RequireAuth requiredPermissions={['manage_orders', 'manage_products']}>
                   <Management />
+                </RequireAuth>
+              } 
+            />
+            <Route 
+              path="/development/*" 
+              element={
+                <RequireAuth requiredPermissions={['manage_products']}>
+                  <Development />
                 </RequireAuth>
               } 
             />

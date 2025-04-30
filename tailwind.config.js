@@ -7,6 +7,20 @@ export default {
         brand: {
           purple: '#7C3AED', // Vivid purple
           pink: '#EC4899'    // Vibrant pink
+        },
+        dev: {
+          DEFAULT: '#2dd4cf',
+          50: '#f0fdfc',
+          100: '#ccfaf7',
+          200: '#99f6f1',
+          300: '#5eeae3',
+          400: '#2dd4cf',
+          500: '#14b8b8',
+          600: '#0e8f94',
+          700: '#0f7178',
+          800: '#115c63',
+          900: '#134d53',
+          950: '#07333a',
         }
       },
       boxShadow: {
