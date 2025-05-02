@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import type { Order, Product } from '../../../types/types';
 import { useBranches } from '../../../hooks/useBranches';
 import { getBranchStyles } from '../../../utils/branchStyles';
+import Beaker from '../../common/BeakerIcon';
 
 interface ProductionCalendarProps {
   orders: Order[];
@@ -48,6 +49,13 @@ export default function ProductionCalendar({ orders, products, onScheduleOrder }
         }
         acc[dateStr].push(order);
       }
+    } else if (order.isRDProduct && order.rdProductData?.targetProductionDate) {
+      // Handle R&D products - show on target production date
+      const dateStr = new Date(order.rdProductData.targetProductionDate).toISOString().split('T')[0];
+      if (!acc[dateStr]) {
+        acc[dateStr] = [];
+      }
+      acc[dateStr].push(order);
     }
     return acc;
   }, {} as Record<string, Order[]>);
@@ -137,6 +145,27 @@ export default function ProductionCalendar({ orders, products, onScheduleOrder }
           {dayOrders.length > 0 && showDetails && (
             <div className="space-y-2">
               {dayOrders.map(order => {
+                // Check if this is an R&D product
+                if (order.isRDProduct && order.rdProductData) {
+                  return (
+                    <div 
+                      key={order.id}
+                      className="p-2 rounded-lg border border-cyan-200 bg-cyan-50/80 
+                        transition-all duration-300 transform hover:scale-[1.02] hover:shadow-md group"
+                    >
+                      <div className="flex items-center gap-1 font-medium text-sm text-cyan-800 group-hover:opacity-90">
+                        <Beaker className="w-3.5 h-3.5" />
+                        <span className="truncate">{order.rdProductData.name}</span>
+                      </div>
+                      <div className="mt-1">
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-cyan-100 text-cyan-800 group-hover:opacity-90">
+                          R&D Product
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+                
                 const branch = branches.find(b => b.id === order.branchId);
                 const styles = getBranchStyles(order.branchId);
                 
@@ -185,6 +214,15 @@ export default function ProductionCalendar({ orders, products, onScheduleOrder }
                   </div>
                 );
               })}
+              <div 
+                className="px-3 py-1.5 text-sm rounded-lg bg-gradient-to-br from-cyan-50 to-cyan-100 border border-cyan-200 text-cyan-800
+                  transition-all duration-300 hover:shadow-md transform hover:-translate-y-0.5"
+              >
+                <div className="flex items-center gap-1">
+                  <Beaker className="w-3.5 h-3.5" />
+                  <span>R&D Products</span>
+                </div>
+              </div>
             </div>
           </div>
           

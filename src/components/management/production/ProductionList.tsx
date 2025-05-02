@@ -9,6 +9,7 @@ import { getBranchStyles } from '../../../utils/branchStyles';
 import { generateOrderPDF, generateProductionChecklistPDF, generateOrderWithRecipesPDF } from '../../../utils/pdfGenerator';
 import { generateExcelData, saveWorkbook } from '../../../utils/excelGenerator';
 import OrderCompletion from '../order/OrderCompletion';
+import Beaker from '../../common/BeakerIcon';
 
 interface ProductionListProps {
   startDate: string;
@@ -44,9 +45,12 @@ export default function ProductionList({
   const { recipes, ingredients } = useStore();
   const [dateErrors, setDateErrors] = useState<Record<string, string>>({});
 
-  // Separate orders into scheduled and unscheduled
-  const scheduledOrders = orders.filter(order => order.productionStartDate && order.productionEndDate);
-  const unscheduledOrders = orders.filter(order => !order.productionStartDate || !order.productionEndDate);
+  // Separate orders into regular orders and R&D products
+  const regularOrders = orders.filter(order => !order.isRDProduct);
+  const rdProducts = orders.filter(order => order.isRDProduct);
+  
+  const scheduledOrders = regularOrders.filter(order => order.productionStartDate && order.productionEndDate);
+  const unscheduledOrders = regularOrders.filter(order => !order.productionStartDate || !order.productionEndDate);
 
   const handleStartDateChange = (orderId: string, date: string) => {
     setDateErrors(prev => ({ ...prev, [orderId]: '' }));
@@ -221,6 +225,76 @@ export default function ProductionList({
       {error && (
         <div className="p-4 bg-red-50 text-red-600 text-sm">
           {error}
+        </div>
+      )}
+
+      {/* R&D Products Section - Shows at top of the list for visibility */}
+      {rdProducts.length > 0 && (
+        <div className="p-6 bg-cyan-50 rounded-lg border border-cyan-200">
+          <h3 className="font-medium text-lg mb-4 text-cyan-800 flex items-center gap-2">
+            <Beaker className="w-5 h-5" />
+            R&D Products in Production Pipeline
+          </h3>
+          <div className="divide-y divide-cyan-200">
+            {rdProducts.map(order => {
+              const rdProductData = order.rdProductData;
+              if (!rdProductData) return null;
+              
+              const isExpanded = expandedOrders.has(order.id);
+              
+              return (
+                <div key={order.id} className="py-4">
+                  <div className="flex justify-between items-start">
+                    <button
+                      onClick={() => toggleOrderExpanded(order.id)}
+                      className="flex items-center gap-3 hover:bg-cyan-100/50 p-2 rounded-md -ml-2 transition-colors text-left"
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-cyan-700" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-cyan-700" />
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-cyan-900">{rdProductData.name}</h4>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-200 text-cyan-800 font-medium">
+                            {rdProductData.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-cyan-700">
+                          Target: {new Date(rdProductData.targetProductionDate || '').toLocaleDateString()}
+                        </p>
+                      </div>
+                    </button>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          alert(`View details for ${rdProductData.name} - Feature coming soon`);
+                        }}
+                        className="px-3 py-1.5 text-sm bg-white text-cyan-700 border border-cyan-300 rounded-md hover:bg-cyan-50"
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {isExpanded && (
+                    <div className="ml-8 mt-3 bg-white p-4 rounded-lg border border-cyan-200">
+                      <p className="text-sm text-gray-700">{rdProductData.description}</p>
+                      {rdProductData.notes && (
+                        <div className="mt-2 p-3 bg-gray-50 rounded-md text-sm">
+                          <div className="font-medium mb-1">Development Notes:</div>
+                          <p>{rdProductData.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

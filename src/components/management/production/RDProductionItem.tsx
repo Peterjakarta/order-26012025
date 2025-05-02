@@ -19,14 +19,19 @@ export default function RDProductionItem({
   if (categories[product.category]) {
     categoryName = categories[product.category].name;
   } else if (product.category.startsWith('rd-category-')) {
-    // Special handling for test categories - in a real app, we'd fetch this from the database
-    const testCategories = {
-      'rd-category-1': 'Experimental Truffles',
-      'rd-category-2': 'Sugar-Free Products',
-      'rd-category-3': 'Vegan Range',
-      'rd-category-4': 'Single Origin Series'
-    };
-    categoryName = testCategories[product.category as keyof typeof testCategories] || product.category;
+    // Get R&D category names from localStorage
+    try {
+      const storedCategories = localStorage.getItem('rd-categories-data');
+      if (storedCategories) {
+        const rdCategories = JSON.parse(storedCategories);
+        const category = rdCategories.find((c: any) => c.id === product.category);
+        if (category) {
+          categoryName = category.name;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching R&D category name:', error);
+    }
   }
   
   const statusClass = {

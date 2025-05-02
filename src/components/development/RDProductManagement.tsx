@@ -9,6 +9,10 @@ import RDCategoryForm from './RDCategoryForm';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Beaker from '../common/BeakerIcon';
 
+// Local storage keys
+const RD_PRODUCTS_STORAGE_KEY = 'rd-products-data';
+const RD_CATEGORIES_STORAGE_KEY = 'rd-categories-data';
+
 // Demo data for initial implementation
 const DEMO_RD_PRODUCTS: RDProduct[] = [
   {
@@ -220,7 +224,7 @@ const DEMO_RD_CATEGORIES: RDCategory[] = [
 export default function RDProductManagement() {
   const { categories, ingredients } = useStore();
   const { user } = useAuth();
-  const [rdProducts, setRdProducts] = useState<RDProduct[]>(DEMO_RD_PRODUCTS);
+  const [rdProducts, setRdProducts] = useState<RDProduct[]>([]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<RDProduct | null>(null);
   const [viewingProduct, setViewingProduct] = useState<RDProduct | null>(null);
@@ -230,7 +234,7 @@ export default function RDProductManagement() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   
   // Category management state
-  const [rdCategories, setRdCategories] = useState<RDCategory[]>(DEMO_RD_CATEGORIES);
+  const [rdCategories, setRdCategories] = useState<RDCategory[]>([]);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [editingCategory, setEditingCategory] = useState<RDCategory | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<RDCategory | null>(null);
@@ -238,6 +242,47 @@ export default function RDProductManagement() {
   
   // Track expanded categories
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  // Load data from localStorage on component mount
+  useEffect(() => {
+    // Load R&D categories
+    try {
+      const storedCategories = localStorage.getItem(RD_CATEGORIES_STORAGE_KEY);
+      if (storedCategories) {
+        setRdCategories(JSON.parse(storedCategories));
+      } else {
+        setRdCategories(DEMO_RD_CATEGORIES);
+        localStorage.setItem(RD_CATEGORIES_STORAGE_KEY, JSON.stringify(DEMO_RD_CATEGORIES));
+      }
+    } catch (error) {
+      console.error('Error loading R&D categories:', error);
+      setRdCategories(DEMO_RD_CATEGORIES);
+    }
+
+    // Load R&D products
+    try {
+      const storedProducts = localStorage.getItem(RD_PRODUCTS_STORAGE_KEY);
+      if (storedProducts) {
+        setRdProducts(JSON.parse(storedProducts));
+      } else {
+        setRdProducts(DEMO_RD_PRODUCTS);
+        localStorage.setItem(RD_PRODUCTS_STORAGE_KEY, JSON.stringify(DEMO_RD_PRODUCTS));
+      }
+    } catch (error) {
+      console.error('Error loading R&D products:', error);
+      setRdProducts(DEMO_RD_PRODUCTS);
+    }
+  }, []);
+
+  // Save categories to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(RD_CATEGORIES_STORAGE_KEY, JSON.stringify(rdCategories));
+  }, [rdCategories]);
+
+  // Save products to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(RD_PRODUCTS_STORAGE_KEY, JSON.stringify(rdProducts));
+  }, [rdProducts]);
 
   // Combined categories for filtering (includes both production and RD categories)
   const combinedCategoryOptions = {

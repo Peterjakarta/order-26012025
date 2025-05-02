@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Tag, Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
+import { Tag, Plus, X, Search, Loader2 } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { RDCategory } from '../../types/rd-types';
 import RDCategoryForm from './RDCategoryForm';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Beaker from '../common/BeakerIcon';
+
+// Local storage key for R&D categories
+const LOCAL_STORAGE_KEY = 'rd-categories-data';
 
 // Demo data for initial implementation
 const DEMO_RD_CATEGORIES: RDCategory[] = [
@@ -36,7 +39,7 @@ const DEMO_RD_CATEGORIES: RDCategory[] = [
     id: 'rd-category-4',
     name: 'Single Origin Series',
     description: 'Chocolates made from beans of specific regions',
-    status: 'inactive',
+    status: 'active',
     createdAt: '2024-12-05T16:30:00Z',
     updatedAt: '2025-01-10T13:20:00Z',
   }
@@ -44,12 +47,38 @@ const DEMO_RD_CATEGORIES: RDCategory[] = [
 
 export default function RDCategoryManagement() {
   const { categories } = useStore();
-  const [rdCategories, setRdCategories] = useState<RDCategory[]>(DEMO_RD_CATEGORIES);
+  const [rdCategories, setRdCategories] = useState<RDCategory[]>([]);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [editingCategory, setEditingCategory] = useState<RDCategory | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<RDCategory | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [loading, setLoading] = useState(true);
+
+  // Initialize from localStorage or default demo data
+  useEffect(() => {
+    try {
+      const storedCategories = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (storedCategories) {
+        setRdCategories(JSON.parse(storedCategories));
+      } else {
+        setRdCategories(DEMO_RD_CATEGORIES);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(DEMO_RD_CATEGORIES));
+      }
+    } catch (error) {
+      console.error('Error loading R&D categories:', error);
+      setRdCategories(DEMO_RD_CATEGORIES);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Save to localStorage whenever categories change
+  useEffect(() => {
+    if (!loading) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(rdCategories));
+    }
+  }, [rdCategories, loading]);
 
   // Filter categories based on search term and status
   const filteredCategories = rdCategories.filter(category => {
@@ -114,6 +143,14 @@ export default function RDCategoryManagement() {
       c.id === category.id ? updatedCategory : c
     ));
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-12">
+        <Loader2 className="w-8 h-8 text-cyan-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

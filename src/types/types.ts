@@ -52,3 +52,93 @@ export interface StockCategoryItem {
   ingredient_id: string;
   created_at: string;
 }
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+}
+
+export interface CategoryData {
+  name: string;
+  description?: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  category: ProductCategory['id'];
+  description?: string;
+  unit?: string;
+  price?: number;
+  minOrder?: number;
+  quantityStep?: number;
+  showPrice: boolean;
+  showDescription: boolean;
+  showMinOrder: boolean;
+  showUnit: boolean;
+}
+
+export interface Order {
+  id: string;
+  branchId: string;
+  orderedBy: string;
+  orderDate: string;
+  deliveryDate: string;
+  poNumber?: string;
+  notes?: string;
+  products: OrderItem[];
+  status: 'pending' | 'processing' | 'completed';
+  createdAt: string;
+  updatedAt?: string;
+  completedAt?: string;
+  orderNumber?: string;
+  productionStartDate?: string;
+  productionEndDate?: string;
+  stockReduced?: boolean;
+  
+  // Special fields for R&D products
+  isRDProduct?: boolean;
+  rdProductData?: any; // Type for the R&D product data
+}
+
+export interface OrderItem {
+  productId: string;
+  quantity: number;
+  producedQuantity?: number;
+  stockQuantity?: number;
+  rejectQuantity?: number;
+  rejectNotes?: string;
+}
+
+export interface Branch {
+  id: string;
+  name: string;
+}
+
+export interface Ingredient {
+  id: string;
+  name: string;
+  unit: string;
+  packageSize: number;
+  packageUnit: string;
+  price: number;
+}
+
+export interface Recipe {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  productId: string;
+  yield: number;
+  yieldUnit: string;
+  ingredients: RecipeIngredient[];
+  laborCost?: number;
+  packagingCost?: number;
+  notes?: string;
+}
+
+export interface RecipeIngredient {
+  ingredientId: string;
+  amount: number;
+}

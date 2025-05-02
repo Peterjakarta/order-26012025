@@ -7,66 +7,47 @@ import { getInitialStartDate, getDefaultEndDate } from '../../../utils/dateUtils
 import ProductionList from './ProductionList';
 import ProductionCalendar from './ProductionCalendar';
 import { RDProduct } from '../../../types/rd-types';
+import { Order } from '../../../types/types';
+import Beaker from '../../common/BeakerIcon';
 
 type ViewMode = 'list' | 'calendar';
 
-// Mock function to fetch R&D products with target production dates
-const fetchRDProductsInProduction = (): Promise<RDProduct[]> => {
-  // In a real application, this would be a database call
-  // For demo purposes, we'll return some mock data
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve([
-        {
-          id: 'rd-product-1',
-          name: 'Ruby Chocolate Pralines',
-          category: 'pralines',
-          description: 'Premium pralines made with ruby chocolate and raspberry filling',
-          unit: 'boxes',
-          minOrder: 5,
-          price: 32.99,
-          showPrice: true,
-          showDescription: true,
-          showUnit: true,
-          showMinOrder: true,
-          developmentDate: '2025-01-10',
-          targetProductionDate: '2025-07-15',
-          status: 'development',
-          notes: 'Working on stabilizing the raspberry filling. Need to test shelf life at room temperature.',
-          imageUrls: [
-            'https://images.unsplash.com/photo-1548907040-4baa42d10919?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTh8fHJ1Ynklc2hvY29sYXRlfGVufDB8fDB8fHww&auto=format&fit=crop&w=800&q=60',
-          ],
-          costEstimate: 15.75,
-          createdBy: 'admin',
-          createdAt: '2025-01-10T09:30:00Z',
-          updatedAt: '2025-01-15T14:20:00Z'
-        },
-        {
-          id: 'rd-product-6',
-          name: 'Experimental Whiskey Ganache',
-          category: 'rd-category-1', // Experimental Truffles
-          description: 'Dark chocolate ganache infused with single malt whiskey',
-          unit: 'boxes',
-          minOrder: 3,
-          price: 45.99,
-          showPrice: true,
-          showDescription: true,
-          showUnit: true,
-          showMinOrder: true,
-          developmentDate: '2025-01-15',
-          targetProductionDate: '2025-03-30',
-          status: 'testing',
-          notes: 'Testing different whiskey varieties. Need to balance alcohol content for flavor vs shelf stability.',
-          imageUrls: [
-            'https://images.unsplash.com/photo-1620504600375-4793e85ecbd8?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8Y2hvY29sYXRlJTIwZ2FuYWNoZXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=800&q=60'
-          ],
-          createdBy: 'admin',
-          createdAt: '2025-01-15T15:20:00Z',
-          updatedAt: '2025-02-05T10:10:00Z'
-        }
-      ]);
-    }, 500);
-  });
+// Function to get R&D products from localStorage
+const getRDProductsFromStorage = (): RDProduct[] => {
+  try {
+    const storedProducts = localStorage.getItem('rd-products-data');
+    if (storedProducts) {
+      return JSON.parse(storedProducts);
+    }
+  } catch (error) {
+    console.error('Failed to parse stored RD products:', error);
+  }
+  return [];
+};
+
+// Convert RD Product to Production Order format for calendar/list views
+const convertRDToProductionFormat = (rdProduct: RDProduct): Order => {
+  return {
+    id: `rd-${rdProduct.id}`,
+    branchId: 'production', // Always assign to production branch
+    orderedBy: 'R&D Department',
+    orderDate: rdProduct.developmentDate,
+    deliveryDate: rdProduct.targetProductionDate || rdProduct.developmentDate,
+    productionStartDate: rdProduct.targetProductionDate,
+    productionEndDate: rdProduct.targetProductionDate,
+    products: [
+      {
+        productId: rdProduct.id,
+        quantity: rdProduct.minOrder || 1,
+        producedQuantity: 0
+      }
+    ],
+    status: 'processing',
+    createdAt: rdProduct.createdAt,
+    updatedAt: rdProduct.updatedAt,
+    isRDProduct: true, // Special flag to identify R&D products
+    rdProductData: rdProduct // Store original data
+  };
 };
 
 export default function ProductionSchedule() {
@@ -90,13 +71,17 @@ export default function ProductionSchedule() {
     order.status !== 'completed'
   );
 
-  // Fetch R&D products that have target production dates
+  // Load R&D products from localStorage
   useEffect(() => {
     const loadRDProducts = async () => {
       setIsLoadingRdProducts(true);
       try {
-        const products = await fetchRDProductsInProduction();
-        setRdProducts(products);
+        // Get products from localStorage
+        const products = getRDProductsFromStorage();
+        
+        // Only keep products with target production dates
+        const productsWithDates = products.filter(p => p.targetProductionDate);
+        setRdProducts(productsWithDates);
       } catch (err) {
         console.error('Error loading R&D products:', err);
         setError('Failed to load R&D products');
@@ -108,9 +93,39 @@ export default function ProductionSchedule() {
     loadRDProducts();
   }, []);
 
+  // Convert RD Products to production orders for display
+  const rdProductionOrders = rdProducts
+    .filter(product => product.targetProductionDate || product.developmentDate)
+    .map(convertRDToProductionFormat);
+
+  // Combine regular orders with RD production orders
+  const allProductionOrders = [...relevantOrders, ...rdProductionOrders];
+
   const handleSchedule = async (orderId: string, startDate: string, endDate: string) => {
     try {
       setError(null);
+      
+      // Check if this is an R&D product order
+      if (orderId.startsWith('rd-')) {
+        // For R&D products, we update the localStorage entry
+        const rdProductId = orderId.replace('rd-', '');
+        const updatedRdProducts = rdProducts.map(product => {
+          if (product.id === rdProductId) {
+            return {
+              ...product,
+              targetProductionDate: startDate,
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return product;
+        });
+        
+        setRdProducts(updatedRdProducts);
+        localStorage.setItem('rd-products-data', JSON.stringify(updatedRdProducts));
+        return;
+      }
+      
+      // For regular orders
       await updateOrderProduction(orderId, startDate, endDate);
     } catch (err) {
       console.error('Error scheduling production:', err);
@@ -128,6 +143,28 @@ export default function ProductionSchedule() {
   ) => {
     try {
       setError(null);
+      
+      // Check if this is an R&D product order
+      if (orderId.startsWith('rd-')) {
+        // For R&D products, we update the status in localStorage
+        const rdProductId = orderId.replace('rd-', '');
+        const updatedRdProducts = rdProducts.map(product => {
+          if (product.id === rdProductId) {
+            return {
+              ...product,
+              status: 'approved',
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return product;
+        });
+        
+        setRdProducts(updatedRdProducts);
+        localStorage.setItem('rd-products-data', JSON.stringify(updatedRdProducts));
+        return;
+      }
+      
+      // For regular orders
       await updateOrderStatus(
         orderId, 
         'completed', 
@@ -146,6 +183,28 @@ export default function ProductionSchedule() {
   const handleRemoveFromProduction = async (orderId: string) => {
     try {
       setError(null);
+      
+      // Check if this is an R&D product order
+      if (orderId.startsWith('rd-')) {
+        // For R&D products, we remove the target production date
+        const rdProductId = orderId.replace('rd-', '');
+        const updatedRdProducts = rdProducts.map(product => {
+          if (product.id === rdProductId) {
+            const { targetProductionDate, ...rest } = product;
+            return {
+              ...rest,
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return product;
+        });
+        
+        setRdProducts(updatedRdProducts);
+        localStorage.setItem('rd-products-data', JSON.stringify(updatedRdProducts));
+        return;
+      }
+      
+      // For regular orders
       await updateOrderProduction(orderId, '', ''); // Clear production dates
       await updateOrderStatus(orderId, 'pending'); // Reset status to pending
     } catch (err) {
@@ -153,44 +212,6 @@ export default function ProductionSchedule() {
       setError('Failed to remove from production');
       throw err;
     }
-  };
-
-  // Render R&D products section
-  const renderRDProductsSection = () => {
-    if (rdProducts.length === 0) return null;
-
-    return (
-      <div className="border-t pt-6 mt-6">
-        <h3 className="text-lg font-medium mb-4">R&D Products in Production Pipeline</h3>
-        <div className="bg-cyan-50 p-4 rounded-lg border border-cyan-200">
-          <div className="space-y-4">
-            {rdProducts.map(product => (
-              <div key={product.id} className="bg-white p-4 rounded-lg border border-cyan-100 flex justify-between items-center">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium">{product.name}</h4>
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800">
-                      R&D
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Target Production: {new Date(product.targetProductionDate || '').toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => alert('View R&D details - feature coming soon')}
-                    className="px-3 py-1.5 text-sm border border-cyan-200 text-cyan-700 rounded-md hover:bg-cyan-50"
-                  >
-                    View Details
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -236,7 +257,7 @@ export default function ProductionSchedule() {
       <div className="bg-white rounded-lg shadow-sm">
         {viewMode === 'calendar' ? (
           <ProductionCalendar
-            orders={relevantOrders}
+            orders={allProductionOrders}
             products={products}
             onScheduleOrder={handleSchedule}
           />
@@ -244,7 +265,7 @@ export default function ProductionSchedule() {
           <ProductionList
             startDate={startDate}
             endDate={endDate}
-            orders={relevantOrders}
+            orders={allProductionOrders}
             products={products}
             onSchedule={handleSchedule}
             onComplete={handleComplete}
@@ -253,8 +274,34 @@ export default function ProductionSchedule() {
         )}
       </div>
 
-      {/* Render R&D Products in Production Pipeline */}
-      {renderRDProductsSection()}
+      {/* R&D Products Section */}
+      {rdProducts.length > 0 && (
+        <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+            <Beaker className="w-5 h-5 text-cyan-700" />
+            <span className="text-cyan-800">R&D Products in Production Pipeline</span>
+          </h3>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {rdProducts.map(product => (
+              <div key={product.id} className="bg-white p-4 rounded-lg border border-cyan-200 shadow-sm">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-medium text-cyan-900">{product.name}</h4>
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-cyan-100 text-cyan-800 font-medium">
+                        {product.status}
+                      </span>
+                    </div>
+                    <p className="text-sm text-cyan-700">
+                      Target Date: {new Date(product.targetProductionDate || '').toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
