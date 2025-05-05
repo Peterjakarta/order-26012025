@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight, ClipboardCheck, FileSpreadsheet, AlertCircle } from 'lucide-react';
+import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight, ClipboardCheck, FileSpreadsheet, AlertCircle, Eye } from 'lucide-react';
 import type { Order, Product } from '../../../types/types';
 import { useBranches } from '../../../hooks/useBranches';
 import { useStore } from '../../../store/StoreContext';
@@ -10,6 +10,7 @@ import { generateOrderPDF, generateProductionChecklistPDF, generateOrderWithReci
 import { generateExcelData, saveWorkbook } from '../../../utils/excelGenerator';
 import OrderCompletion from '../order/OrderCompletion';
 import Beaker from '../../common/BeakerIcon';
+import RDProductDetailsPopup from './RDProductDetailsPopup';
 
 interface ProductionListProps {
   startDate: string;
@@ -44,10 +45,24 @@ export default function ProductionList({
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const { recipes, ingredients } = useStore();
   const [dateErrors, setDateErrors] = useState<Record<string, string>>({});
+  const [viewingRDProduct, setViewingRDProduct] = useState<any>(null);
+  const [processedOrderIds, setProcessedOrderIds] = useState<Set<string>>(new Set());
 
   // Separate orders into regular orders and R&D products
   const regularOrders = orders.filter(order => !order.isRDProduct);
-  const rdProducts = orders.filter(order => order.isRDProduct);
+  const rdProducts = orders.filter(order => {
+    // Only include each R&D product once (avoid duplicates)
+    if (order.isRDProduct && !processedOrderIds.has(order.id)) {
+      setProcessedOrderIds(prevIds => new Set([...prevIds, order.id]));
+      return true;
+    }
+    return false;
+  });
+  
+  // Reset the processed IDs when orders change
+  useEffect(() => {
+    setProcessedOrderIds(new Set());
+  }, [orders]);
   
   const scheduledOrders = regularOrders.filter(order => order.productionStartDate && order.productionEndDate);
   const unscheduledOrders = regularOrders.filter(order => !order.productionStartDate || !order.productionEndDate);
@@ -212,6 +227,10 @@ export default function ProductionList({
     });
   };
 
+  const handleViewRDProductDetails = (product: any) => {
+    setViewingRDProduct(product);
+  };
+
   if (orders.length === 0) {
     return (
       <div className="p-6 text-center text-gray-500">
@@ -271,10 +290,11 @@ export default function ProductionList({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          alert(`View details for ${rdProductData.name} - Feature coming soon`);
+                          handleViewRDProductDetails(rdProductData);
                         }}
-                        className="px-3 py-1.5 text-sm bg-white text-cyan-700 border border-cyan-300 rounded-md hover:bg-cyan-50"
+                        className="px-3 py-1.5 text-sm bg-white text-cyan-700 border border-cyan-300 rounded-md hover:bg-cyan-50 flex items-center gap-1"
                       >
+                        <Eye className="w-4 h-4" />
                         View Details
                       </button>
                     </div>
@@ -646,6 +666,14 @@ export default function ProductionList({
             />
           </div>
         </div>
+      )}
+
+      {/* RD Product Details Dialog */}
+      {viewingRDProduct && (
+        <RDProductDetailsPopup
+          product={viewingRDProduct}
+          onClose={() => setViewingRDProduct(null)}
+        />
       )}
     </div>
   );

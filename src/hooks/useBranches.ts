@@ -3,17 +3,25 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, query, orderBy, onSnapsh
 import { db, COLLECTIONS } from '../lib/firebase';
 import type { Branch } from '../types/types';
 import { branches as initialBranches } from '../data/branches';
+import { useAuth } from './useAuth';
 
 export function useBranches() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated, user } = useAuth();
 
   // Initialize branches in Firestore if they don't exist
   const initializeBranches = useCallback(async () => {
     try {
+      // Only proceed if authenticated
+      if (!isAuthenticated) {
+        console.log('Waiting for authentication before initializing branches...');
+        return;
+      }
+
       console.log('Checking for existing branches...');
-      const branchesRef = collection(db, 'branches');
+      const branchesRef = collection(db, COLLECTIONS.BRANCHES);
       const q = query(branchesRef);
       const snapshot = await getDocs(q);
       
@@ -63,13 +71,26 @@ export function useBranches() {
     } catch (error) {
       console.error('Error initializing branches:', error);
       setError('Failed to initialize branches');
+      
+      // Fallback to local data if Firestore fails
+      console.log('Using local branch data as fallback');
+      setBranches(initialBranches);
+      setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   // Subscribe to branches from Firebase
   const { useEffect } = React;
   useEffect(() => {
-    // Initialize branches when component mounts
+    // Don't attempt to load branches until authenticated
+    if (!isAuthenticated) {
+      console.log('Not authenticated, using local branch data');
+      setBranches(initialBranches);
+      setLoading(false);
+      return () => {};
+    }
+
+    // Initialize branches when component mounts and we're authenticated
     initializeBranches();
     
     const q = query(collection(db, COLLECTIONS.BRANCHES), orderBy('name'));
@@ -80,22 +101,27 @@ export function useBranches() {
         snapshot.forEach((doc) => {
           branchesData.push({ id: doc.id, ...doc.data() } as Branch);
         });
-        setBranches(branchesData);
+        setBranches(branchesData.length > 0 ? branchesData : initialBranches);
         setLoading(false);
         setError(null);
       },
       (err) => {
         console.error('Error fetching branches:', err);
         setError('Failed to load branches');
+        setBranches(initialBranches); // Fallback to local data
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [initializeBranches]);
+  }, [initializeBranches, isAuthenticated]);
 
   const addBranch = useCallback(async (data: Omit<Branch, 'id'>) => {
     try {
+      if (!isAuthenticated) {
+        throw new Error('You must be logged in to add a branch');
+      }
+
       // Generate a sanitized ID from the branch name
       const id = data.name.toLowerCase()
         .replace(/[^a-z0-9\s-]/g, '')
@@ -114,10 +140,14 @@ export function useBranches() {
       console.error('Error adding branch:', error);
       throw error;
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const updateBranch = useCallback(async (id: string, data: Omit<Branch, 'id'>) => {
     try {
+      if (!isAuthenticated) {
+        throw new Error('You must be logged in to update a branch');
+      }
+
       const branchRef = doc(db, COLLECTIONS.BRANCHES, id);
       await updateDoc(branchRef, {
         ...data,
@@ -127,16 +157,20 @@ export function useBranches() {
       console.error('Error updating branch:', error);
       throw error;
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const deleteBranch = useCallback(async (id: string) => {
     try {
+      if (!isAuthenticated) {
+        throw new Error('You must be logged in to delete a branch');
+      }
+
       await deleteDoc(doc(db, COLLECTIONS.BRANCHES, id));
     } catch (error) {
       console.error('Error deleting branch:', error);
       throw error;
     }
-  }, []);
+  }, [isAuthenticated]);
 
   return {
     branches,

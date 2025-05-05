@@ -1,49 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Tag, Plus, X, Search, Loader2 } from 'lucide-react';
+import { Tag, Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { RDCategory } from '../../types/rd-types';
 import RDCategoryForm from './RDCategoryForm';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Beaker from '../common/BeakerIcon';
-
-// Local storage key for R&D categories
-const LOCAL_STORAGE_KEY = 'rd-categories-data';
-
-// Demo data for initial implementation
-const DEMO_RD_CATEGORIES: RDCategory[] = [
-  {
-    id: 'rd-category-1',
-    name: 'Experimental Truffles',
-    description: 'New and innovative truffle flavors and designs',
-    status: 'active',
-    createdAt: '2025-01-15T10:30:00Z',
-    updatedAt: '2025-01-15T10:30:00Z',
-  },
-  {
-    id: 'rd-category-2',
-    name: 'Sugar-Free Products',
-    description: 'Chocolate products with no added sugars',
-    status: 'active',
-    createdAt: '2025-02-10T14:45:00Z',
-    updatedAt: '2025-02-12T09:15:00Z',
-  },
-  {
-    id: 'rd-category-3',
-    name: 'Vegan Range',
-    description: 'Plant-based chocolate products with no animal ingredients',
-    status: 'active',
-    createdAt: '2025-02-20T11:00:00Z',
-    updatedAt: '2025-02-20T11:00:00Z',
-  },
-  {
-    id: 'rd-category-4',
-    name: 'Single Origin Series',
-    description: 'Chocolates made from beans of specific regions',
-    status: 'active',
-    createdAt: '2024-12-05T16:30:00Z',
-    updatedAt: '2025-01-10T13:20:00Z',
-  }
-];
+import { 
+  loadRDCategories, 
+  saveRDCategories, 
+  addRDCategory, 
+  updateRDCategory, 
+  deleteRDCategory,
+  dispatchRDDataChangedEvent,
+  addRDDataChangeListener
+} from '../../services/rdDataService';
 
 export default function RDCategoryManagement() {
   const { categories } = useStore();
@@ -55,30 +25,25 @@ export default function RDCategoryManagement() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [loading, setLoading] = useState(true);
 
-  // Initialize from localStorage or default demo data
+  // Initialize from localStorage
   useEffect(() => {
     try {
-      const storedCategories = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (storedCategories) {
-        setRdCategories(JSON.parse(storedCategories));
-      } else {
-        setRdCategories(DEMO_RD_CATEGORIES);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(DEMO_RD_CATEGORIES));
-      }
+      const categories = loadRDCategories();
+      setRdCategories(categories);
     } catch (error) {
       console.error('Error loading R&D categories:', error);
-      setRdCategories(DEMO_RD_CATEGORIES);
     } finally {
       setLoading(false);
     }
+    
+    // Listen for changes from other components
+    const unsubscribe = addRDDataChangeListener(() => {
+      const updatedCategories = loadRDCategories();
+      setRdCategories(updatedCategories);
+    });
+    
+    return unsubscribe;
   }, []);
-
-  // Save to localStorage whenever categories change
-  useEffect(() => {
-    if (!loading) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(rdCategories));
-    }
-  }, [rdCategories, loading]);
 
   // Filter categories based on search term and status
   const filteredCategories = rdCategories.filter(category => {
@@ -91,63 +56,59 @@ export default function RDCategoryManagement() {
 
   const handleSubmit = async (categoryData: Omit<RDCategory, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      const now = new Date().toISOString();
-      
       if (editingCategory) {
         // Update existing category
-        const updatedCategory = {
-          ...editingCategory,
-          ...categoryData,
-          updatedAt: now
-        };
-        
-        setRdCategories(prev => prev.map(c => 
-          c.id === editingCategory.id ? updatedCategory : c
-        ));
-        
+        const updatedCategory = updateRDCategory(editingCategory.id, categoryData);
+        if (updatedCategory) {
+          setRdCategories(prev => prev.map(c => 
+            c.id === editingCategory.id ? updatedCategory : c
+          ));
+        }
         setEditingCategory(null);
       } else {
         // Create new category
-        const newCategory: RDCategory = {
-          ...categoryData,
-          id: `rd-category-${Date.now()}`,
-          createdAt: now,
-          updatedAt: now
-        };
-        
+        const newCategory = addRDCategory(categoryData);
         setRdCategories(prev => [...prev, newCategory]);
         setIsAddingCategory(false);
       }
+      
+      // Notify other components that data has changed
+      dispatchRDDataChangedEvent();
     } catch (error) {
       console.error('Error saving category:', error);
-      alert('Failed to save category. Please try again.');
+      throw error;
     }
   };
 
   const handleDelete = () => {
     if (!deletingCategory) return;
     
+    deleteRDCategory(deletingCategory.id);
     setRdCategories(prev => prev.filter(c => c.id !== deletingCategory.id));
     setDeletingCategory(null);
+    
+    // Notify other components that data has changed
+    dispatchRDDataChangedEvent();
   };
 
   const toggleCategoryStatus = (category: RDCategory) => {
     const newStatus = category.status === 'active' ? 'inactive' : 'active';
-    const updatedCategory = {
-      ...category,
-      status: newStatus,
-      updatedAt: new Date().toISOString()
-    };
+    const updatedCategory = updateRDCategory(category.id, { status: newStatus });
     
-    setRdCategories(prev => prev.map(c => 
-      c.id === category.id ? updatedCategory : c
-    ));
+    if (updatedCategory) {
+      setRdCategories(prev => prev.map(c => 
+        c.id === category.id ? updatedCategory : c
+      ));
+      
+      // Notify other components that data has changed
+      dispatchRDDataChangedEvent();
+    }
   };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center p-12">
-        <Loader2 className="w-8 h-8 text-cyan-600 animate-spin" />
+        <div className="w-8 h-8 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -168,7 +129,6 @@ export default function RDCategoryManagement() {
         </button>
       </div>
 
-      {/* Search and Filter */}
       <div className="bg-white p-4 rounded-lg shadow-sm border space-y-4">
         <div className="flex items-center gap-2 text-gray-700">
           <Filter className="w-5 h-5" />

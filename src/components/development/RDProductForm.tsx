@@ -572,7 +572,7 @@ export default function RDProductForm({
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {recipeIngredients.map((item, index) => {
-                    const ingredient = ingredients.find(ing => ing.id === item.ingredientId);
+                    const ingredient = ingredients.find(i => i.id === item.ingredientId);
                     return (
                       <tr key={index} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -612,7 +612,7 @@ export default function RDProductForm({
       <div className="border-b pb-6">
         <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-cyan-600" />
-          Development Schedule
+          Development Information
         </h3>
         
         <div className="grid gap-6 sm:grid-cols-2">
@@ -628,6 +628,9 @@ export default function RDProductForm({
               required
               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
             />
+            <p className="mt-1 text-sm text-gray-500">
+              This date will be used for development tracking and production planning when status is "Planning"
+            </p>
           </div>
 
           <div>

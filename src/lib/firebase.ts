@@ -166,7 +166,10 @@ export const COLLECTIONS = {
   STOCK_HISTORY: 'stock_history',
   STOCK_CATEGORIES: 'stock_categories',
   STOCK_CATEGORY_ITEMS: 'stock_category_items',
-  LOGS: 'logs'
+  LOGS: 'logs',
+  // Add RD collections
+  RD_CATEGORIES: 'rd_categories',
+  RD_PRODUCTS: 'rd_products'
 } as const;
 
 // Helper function to create log entries
@@ -185,6 +188,19 @@ export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) 
   } catch (error) {
     console.error('Error creating log entry:', error);
   }
+}
+
+// Helper functions for batch operations
+export function getBatch() {
+  return writeBatch(db);
+}
+
+export async function commitBatchIfNeeded(batch: any, operationCount: number, limit: number = 500) {
+  if (operationCount >= limit) {
+    await batch.commit();
+    return { batch: getBatch(), operationCount: 0 };
+  }
+  return { batch, operationCount };
 }
 
 // Initialize persistence and export

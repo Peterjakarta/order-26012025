@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Calculator, Copy, ChevronDown, ChevronRight, Upload, Package2, Eye, EyeOff, FileSpreadsheet, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, Calculator, Copy, ChevronDown, ChevronRight, Upload, Package2, Eye, EyeOff, FileSpreadsheet, Check, Clipboard } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
 import type { Recipe, RecipeIngredient, Product } from '../../../types/types';
 import RecipeForm from './RecipeForm';
@@ -21,6 +21,7 @@ export default function RecipeManagement() {
   const [expandedRecipes, setExpandedRecipes] = useState<Set<string>>(new Set());
   const [justCopied, setJustCopied] = useState<string | null>(null);
   const [justCopiedIngredients, setJustCopiedIngredients] = useState<string | null>(null);
+  const [justPastedIngredients, setJustPastedIngredients] = useState<string | null>(null);
   const [showIngredientImport, setShowIngredientImport] = useState(false);
   const [showProductImport, setShowProductImport] = useState(false);
   const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
@@ -29,6 +30,9 @@ export default function RecipeManagement() {
   const [selectedRecipes, setSelectedRecipes] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [showPasteConfirmation, setShowPasteConfirmation] = useState(false);
+  const [targetRecipeForPaste, setTargetRecipeForPaste] = useState<Recipe | null>(null);
+  const [copiedIngredientsData, setCopiedIngredientsData] = useState<string>('');
 
   const handleSubmit = async (data: Omit<Recipe, 'id'>) => {
     try {
@@ -78,12 +82,84 @@ export default function RecipeManagement() {
       ).join('\n');
 
       navigator.clipboard.writeText(ingredientText);
+      setCopiedIngredientsData(ingredientText);
       
       setJustCopiedIngredients(recipe.id);
       setTimeout(() => setJustCopiedIngredients(null), 2000);
     } catch (err) {
       console.error('Error copying ingredients:', err);
       alert('Failed to copy ingredients to clipboard');
+    }
+  };
+
+  const handlePasteIngredients = (recipe: Recipe) => {
+    setTargetRecipeForPaste(recipe);
+    
+    // If we have copied ingredient data in state, use that
+    if (copiedIngredientsData) {
+      setShowPasteConfirmation(true);
+    } else {
+      // Otherwise, try to read from clipboard
+      navigator.clipboard.readText()
+        .then(text => {
+          if (text && text.includes('|')) {
+            setCopiedIngredientsData(text);
+            setShowPasteConfirmation(true);
+          } else {
+            alert('No valid ingredient data found in clipboard. Please copy ingredients first.');
+          }
+        })
+        .catch(err => {
+          console.error('Error reading from clipboard:', err);
+          alert('Unable to read from clipboard. Please ensure you have permission to access the clipboard.');
+        });
+    }
+  };
+
+  const confirmPasteIngredients = async () => {
+    if (!targetRecipeForPaste || !copiedIngredientsData) return;
+    
+    try {
+      // Parse the copied ingredients
+      const lines = copiedIngredientsData.trim().split('\n');
+      const newIngredients: RecipeIngredient[] = [];
+      
+      lines.forEach(line => {
+        const [ingredientId, amount] = line.split('|');
+        if (ingredientId && amount) {
+          newIngredients.push({
+            ingredientId,
+            amount: parseFloat(amount)
+          });
+        }
+      });
+      
+      if (newIngredients.length === 0) {
+        alert('No valid ingredients found in copied data');
+        return;
+      }
+      
+      // Merge with existing ingredients, replacing any with the same ID
+      const existingIds = new Set(targetRecipeForPaste.ingredients.map(i => i.ingredientId));
+      const uniqueNewIngredients = newIngredients.filter(i => !existingIds.has(i.ingredientId));
+      
+      // Get all ingredients
+      const updatedIngredients = [...targetRecipeForPaste.ingredients, ...uniqueNewIngredients];
+      
+      // Update the recipe
+      await updateRecipe(targetRecipeForPaste.id, {
+        ...targetRecipeForPaste,
+        ingredients: updatedIngredients
+      });
+      
+      setJustPastedIngredients(targetRecipeForPaste.id);
+      setTimeout(() => setJustPastedIngredients(null), 2000);
+      
+      setShowPasteConfirmation(false);
+      setTargetRecipeForPaste(null);
+    } catch (err) {
+      console.error('Error pasting ingredients:', err);
+      alert('Failed to paste ingredients. Please try again.');
     }
   };
 
@@ -506,6 +582,13 @@ export default function RecipeManagement() {
                                   {justCopiedIngredients === recipe.id ? 'Ingredients Copied!' : 'Copy Ingredients'}
                                 </button>
                                 <button
+                                  onClick={() => handlePasteIngredients(recipe)}
+                                  className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                                >
+                                  <Clipboard className="w-4 h-4" />
+                                  {justPastedIngredients === recipe.id ? 'Ingredients Pasted!' : 'Paste Ingredients'}
+                                </button>
+                                <button
                                   onClick={() => handleCopyRecipe(recipe)}
                                   className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
                                 >
@@ -565,6 +648,18 @@ export default function RecipeManagement() {
         message={`Are you sure you want to delete the recipe "${recipeToDelete?.name}"? This action cannot be undone.`}
         onConfirm={() => recipeToDelete && handleDeleteRecipe(recipeToDelete)}
         onCancel={() => setRecipeToDelete(null)}
+      />
+
+      {/* Confirmation Dialog for Paste Ingredients */}
+      <ConfirmDialog
+        isOpen={showPasteConfirmation}
+        title="Paste Ingredients"
+        message={`Are you sure you want to add the copied ingredients to "${targetRecipeForPaste?.name}"? This will add them to any existing ingredients.`}
+        onConfirm={confirmPasteIngredients}
+        onCancel={() => {
+          setShowPasteConfirmation(false);
+          setTargetRecipeForPaste(null);
+        }}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Eye, ArrowUpRight, Search, Filter, Calendar, Star, FileDown, Tag, ChevronDown, ChevronRight, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, ArrowUpRight, Calendar, Star, FileText, Check, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, ClipboardList, FileDown, Tag, Search, Filter } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../hooks/useAuth';
 import { RDProduct, RDCategory } from '../../types/rd-types';
@@ -8,218 +8,19 @@ import RDProductDetails from './RDProductDetails';
 import RDCategoryForm from './RDCategoryForm';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Beaker from '../common/BeakerIcon';
-
-// Local storage keys
-const RD_PRODUCTS_STORAGE_KEY = 'rd-products-data';
-const RD_CATEGORIES_STORAGE_KEY = 'rd-categories-data';
-
-// Demo data for initial implementation
-const DEMO_RD_PRODUCTS: RDProduct[] = [
-  {
-    id: 'rd-product-1',
-    name: 'Ruby Chocolate Pralines',
-    category: 'pralines',
-    description: 'Premium pralines made with ruby chocolate and raspberry filling',
-    unit: 'boxes',
-    minOrder: 5,
-    price: 32.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2025-01-10',
-    targetProductionDate: '2025-07-15',
-    status: 'development',
-    notes: 'Working on stabilizing the raspberry filling. Need to test shelf life at room temperature.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1548907040-4baa42d10919?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTh8fHJ1Ynklc2hvY29sYXRlfGVufDB8fDB8fHww&auto=format&fit=crop&w=800&q=60',
-      'https://images.unsplash.com/photo-1599599810769-bcde5a160d32?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8cmFzcGJlcnJ5fGVufDB8fDB8fHww&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 15.75,
-    createdBy: 'admin',
-    createdAt: '2025-01-10T09:30:00Z',
-    updatedAt: '2025-01-15T14:20:00Z'
-  },
-  {
-    id: 'rd-product-2',
-    name: 'Matcha Infused Truffles',
-    category: 'truffles',
-    description: 'White chocolate truffles with premium matcha powder',
-    unit: 'boxes',
-    minOrder: 4,
-    price: 28.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2025-02-05',
-    targetProductionDate: '2025-06-01',
-    status: 'testing',
-    notes: 'Trying different matcha suppliers for best color and flavor profile. Current batch has great color but slightly bitter aftertaste.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1581200005213-6fe9842cefd4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NHx8bWF0Y2hhJTIwY2hvY29sYXRlfGVufDB8fDB8fHww&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 12.50,
-    createdBy: 'admin',
-    createdAt: '2025-02-05T11:15:00Z',
-    updatedAt: '2025-02-20T16:45:00Z'
-  },
-  {
-    id: 'rd-product-3',
-    name: 'Salted Caramel Bonbons',
-    category: 'bonbon',
-    description: 'Milk chocolate bonbons with salted caramel filling',
-    unit: 'boxes',
-    minOrder: 6,
-    price: 34.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2024-12-15',
-    status: 'approved',
-    notes: 'Recipe finalized and approved for production. First batch scheduled for June production.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1582176604856-e824b4736522?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8Y2FyYW1lbCUyMGNob2NvbGF0ZXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 16.25,
-    createdBy: 'admin',
-    createdAt: '2024-12-15T10:00:00Z',
-    updatedAt: '2025-03-01T09:30:00Z'
-  },
-  {
-    id: 'rd-product-4',
-    name: 'Vegan Dark Chocolate Truffles',
-    category: 'rd-category-3', // Vegan Range
-    description: 'Plant-based dark chocolate truffles with coconut cream',
-    unit: 'boxes',
-    minOrder: 5,
-    price: 29.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2025-02-01',
-    targetProductionDate: '2025-05-15',
-    status: 'testing',
-    notes: 'Testing shelf stability and mouthfeel. Current version is promising but needs texture adjustment.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1608221386777-6c3c1a506291?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGRhcmslMjBjaG9jb2xhdGUlMjB0cnVmZmxlfGVufDB8fDB8fHww&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 14.25,
-    createdBy: 'admin',
-    createdAt: '2025-02-01T09:15:00Z',
-    updatedAt: '2025-02-10T16:30:00Z'
-  },
-  {
-    id: 'rd-product-5',
-    name: 'Sugar-Free Milk Chocolate',
-    category: 'rd-category-2', // Sugar-Free Products
-    description: 'Milk chocolate sweetened with stevia and erythritol',
-    unit: 'bars',
-    minOrder: 10,
-    price: 5.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2025-01-20',
-    targetProductionDate: '2025-04-10',
-    status: 'development',
-    notes: 'Working on improving the aftertaste from stevia. Latest batch shows promise with new stevia extract.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1614088685112-0b05b6f1e570?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8bWlsayUyMGNob2NvbGF0ZXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 3.25,
-    createdBy: 'admin',
-    createdAt: '2025-01-20T11:30:00Z',
-    updatedAt: '2025-01-28T13:45:00Z'
-  },
-  {
-    id: 'rd-product-6',
-    name: 'Experimental Whiskey Ganache',
-    category: 'rd-category-1', // Experimental Truffles
-    description: 'Dark chocolate ganache infused with single malt whiskey',
-    unit: 'boxes',
-    minOrder: 3,
-    price: 45.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2025-01-15',
-    targetProductionDate: '2025-03-30',
-    status: 'testing',
-    notes: 'Testing different whiskey varieties. Need to balance alcohol content for flavor vs shelf stability.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1620504600375-4793e85ecbd8?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8Y2hvY29sYXRlJTIwZ2FuYWNoZXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 22.30,
-    createdBy: 'admin',
-    createdAt: '2025-01-15T15:20:00Z',
-    updatedAt: '2025-02-05T10:10:00Z'
-  },
-  {
-    id: 'rd-product-7',
-    name: 'Ghana Single Origin 75%',
-    category: 'rd-category-4', // Single Origin Series
-    description: 'Dark chocolate from single estate Ghana cocoa beans',
-    unit: 'bars',
-    minOrder: 8,
-    price: 7.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2024-12-10',
-    targetProductionDate: '2025-04-01',
-    status: 'development',
-    notes: 'Experimenting with different roasting profiles to highlight fruity notes.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1589750602846-60c8c5ea3e56?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8ZGFyayUyMGNob2NvbGF0ZXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 4.50,
-    createdBy: 'admin',
-    createdAt: '2024-12-10T12:00:00Z',
-    updatedAt: '2025-01-05T09:30:00Z'
-  }
-];
-
-// Demo RD categories
-const DEMO_RD_CATEGORIES: RDCategory[] = [
-  {
-    id: 'rd-category-1',
-    name: 'Experimental Truffles',
-    description: 'New and innovative truffle flavors and designs',
-    status: 'active',
-    createdAt: '2025-01-15T10:30:00Z',
-    updatedAt: '2025-01-15T10:30:00Z',
-  },
-  {
-    id: 'rd-category-2',
-    name: 'Sugar-Free Products',
-    description: 'Chocolate products with no added sugars',
-    status: 'active',
-    createdAt: '2025-02-10T14:45:00Z',
-    updatedAt: '2025-02-12T09:15:00Z',
-  },
-  {
-    id: 'rd-category-3',
-    name: 'Vegan Range',
-    description: 'Plant-based chocolate products with no animal ingredients',
-    status: 'active',
-    createdAt: '2025-02-20T11:00:00Z',
-    updatedAt: '2025-02-20T11:00:00Z',
-  },
-  {
-    id: 'rd-category-4',
-    name: 'Single Origin Series',
-    description: 'Chocolates made from beans of specific regions',
-    status: 'active',
-    createdAt: '2024-12-05T16:30:00Z',
-    updatedAt: '2025-01-10T13:20:00Z',
-  }
-];
+import { 
+  loadRDProducts, 
+  loadRDCategories, 
+  addRDProduct, 
+  updateRDProduct, 
+  deleteRDProduct,
+  addRDCategory,
+  updateRDCategory,
+  deleteRDCategory,
+  scheduleRDProductForProduction,
+  dispatchRDDataChangedEvent,
+  addRDDataChangeListener
+} from '../../services/rdDataService';
 
 export default function RDProductManagement() {
   const { categories, ingredients } = useStore();
@@ -242,47 +43,30 @@ export default function RDProductManagement() {
   
   // Track expanded categories
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
-
-  // Load data from localStorage on component mount
+  
+  // Load data on component mount
   useEffect(() => {
-    // Load R&D categories
-    try {
-      const storedCategories = localStorage.getItem(RD_CATEGORIES_STORAGE_KEY);
-      if (storedCategories) {
-        setRdCategories(JSON.parse(storedCategories));
-      } else {
-        setRdCategories(DEMO_RD_CATEGORIES);
-        localStorage.setItem(RD_CATEGORIES_STORAGE_KEY, JSON.stringify(DEMO_RD_CATEGORIES));
-      }
-    } catch (error) {
-      console.error('Error loading R&D categories:', error);
-      setRdCategories(DEMO_RD_CATEGORIES);
-    }
-
-    // Load R&D products
-    try {
-      const storedProducts = localStorage.getItem(RD_PRODUCTS_STORAGE_KEY);
-      if (storedProducts) {
-        setRdProducts(JSON.parse(storedProducts));
-      } else {
-        setRdProducts(DEMO_RD_PRODUCTS);
-        localStorage.setItem(RD_PRODUCTS_STORAGE_KEY, JSON.stringify(DEMO_RD_PRODUCTS));
-      }
-    } catch (error) {
-      console.error('Error loading R&D products:', error);
-      setRdProducts(DEMO_RD_PRODUCTS);
-    }
+    loadData();
+    
+    // Listen for changes from other components
+    const unsubscribe = addRDDataChangeListener(loadData);
+    
+    return unsubscribe;
   }, []);
 
-  // Save categories to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem(RD_CATEGORIES_STORAGE_KEY, JSON.stringify(rdCategories));
-  }, [rdCategories]);
-
-  // Save products to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem(RD_PRODUCTS_STORAGE_KEY, JSON.stringify(rdProducts));
-  }, [rdProducts]);
+  const loadData = () => {
+    try {
+      // Load products
+      const products = loadRDProducts();
+      setRdProducts(products);
+      
+      // Load categories
+      const categories = loadRDCategories();
+      setRdCategories(categories);
+    } catch (error) {
+      console.error('Error loading R&D data:', error);
+    }
+  };
 
   // Combined categories for filtering (includes both production and RD categories)
   const combinedCategoryOptions = {
@@ -361,41 +145,24 @@ export default function RDProductManagement() {
 
   const handleSubmitProduct = async (productData: Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => {
     try {
-      const now = new Date().toISOString();
-      
       if (editingProduct) {
         // Update existing product
-        const updatedProduct = {
-          ...editingProduct,
-          ...productData,
-          updatedAt: now
-        };
-        
-        setRdProducts(prev => prev.map(p => 
-          p.id === editingProduct.id ? updatedProduct : p
-        ));
-        
+        const updatedProduct = updateRDProduct(editingProduct.id, productData);
+        if (updatedProduct) {
+          setRdProducts(prev => prev.map(p => 
+            p.id === editingProduct.id ? updatedProduct : p
+          ));
+        }
         setEditingProduct(null);
       } else {
         // Create new product
-        const newProduct: RDProduct = {
-          ...productData,
-          id: `rd-product-${Date.now()}`,
-          createdAt: now,
-          updatedAt: now,
-          createdBy: user?.email || 'unknown'
-        };
-        
+        const newProduct = addRDProduct(productData);
         setRdProducts(prev => [...prev, newProduct]);
         setIsAddingProduct(false);
       }
       
-      // If this product has a targetProductionDate, we need to ensure it appears in the
-      // production schedule. For demo purposes, this just logs the synchronization
-      if (productData.targetProductionDate) {
-        console.log(`Syncing product ${productData.name} to production schedule for ${productData.targetProductionDate}`);
-        // In a real implementation, this would update the Production table
-      }
+      // Notify other components that data has changed
+      dispatchRDDataChangedEvent();
     } catch (error) {
       console.error('Error saving product:', error);
       alert('Failed to save product. Please try again.');
@@ -405,97 +172,33 @@ export default function RDProductManagement() {
   const handleDeleteProduct = () => {
     if (!deletingProduct) return;
     
+    deleteRDProduct(deletingProduct.id);
     setRdProducts(prev => prev.filter(p => p.id !== deletingProduct.id));
     setDeletingProduct(null);
-  };
-
-  const handleSubmitCategory = async (categoryData: Omit<RDCategory, 'id' | 'createdAt' | 'updatedAt'>) => {
-    try {
-      const now = new Date().toISOString();
-      
-      if (editingCategory) {
-        // Update existing category
-        const updatedCategory = {
-          ...editingCategory,
-          ...categoryData,
-          updatedAt: now
-        };
-        
-        setRdCategories(prev => prev.map(c => 
-          c.id === editingCategory.id ? updatedCategory : c
-        ));
-        
-        setEditingCategory(null);
-      } else {
-        // Create new category
-        const newCategory: RDCategory = {
-          ...categoryData,
-          id: `rd-category-${Date.now()}`,
-          createdAt: now,
-          updatedAt: now
-        };
-        
-        setRdCategories(prev => [...prev, newCategory]);
-        setIsAddingCategory(false);
-      }
-    } catch (error) {
-      console.error('Error saving category:', error);
-      alert('Failed to save category. Please try again.');
-    }
-  };
-
-  const handleDeleteCategory = () => {
-    if (!deletingCategory) return;
     
-    setRdCategories(prev => prev.filter(c => c.id !== deletingCategory.id));
-    setDeletingCategory(null);
+    // Notify other components that data has changed
+    dispatchRDDataChangedEvent();
   };
 
   const handleApproveForProduction = (product: RDProduct) => {
-    // Here we would normally send this to the production system
-    // For now, just change status to approved
-    const updatedProduct = {
-      ...product,
-      status: 'approved' as const,
-      updatedAt: new Date().toISOString()
-    };
+    const targetDate = product.targetProductionDate || new Date().toISOString().split('T')[0];
+    const updatedProduct = scheduleRDProductForProduction(product.id, targetDate);
     
-    setRdProducts(prev => prev.map(p => 
-      p.id === product.id ? updatedProduct : p
-    ));
+    if (updatedProduct) {
+      const statusUpdated = updateRDProduct(product.id, { status: 'approved' as const });
+      if (statusUpdated) {
+        setRdProducts(prev => prev.map(p => 
+          p.id === product.id ? statusUpdated : p
+        ));
+        setViewingProduct(statusUpdated);
+      }
+    }
     
-    setViewingProduct(updatedProduct);
-  };
-
-  const toggleCategoryStatus = (category: RDCategory) => {
-    const newStatus = category.status === 'active' ? 'inactive' : 'active';
-    const updatedCategory = {
-      ...category,
-      status: newStatus,
-      updatedAt: new Date().toISOString()
-    };
+    // Show confirmation to user
+    alert(`${product.name} is scheduled for production on ${new Date(targetDate).toLocaleDateString()}`);
     
-    setRdCategories(prev => prev.map(c => 
-      c.id === category.id ? updatedCategory : c
-    ));
-  };
-
-  const renderStatusBadge = (status: RDProduct['status']) => {
-    const statusConfig = {
-      planning: { bg: 'bg-blue-100', text: 'text-blue-800' },
-      development: { bg: 'bg-amber-100', text: 'text-amber-800' },
-      testing: { bg: 'bg-purple-100', text: 'text-purple-800' },
-      approved: { bg: 'bg-green-100', text: 'text-green-800' },
-      rejected: { bg: 'bg-red-100', text: 'text-red-800' }
-    };
-    
-    const config = statusConfig[status];
-    
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
+    // Notify other components that data has changed
+    dispatchRDDataChangedEvent();
   };
 
   return (
@@ -545,7 +248,12 @@ export default function RDProductManagement() {
           {isAddingCategory && (
             <div className="mb-4">
               <RDCategoryForm
-                onSubmit={handleSubmitCategory}
+                onSubmit={(categoryData) => {
+                  const newCategory = addRDCategory(categoryData);
+                  setRdCategories(prev => [...prev, newCategory]);
+                  setIsAddingCategory(false);
+                  dispatchRDDataChangedEvent();
+                }}
                 onCancel={() => setIsAddingCategory(false)}
               />
             </div>
@@ -555,7 +263,16 @@ export default function RDProductManagement() {
             <div className="mb-4">
               <RDCategoryForm
                 category={editingCategory}
-                onSubmit={handleSubmitCategory}
+                onSubmit={(categoryData) => {
+                  const updatedCategory = updateRDCategory(editingCategory.id, categoryData);
+                  if (updatedCategory) {
+                    setRdCategories(prev => prev.map(c => 
+                      c.id === editingCategory.id ? updatedCategory : c
+                    ));
+                  }
+                  setEditingCategory(null);
+                  dispatchRDDataChangedEvent();
+                }}
                 onCancel={() => setEditingCategory(null)}
               />
             </div>
@@ -583,12 +300,26 @@ export default function RDProductManagement() {
                     <p className="text-sm text-gray-600 mt-1 mb-2">
                       {category.description || 'No description'}
                     </p>
+                    
+                    <div className="text-xs text-gray-500">
+                      Created: {new Date(category.createdAt).toLocaleDateString()}
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex justify-end items-center gap-2 mt-3 pt-2 border-t">
                   <button
-                    onClick={() => toggleCategoryStatus(category)}
+                    onClick={() => {
+                      const updatedCategory = updateRDCategory(category.id, { 
+                        status: category.status === 'active' ? 'inactive' : 'active' 
+                      });
+                      if (updatedCategory) {
+                        setRdCategories(prev => prev.map(c => 
+                          c.id === category.id ? updatedCategory : c
+                        ));
+                        dispatchRDDataChangedEvent();
+                      }
+                    }}
                     className={`text-sm px-2 py-1 rounded ${
                       category.status === 'active'
                         ? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
@@ -775,7 +506,13 @@ export default function RDProductManagement() {
                                 <div>
                                   <div className="flex items-center gap-2 mb-1">
                                     <h4 className="font-medium">{product.name}</h4>
-                                    {renderStatusBadge(product.status)}
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                      ${product.status === 'approved' ? 'bg-green-100 text-green-800' : 
+                                      product.status === 'rejected' ? 'bg-red-100 text-red-800' : 
+                                      'bg-cyan-100 text-cyan-800'}`}
+                                    >
+                                      {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
+                                    </span>
                                   </div>
                                   
                                   {product.description && (
@@ -926,7 +663,15 @@ export default function RDProductManagement() {
         isOpen={!!deletingCategory}
         title="Delete Test Category"
         message={`Are you sure you want to delete "${deletingCategory?.name}"? This action cannot be undone.`}
-        onConfirm={handleDeleteCategory}
+        onConfirm={() => {
+          if (!deletingCategory) return;
+          const success = deleteRDCategory(deletingCategory.id);
+          if (success) {
+            setRdCategories(prev => prev.filter(c => c.id !== deletingCategory.id));
+            dispatchRDDataChangedEvent();
+          }
+          setDeletingCategory(null);
+        }}
         onCancel={() => setDeletingCategory(null)}
       />
     </div>

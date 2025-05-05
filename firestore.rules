@@ -107,5 +107,16 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update, delete: if false; // Logs are immutable
     }
+    
+    // R&D collections
+    match /rd_categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && hasPermission('manage_products');
+    }
+    
+    match /rd_products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && hasPermission('manage_products');
+    }
   }
 }

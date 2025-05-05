@@ -9,21 +9,15 @@ import ProductionCalendar from './ProductionCalendar';
 import { RDProduct } from '../../../types/rd-types';
 import { Order } from '../../../types/types';
 import Beaker from '../../common/BeakerIcon';
+import { 
+  loadRDProducts, 
+  updateRDProduct, 
+  scheduleRDProductForProduction,
+  dispatchRDDataChangedEvent,
+  addRDDataChangeListener
+} from '../../../services/rdDataService';
 
 type ViewMode = 'list' | 'calendar';
-
-// Function to get R&D products from localStorage
-const getRDProductsFromStorage = (): RDProduct[] => {
-  try {
-    const storedProducts = localStorage.getItem('rd-products-data');
-    if (storedProducts) {
-      return JSON.parse(storedProducts);
-    }
-  } catch (error) {
-    console.error('Failed to parse stored RD products:', error);
-  }
-  return [];
-};
 
 // Convert RD Product to Production Order format for calendar/list views
 const convertRDToProductionFormat = (rdProduct: RDProduct): Order => {
@@ -57,7 +51,6 @@ export default function ProductionSchedule() {
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [error, setError] = useState<string | null>(null);
   const [rdProducts, setRdProducts] = useState<RDProduct[]>([]);
-  const [isLoadingRdProducts, setIsLoadingRdProducts] = useState(false);
 
   const startDate = getInitialStartDate();
   const endDate = getDefaultEndDate(startDate);
@@ -71,27 +64,31 @@ export default function ProductionSchedule() {
     order.status !== 'completed'
   );
 
-  // Load R&D products from localStorage
+  // Load R&D products from localStorage and listen for changes
   useEffect(() => {
-    const loadRDProducts = async () => {
-      setIsLoadingRdProducts(true);
-      try {
-        // Get products from localStorage
-        const products = getRDProductsFromStorage();
-        
-        // Only keep products with target production dates
-        const productsWithDates = products.filter(p => p.targetProductionDate);
-        setRdProducts(productsWithDates);
-      } catch (err) {
-        console.error('Error loading R&D products:', err);
-        setError('Failed to load R&D products');
-      } finally {
-        setIsLoadingRdProducts(false);
-      }
-    };
-
-    loadRDProducts();
+    loadRDData();
+    
+    // Listen for changes from other components
+    const unsubscribe = addRDDataChangeListener(loadRDData);
+    
+    return unsubscribe;
   }, []);
+  
+  const loadRDData = () => {
+    try {
+      // Load products from localStorage
+      const allProducts = loadRDProducts();
+      
+      // Only keep products with target production dates AND not approved
+      const productsWithDates = allProducts.filter(p => 
+        p.targetProductionDate && p.status !== 'approved'
+      );
+      setRdProducts(productsWithDates);
+    } catch (err) {
+      console.error('Error loading R&D products:', err);
+      setError('Failed to load R&D products');
+    }
+  };
 
   // Convert RD Products to production orders for display
   const rdProductionOrders = rdProducts
@@ -109,19 +106,15 @@ export default function ProductionSchedule() {
       if (orderId.startsWith('rd-')) {
         // For R&D products, we update the localStorage entry
         const rdProductId = orderId.replace('rd-', '');
-        const updatedRdProducts = rdProducts.map(product => {
-          if (product.id === rdProductId) {
-            return {
-              ...product,
-              targetProductionDate: startDate,
-              updatedAt: new Date().toISOString()
-            };
-          }
-          return product;
-        });
+        const updatedProduct = scheduleRDProductForProduction(rdProductId, startDate);
         
-        setRdProducts(updatedRdProducts);
-        localStorage.setItem('rd-products-data', JSON.stringify(updatedRdProducts));
+        if (updatedProduct) {
+          setRdProducts(prev => prev.map(product => 
+            product.id === rdProductId ? updatedProduct : product
+          ));
+        }
+        
+        dispatchRDDataChangedEvent();
         return;
       }
       
@@ -148,19 +141,15 @@ export default function ProductionSchedule() {
       if (orderId.startsWith('rd-')) {
         // For R&D products, we update the status in localStorage
         const rdProductId = orderId.replace('rd-', '');
-        const updatedRdProducts = rdProducts.map(product => {
-          if (product.id === rdProductId) {
-            return {
-              ...product,
-              status: 'approved',
-              updatedAt: new Date().toISOString()
-            };
-          }
-          return product;
-        });
+        const updatedProduct = updateRDProduct(rdProductId, { status: 'approved' });
         
-        setRdProducts(updatedRdProducts);
-        localStorage.setItem('rd-products-data', JSON.stringify(updatedRdProducts));
+        if (updatedProduct) {
+          setRdProducts(prev => prev.map(product => 
+            product.id === rdProductId ? updatedProduct : product
+          ));
+        }
+        
+        dispatchRDDataChangedEvent();
         return;
       }
       
@@ -188,19 +177,13 @@ export default function ProductionSchedule() {
       if (orderId.startsWith('rd-')) {
         // For R&D products, we remove the target production date
         const rdProductId = orderId.replace('rd-', '');
-        const updatedRdProducts = rdProducts.map(product => {
-          if (product.id === rdProductId) {
-            const { targetProductionDate, ...rest } = product;
-            return {
-              ...rest,
-              updatedAt: new Date().toISOString()
-            };
-          }
-          return product;
-        });
+        const updatedProduct = updateRDProduct(rdProductId, { targetProductionDate: undefined });
         
-        setRdProducts(updatedRdProducts);
-        localStorage.setItem('rd-products-data', JSON.stringify(updatedRdProducts));
+        if (updatedProduct) {
+          setRdProducts(prev => prev.filter(p => p.id !== rdProductId));
+        }
+        
+        dispatchRDDataChangedEvent();
         return;
       }
       
