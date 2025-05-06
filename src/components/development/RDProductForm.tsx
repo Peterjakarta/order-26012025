@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Upload, Star, Trash2, Plus, X, Check, AlertCircle, FileText, ClipboardList, PlusCircle, Image } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../hooks/useAuth';
-import { RDProduct, RDCategory } from '../../types/rd-types';
+import { RDProduct, RDCategory, TestResult } from '../../types/rd-types';
 import Beaker from '../common/BeakerIcon';
 
 interface RecipeIngredient {
@@ -49,6 +49,22 @@ export default function RDProductForm({
   const [selectedIngredient, setSelectedIngredient] = useState('');
   const [ingredientAmount, setIngredientAmount] = useState('');
   const [activeTab, setActiveTab] = useState<'url' | 'upload'>('upload'); // Default to upload tab
+
+  // Test results state
+  const [testResults, setTestResults] = useState<TestResult[]>(
+    product?.testResults || []
+  );
+  const [newTestResult, setNewTestResult] = useState<{
+    date: string;
+    tester: string;
+    result: 'pass' | 'fail' | 'pending';
+    comments: string;
+  }>({
+    date: new Date().toISOString().split('T')[0],
+    tester: user?.email || '',
+    result: 'pending',
+    comments: ''
+  });
 
   // Autofocus the first input field when the form appears
   useEffect(() => {
@@ -206,6 +222,40 @@ export default function RDProductForm({
     setRecipeIngredients(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Add test result
+  const addTestResult = () => {
+    if (!newTestResult.date || !newTestResult.tester || !newTestResult.comments) {
+      setError('Please fill in all test result fields');
+      return;
+    }
+
+    setTestResults(prev => [
+      ...prev,
+      {
+        id: `test-${Date.now()}`,
+        date: newTestResult.date,
+        tester: newTestResult.tester,
+        result: newTestResult.result,
+        comments: newTestResult.comments
+      }
+    ]);
+
+    // Reset form
+    setNewTestResult({
+      date: new Date().toISOString().split('T')[0],
+      tester: user?.email || '',
+      result: 'pending',
+      comments: ''
+    });
+    
+    setError(null);
+  };
+
+  // Remove test result
+  const removeTestResult = (index: number) => {
+    setTestResults(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -259,7 +309,8 @@ export default function RDProductForm({
         notes: notes || undefined,
         imageUrls: images,
         costEstimate,
-        recipeIngredients: recipeIngredients
+        recipeIngredients: recipeIngredients,
+        testResults: testResults
       };
 
       await onSubmit(productData);
@@ -604,6 +655,164 @@ export default function RDProductForm({
           ) : (
             <div className="text-center py-6 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-500">No ingredients added yet</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Test Results Section */}
+      <div className="border-b pb-6">
+        <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+          <ClipboardList className="w-5 h-5 text-cyan-600" />
+          Test Results
+        </h3>
+        
+        <div className="space-y-4">
+          {/* Add Test Result Form */}
+          <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+            <h4 className="font-medium">Add New Test Result</h4>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="testDate" className="block text-sm font-medium text-gray-700 mb-1">
+                  Test Date
+                </label>
+                <input
+                  type="date"
+                  id="testDate"
+                  value={newTestResult.date}
+                  onChange={(e) => setNewTestResult({...newTestResult, date: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="tester" className="block text-sm font-medium text-gray-700 mb-1">
+                  Tester Name
+                </label>
+                <input
+                  type="text"
+                  id="tester"
+                  value={newTestResult.tester}
+                  onChange={(e) => setNewTestResult({...newTestResult, tester: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                  placeholder="Name of the tester"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="testResult" className="block text-sm font-medium text-gray-700 mb-1">
+                  Test Result
+                </label>
+                <select
+                  id="testResult"
+                  value={newTestResult.result}
+                  onChange={(e) => setNewTestResult({...newTestResult, result: e.target.value as 'pass' | 'fail' | 'pending'})}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                >
+                  <option value="pending">Pending</option>
+                  <option value="pass">Pass</option>
+                  <option value="fail">Fail</option>
+                </select>
+              </div>
+              
+              <div className="sm:col-span-2">
+                <label htmlFor="testComments" className="block text-sm font-medium text-gray-700 mb-1">
+                  Comments
+                </label>
+                <textarea
+                  id="testComments"
+                  value={newTestResult.comments}
+                  onChange={(e) => setNewTestResult({...newTestResult, comments: e.target.value})}
+                  rows={2}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                  placeholder="Test observations and results..."
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={addTestResult}
+                className="flex items-center gap-2 px-3 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
+              >
+                <Plus className="w-4 h-4" />
+                Add Test Result
+              </button>
+            </div>
+          </div>
+          
+          {/* Test Results List */}
+          {testResults.length > 0 ? (
+            <div className="border rounded-lg overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tester
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Result
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Comments
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {testResults.map((test, index) => (
+                    <tr key={test.id} className={`hover:bg-gray-50 ${
+                      test.result === 'pass' 
+                        ? 'bg-green-50' 
+                        : test.result === 'fail' 
+                          ? 'bg-red-50' 
+                          : ''
+                    }`}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {new Date(test.date).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{test.tester}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          test.result === 'pass' 
+                            ? 'bg-green-100 text-green-800' 
+                            : test.result === 'fail' 
+                              ? 'bg-red-100 text-red-800' 
+                              : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {test.result.charAt(0).toUpperCase() + test.result.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900">{test.comments}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button 
+                          type="button" 
+                          onClick={() => removeTestResult(index)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-6 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-500">No test results added yet</p>
             </div>
           )}
         </div>

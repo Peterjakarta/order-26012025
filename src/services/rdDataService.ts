@@ -400,6 +400,18 @@ export function getScheduledRDProducts(): RDProduct[] {
   return products.filter(p => p.targetProductionDate && p.status !== 'approved');
 }
 
+// Move RD product to production system
+export function moveRDProductToProduction(id: string): RDProduct | null {
+  // This function is now handled in the UI component that can directly use
+  // the Store context to add products and recipes
+  
+  // Mark the R&D product as moved to production
+  return updateRDProduct(id, { 
+    status: 'approved',
+    updatedAt: new Date().toISOString()
+  });
+}
+
 // Dispatch a global event when R&D data changes
 export function dispatchRDDataChangedEvent(): void {
   window.dispatchEvent(new CustomEvent('rd-data-changed'));

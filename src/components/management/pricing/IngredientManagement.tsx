@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Edit2, Trash2, Upload, Copy, Check, Package2, FolderEdit, FileSpreadsheet } from 'lucide-react';
+import { Plus, Edit2, Trash2, Upload, Copy, Check, Package2, FolderEdit, FileSpreadsheet, Search } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
 import { auth, db } from '../../../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -23,6 +23,7 @@ export default function IngredientManagement() {
   const [savingCategories, setSavingCategories] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const loadCategories = useCallback(async () => {
     try {
@@ -141,6 +142,14 @@ export default function IngredientManagement() {
       alert('Failed to export ingredients. Please try again.');
     }
   };
+  
+  // Filter ingredients based on search term
+  const filteredIngredients = ingredients.filter(ingredient => 
+    searchTerm === '' || 
+    ingredient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    ingredient.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    ingredient.packageUnit.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -177,6 +186,29 @@ export default function IngredientManagement() {
           </button>
         </div>
       </div>
+      
+      {/* Search Box */}
+      <div className="relative max-w-md">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search ingredients by name, unit, or package..."
+          className="w-full pl-10 pr-4 py-2 border rounded-md shadow-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+        />
+        <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        {searchTerm && (
+          <button
+            onClick={() => setSearchTerm('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <span className="sr-only">Clear search</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+          </button>
+        )}
+      </div>
 
       {showBulkImport && (
         <BulkIngredientImport
@@ -207,117 +239,127 @@ export default function IngredientManagement() {
       )}
 
       <div className="bg-white shadow-sm rounded-lg divide-y">
-        {ingredients.map(ingredient => (
-          <div key={ingredient.id}>
-            {editingIngredient?.id === ingredient.id ? ( 
-              <div className="p-4">
-                <IngredientForm
-                  ingredient={ingredient}
-                  onSubmit={handleSubmit}
-                  onCancel={() => setEditingIngredient(null)}
-                />
-              </div>
-            ) : (
-              <div className="p-4 flex justify-between items-center hover:bg-gray-50">
-                <div>
-                  <h3 className="font-medium">{ingredient.name}</h3>
-                  <div className="mt-1 space-y-1">
-                    <p className="text-sm text-gray-600">
-                      {formatIDR(ingredient.price)} per {ingredient.packageSize} {ingredient.packageUnit}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Used in: {ingredient.unit}
-                    </p>
-                    <div className="relative inline-block">
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600">Categories:</label>
-                        {editingCategoryId === ingredient.id ? (
-                          <div className="flex items-center gap-2">
-                            <select
-                              className="text-sm border rounded-md px-2 py-1 pr-8 bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                              value={selectedCategories[ingredient.id] || []}
-                              onChange={(e) => {
-                                const selected = Array.from(e.target.selectedOptions).map(option => option.value);
-                                handleCategoryChange(ingredient.id, selected);
-                              }}
-                              multiple
-                              size={4}
-                              onClick={(e) => e.stopPropagation()}
-                              disabled={savingCategories.has(ingredient.id)}
-                            >
-                              {stockCategories.map(category => (
-                                <option 
-                                  key={category.id} 
-                                  value={category.id}
-                                  className="py-1 px-2 hover:bg-gray-100"
-                                >
-                                  {category.name}
-                                </option>
-                              ))}
-                            </select>
-                            {savingCategories.has(ingredient.id) && (
-                              <span className="text-xs text-gray-500">Saving...</span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">
-                              {selectedCategories[ingredient.id]?.length
-                                ? stockCategories
-                                    .filter(c => selectedCategories[ingredient.id]?.includes(c.id))
-                                    .map(c => c.name)
-                                    .join(', ')
-                                : 'None'}
-                            </span>
-                            <button
-                              onClick={() => setEditingCategoryId(ingredient.id)}
-                              className="p-1 hover:bg-gray-100 rounded-full"
-                            >
-                              <FolderEdit className="w-4 h-4 text-gray-400" />
-                            </button>
-                          </div>
-                        )}
+        {filteredIngredients.length > 0 ? (
+          filteredIngredients.map(ingredient => (
+            <div key={ingredient.id}>
+              {editingIngredient?.id === ingredient.id ? ( 
+                <div className="p-4">
+                  <IngredientForm
+                    ingredient={ingredient}
+                    onSubmit={handleSubmit}
+                    onCancel={() => setEditingIngredient(null)}
+                  />
+                </div>
+              ) : (
+                <div className="p-4 flex justify-between items-center hover:bg-gray-50">
+                  <div>
+                    <h3 className="font-medium">{ingredient.name}</h3>
+                    <div className="mt-1 space-y-1">
+                      <p className="text-sm text-gray-600">
+                        {formatIDR(ingredient.price)} per {ingredient.packageSize} {ingredient.packageUnit}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Used in: {ingredient.unit}
+                      </p>
+                      <div className="relative inline-block">
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm text-gray-600">Categories:</label>
+                          {editingCategoryId === ingredient.id ? (
+                            <div className="flex items-center gap-2">
+                              <select
+                                className="text-sm border rounded-md px-2 py-1 pr-8 bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                                value={selectedCategories[ingredient.id] || []}
+                                onChange={(e) => {
+                                  const selected = Array.from(e.target.selectedOptions).map(option => option.value);
+                                  handleCategoryChange(ingredient.id, selected);
+                                }}
+                                multiple
+                                size={4}
+                                onClick={(e) => e.stopPropagation()}
+                                disabled={savingCategories.has(ingredient.id)}
+                              >
+                                {stockCategories.map(category => (
+                                  <option 
+                                    key={category.id} 
+                                    value={category.id}
+                                    className="py-1 px-2 hover:bg-gray-100"
+                                  >
+                                    {category.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {savingCategories.has(ingredient.id) && (
+                                <span className="text-xs text-gray-500">Saving...</span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-600">
+                                {selectedCategories[ingredient.id]?.length
+                                  ? stockCategories
+                                      .filter(c => selectedCategories[ingredient.id]?.includes(c.id))
+                                      .map(c => c.name)
+                                      .join(', ')
+                                  : 'None'}
+                              </span>
+                              <button
+                                onClick={() => setEditingCategoryId(ingredient.id)}
+                                className="p-1 hover:bg-gray-100 rounded-full"
+                              >
+                                <FolderEdit className="w-4 h-4 text-gray-400" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleCopyIngredient(ingredient)}
+                      className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                      title="Copy ingredient"
+                    >
+                      {copiedId === ingredient.id ? (
+                        <>
+                          <Check className="w-4 h-4 text-green-500" />
+                          <span className="text-green-500">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4" />
+                          Copy
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setEditingIngredient(ingredient)}
+                      className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => deleteIngredient(ingredient.id)}
+                      className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleCopyIngredient(ingredient)}
-                    className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-                    title="Copy ingredient"
-                  >
-                    {copiedId === ingredient.id ? (
-                      <>
-                        <Check className="w-4 h-4 text-green-500" />
-                        <span className="text-green-500">Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" />
-                        Copy
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setEditingIngredient(ingredient)}
-                    className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => deleteIngredient(ingredient.id)}
-                    className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
-                </div>
-              </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="p-8 text-center text-gray-500">
+            {searchTerm ? (
+              <p>No ingredients match your search term "{searchTerm}"</p>
+            ) : (
+              <p>No ingredients found. Add your first ingredient to get started.</p>
             )}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

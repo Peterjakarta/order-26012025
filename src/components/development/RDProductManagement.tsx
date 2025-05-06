@@ -8,6 +8,7 @@ import RDProductDetails from './RDProductDetails';
 import RDCategoryForm from './RDCategoryForm';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Beaker from '../common/BeakerIcon';
+import MoveToProductionDialog from './MoveToProductionDialog';
 import { 
   loadRDProducts, 
   loadRDCategories, 
@@ -23,7 +24,7 @@ import {
 } from '../../services/rdDataService';
 
 export default function RDProductManagement() {
-  const { categories, ingredients } = useStore();
+  const { categories, ingredients, products, recipes } = useStore();
   const { user } = useAuth();
   const [rdProducts, setRdProducts] = useState<RDProduct[]>([]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
@@ -33,6 +34,7 @@ export default function RDProductManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RDProduct['status'] | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [movingToProduction, setMovingToProduction] = useState<RDProduct | null>(null);
   
   // Category management state
   const [rdCategories, setRdCategories] = useState<RDCategory[]>([]);
@@ -44,6 +46,9 @@ export default function RDProductManagement() {
   // Track expanded categories
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   
+  // Track already migrated products
+  const [migratedProductIds, setMigratedProductIds] = useState<Set<string>>(new Set());
+  
   // Load data on component mount
   useEffect(() => {
     loadData();
@@ -53,6 +58,27 @@ export default function RDProductManagement() {
     
     return unsubscribe;
   }, []);
+
+  // Check which products have been migrated to production
+  useEffect(() => {
+    const migrated = new Set<string>();
+    
+    rdProducts.forEach(product => {
+      // Check if there's a product with a similar name in production
+      const similarProduct = products.find(p => 
+        p.name.toLowerCase() === product.name.toLowerCase()
+      );
+      
+      // Or check for recipe created for this product
+      const relatedRecipe = recipes.some(r => r.notes?.includes(`Development ID: ${product.id}`));
+      
+      if (similarProduct || relatedRecipe) {
+        migrated.add(product.id);
+      }
+    });
+    
+    setMigratedProductIds(migrated);
+  }, [rdProducts, products, recipes]);
 
   const loadData = () => {
     try {
@@ -79,9 +105,14 @@ export default function RDProductManagement() {
 
   // Filter products based on search term, status, and category
   const filteredProducts = rdProducts.filter(product => {
+    // Filter by search term
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (product.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Filter by selected status
     const matchesStatus = statusFilter === 'all' || product.status === statusFilter;
+    
+    // Filter by selected category
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
     
     return matchesSearch && matchesStatus && matchesCategory;
@@ -143,11 +174,11 @@ export default function RDProductManagement() {
     });
   };
 
-  const handleSubmitProduct = async (productData: Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => {
+  const handleSubmitProduct = async (data: Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => {
     try {
       if (editingProduct) {
         // Update existing product
-        const updatedProduct = updateRDProduct(editingProduct.id, productData);
+        const updatedProduct = updateRDProduct(editingProduct.id, data);
         if (updatedProduct) {
           setRdProducts(prev => prev.map(p => 
             p.id === editingProduct.id ? updatedProduct : p
@@ -156,7 +187,7 @@ export default function RDProductManagement() {
         setEditingProduct(null);
       } else {
         // Create new product
-        const newProduct = addRDProduct(productData);
+        const newProduct = addRDProduct(data);
         setRdProducts(prev => [...prev, newProduct]);
         setIsAddingProduct(false);
       }
@@ -199,6 +230,15 @@ export default function RDProductManagement() {
     
     // Notify other components that data has changed
     dispatchRDDataChangedEvent();
+  };
+
+  const handleMoveToProduction = (product: RDProduct) => {
+    setMovingToProduction(product);
+  };
+
+  const handleProductionSuccess = () => {
+    // Reload data after successful migration
+    loadData();
   };
 
   return (
@@ -282,14 +322,14 @@ export default function RDProductManagement() {
             {rdCategories.map(category => (
               <div 
                 key={category.id}
-                className={`bg-white rounded-lg shadow-sm border p-4 ${
+                className={`bg-white rounded-lg shadow-sm border p-5 ${
                   category.status === 'active' ? 'border-cyan-200' : 'border-gray-200 opacity-70'
                 }`}
               >
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-2">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-medium">{category.name}</h3>
+                      <h3 className="font-medium text-lg">{category.name}</h3>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         category.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                       }`}>
@@ -297,7 +337,7 @@ export default function RDProductManagement() {
                       </span>
                     </div>
                     
-                    <p className="text-sm text-gray-600 mt-1 mb-2">
+                    <p className="text-sm text-gray-600 mt-2 mb-4">
                       {category.description || 'No description'}
                     </p>
                     
@@ -307,20 +347,18 @@ export default function RDProductManagement() {
                   </div>
                 </div>
 
-                <div className="flex justify-end items-center gap-2 mt-3 pt-2 border-t">
+                <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t">
                   <button
                     onClick={() => {
-                      const updatedCategory = updateRDCategory(category.id, { 
+                      updateRDCategory(category.id, { 
                         status: category.status === 'active' ? 'inactive' : 'active' 
                       });
-                      if (updatedCategory) {
-                        setRdCategories(prev => prev.map(c => 
-                          c.id === category.id ? updatedCategory : c
-                        ));
-                        dispatchRDDataChangedEvent();
-                      }
+                      setRdCategories(prev => prev.map(c => 
+                        c.id === category.id ? {...c, status: c.status === 'active' ? 'inactive' : 'active'} : c
+                      ));
+                      dispatchRDDataChangedEvent();
                     }}
-                    className={`text-sm px-2 py-1 rounded ${
+                    className={`text-sm px-3 py-1.5 rounded-md ${
                       category.status === 'active'
                         ? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
                         : 'text-green-700 bg-green-50 hover:bg-green-100'
@@ -330,14 +368,14 @@ export default function RDProductManagement() {
                   </button>
                   <button
                     onClick={() => setEditingCategory(category)}
-                    className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
                     title="Edit category"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setDeletingCategory(category)}
-                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full"
+                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full"
                     title="Delete category"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -462,21 +500,23 @@ export default function RDProductManagement() {
               <div key={categoryId} className="bg-white rounded-lg shadow-sm border overflow-hidden">
                 {/* Category Header */}
                 <div 
-                  className="p-4 cursor-pointer hover:bg-gray-50 flex justify-between items-center"
+                  className="p-4 cursor-pointer hover:bg-gray-50"
                   onClick={() => toggleCategory(categoryId)}
                 >
-                  <div className="flex items-center gap-2">
-                    {isExpanded ? (
-                      <ChevronDown className="w-5 h-5 text-gray-500" />
-                    ) : (
-                      <ChevronRight className="w-5 h-5 text-gray-500" />
-                    )}
-                    <h3 className="font-medium">{categoryName}</h3>
-                    <span className="text-sm text-gray-500">({products.length} products)</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    {/* Category stats/indicators could go here */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-gray-500" />
+                      )}
+                      <h3 className="font-medium">{categoryName}</h3>
+                      <span className="text-sm text-gray-500">({products.length} products)</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {/* Category stats/indicators could go here */}
+                    </div>
                   </div>
                 </div>
                 
@@ -591,16 +631,23 @@ export default function RDProductManagement() {
                                 </div>
                                 
                                 {product.status === 'approved' && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      alert('Move to production functionality coming soon');
-                                    }}
-                                    className="flex items-center gap-1 text-xs font-medium px-2 py-1 bg-green-100 text-green-800 rounded-md hover:bg-green-200"
-                                  >
-                                    <ArrowUpRight className="w-3.5 h-3.5" />
-                                    To Production
-                                  </button>
+                                  migratedProductIds.has(product.id) ? (
+                                    <span className="flex items-center gap-1 text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded-md">
+                                      <Check className="w-3.5 h-3.5" />
+                                      ALREADY MIGRATED
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleMoveToProduction(product);
+                                      }}
+                                      className="flex items-center gap-1 text-xs font-medium px-2 py-1 bg-green-100 text-green-800 rounded-md hover:bg-green-200"
+                                    >
+                                      <ArrowUpRight className="w-3.5 h-3.5" />
+                                      To Production
+                                    </button>
+                                  )
                                 )}
                                 {product.status !== 'approved' && product.status !== 'rejected' && (
                                   <button
@@ -674,6 +721,15 @@ export default function RDProductManagement() {
         }}
         onCancel={() => setDeletingCategory(null)}
       />
+
+      {/* Move to production dialog */}
+      {movingToProduction && (
+        <MoveToProductionDialog 
+          product={movingToProduction}
+          onClose={() => setMovingToProduction(null)}
+          onSuccess={handleProductionSuccess}
+        />
+      )}
     </div>
   );
 }
