@@ -25,3 +25,35 @@ export function calculateIngredientUsage(recipes: Recipe[], quantity: number): R
 
   return usage;
 }
+
+// Calculate selling price with margin and optional tax
+export function calculateSellPrice(
+  cost: number, 
+  marginPercentage: number = 30, 
+  includeTax: boolean = false,
+  taxPercentage: number = 10
+): number {
+  // Calculate base price with margin
+  // Formula: cost / (1 - marginPercentage/100)
+  const basePrice = cost / (1 - (marginPercentage / 100));
+  
+  // Apply tax if requested
+  if (includeTax) {
+    return basePrice * (1 + (taxPercentage / 100));
+  }
+  
+  return basePrice;
+}
+
+// Calculate total production cost including reject percentage
+export function calculateTotalProductionCost(
+  baseCost: number,
+  laborCost: number = 0,
+  packagingCost: number = 0,
+  equipmentCost: number = 0,
+  rejectPercentage: number = 0
+): number {
+  const productionCost = baseCost + laborCost + packagingCost + equipmentCost;
+  const rejectCost = productionCost * (rejectPercentage / 100);
+  return productionCost + rejectCost;
+}

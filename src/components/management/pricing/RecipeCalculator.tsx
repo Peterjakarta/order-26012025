@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, FileDown, FileSpreadsheet, Copy, Check } from 'lucide-react';
 import type { Recipe } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
-import { calculateRecipeCost } from '../../../utils/recipeCalculations';
+import { calculateRecipeCost, calculateTotalProductionCost, calculateSellPrice } from '../../../utils/recipeCalculations';
 import { formatIDR } from '../../../utils/currencyFormatter';
 import { generateExcelData, saveWorkbook } from '../../../utils/excelGenerator';
 import { generateRecipePDF } from '../../../utils/pdfGenerator';
@@ -17,15 +17,38 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
   const [quantity, setQuantity] = useState(recipe.yield);
   const [copied, setCopied] = useState(false);
   
+  // Calculate base cost (ingredients only)
   const baseCost = calculateRecipeCost(recipe, ingredients);
-  const scaledCost = (baseCost / recipe.yield) * quantity;
+  const scaledBaseCost = (baseCost / recipe.yield) * quantity;
   
+  // Additional costs
   const laborCost = recipe.laborCost ? (recipe.laborCost / recipe.yield) * quantity : 0;
   const packagingCost = recipe.packagingCost ? (recipe.packagingCost / recipe.yield) * quantity : 0;
+  const equipmentCost = recipe.equipmentCost ? (recipe.equipmentCost / recipe.yield) * quantity : 0;
   
-  const totalCost = scaledCost + laborCost + packagingCost;
-  const costPerUnit = totalCost / quantity;
-
+  // Production cost (before reject adjustment)
+  const productionCost = scaledBaseCost + laborCost + packagingCost + equipmentCost;
+  
+  // Reject cost (if applicable)
+  const rejectPercentage = recipe.rejectPercentage || 0;
+  const rejectCost = productionCost * (rejectPercentage / 100);
+  
+  // Total production cost with reject adjustment
+  const totalProductionCost = productionCost + rejectCost;
+  
+  // Cost per unit
+  const costPerUnit = totalProductionCost / quantity;
+  
+  // Selling price calculation
+  const marginPercentage = recipe.marginPercentage || 30; // Default 30%
+  const taxPercentage = recipe.taxPercentage || 10; // Default 10%
+  
+  // Calculate selling price without tax
+  const baseSellingPrice = calculateSellPrice(costPerUnit, marginPercentage, false);
+  
+  // Calculate selling price with tax
+  const sellingPriceWithTax = calculateSellPrice(costPerUnit, marginPercentage, true, taxPercentage);
+  
   // Calculate total weight and find the common unit
   const { totalWeight, commonUnit } = recipe.ingredients.reduce((acc, item) => {
     const ingredient = ingredients.find(i => i.id === item.ingredientId);
@@ -82,12 +105,21 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
       [''],
       commonUnit ? ['Total Weight:', `${totalWeight.toFixed(2)} ${commonUnit}`] : [],
       [''],
-      ['Costs'],
-      ['Base Cost:', formatIDR(scaledCost)],
+      ['Production Costs'],
+      ['Base Ingredient Cost:', formatIDR(scaledBaseCost)],
       ['Labor Cost:', formatIDR(laborCost)],
       ['Packaging Cost:', formatIDR(packagingCost)],
-      ['Total Cost:', formatIDR(totalCost)],
-      ['Cost per Unit:', formatIDR(costPerUnit)]
+      ['Equipment Cost:', formatIDR(equipmentCost)],
+      [`Reject Cost (${rejectPercentage}%):`, formatIDR(rejectCost)],
+      ['Total Production Cost:', formatIDR(totalProductionCost)],
+      ['Cost per Unit:', formatIDR(costPerUnit)],
+      [''],
+      ['Pricing'],
+      [`Margin (${marginPercentage}%):`, formatIDR(baseSellingPrice - costPerUnit)],
+      ['Selling Price (before tax):', formatIDR(baseSellingPrice)],
+      [`Tax (${taxPercentage}%):`, formatIDR(sellingPriceWithTax - baseSellingPrice)],
+      ['Selling Price (with tax):', formatIDR(sellingPriceWithTax)],
+      ['Rounded Selling Price:', formatIDR(Math.ceil(sellingPriceWithTax / 1000) * 1000)]
     ].filter(row => row.length > 0);
 
     const wb = generateExcelData(data, 'Recipe Calculator');
@@ -204,10 +236,10 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
                   )}
                   <tr key={`${recipe.id}-final-total-cost`} className="bg-gray-50 font-medium">
                     <td colSpan={4} className="py-3 px-4 text-right">
-                      Total Cost:
+                      Total Ingredient Cost:
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {formatIDR(totalCost)}
+                      {formatIDR(scaledBaseCost)}
                     </td>
                   </tr>
                 </tbody>
@@ -215,26 +247,65 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
             </div>
           </div>
 
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Base Cost:</span>
-              <span>{formatIDR(scaledCost)}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+              <h4 className="font-medium border-b pb-2">Production Costs</h4>
+              <div className="flex justify-between text-sm">
+                <span>Base Ingredient Cost:</span>
+                <span>{formatIDR(scaledBaseCost)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Labor Cost:</span>
+                <span>{formatIDR(laborCost)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Packaging Cost:</span>
+                <span>{formatIDR(packagingCost)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Equipment Cost:</span>
+                <span>{formatIDR(equipmentCost)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Reject Cost ({rejectPercentage}%):</span>
+                <span>{formatIDR(rejectCost)}</span>
+              </div>
+              <div className="flex justify-between font-medium pt-2 border-t">
+                <span>Total Production Cost:</span>
+                <span>{formatIDR(totalProductionCost)}</span>
+              </div>
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>Cost per {recipe.yieldUnit}:</span>
+                <span>{formatIDR(costPerUnit)}</span>
+              </div>
             </div>
-            <div className="flex justify-between text-sm">
-              <span>Labor Cost:</span>
-              <span>{formatIDR(laborCost)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Packaging Cost:</span>
-              <span>{formatIDR(packagingCost)}</span>
-            </div>
-            <div className="flex justify-between font-medium pt-2 border-t">
-              <span>Total Cost:</span>
-              <span>{formatIDR(totalCost)}</span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Cost per {recipe.yieldUnit}:</span>
-              <span>{formatIDR(costPerUnit)}</span>
+
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+              <h4 className="font-medium border-b pb-2">Pricing</h4>
+              <div className="flex justify-between text-sm">
+                <span>Cost per {recipe.yieldUnit}:</span>
+                <span>{formatIDR(costPerUnit)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Margin ({marginPercentage}%):</span>
+                <span>{formatIDR(baseSellingPrice - costPerUnit)}</span>
+              </div>
+              <div className="flex justify-between font-medium">
+                <span>Selling Price (before tax):</span>
+                <span>{formatIDR(baseSellingPrice)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Tax ({taxPercentage}%):</span>
+                <span>{formatIDR(sellingPriceWithTax - baseSellingPrice)}</span>
+              </div>
+              <div className="flex justify-between font-medium pt-2 border-t text-pink-600">
+                <span>Selling Price (with tax):</span>
+                <span>{formatIDR(sellingPriceWithTax)}</span>
+              </div>
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>Rounded Selling Price:</span>
+                <span>{formatIDR(Math.ceil(sellingPriceWithTax / 1000) * 1000)}</span>
+              </div>
             </div>
           </div>
         </div>

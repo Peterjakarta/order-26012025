@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Edit2, Trash2, Upload, Copy, Check, Package2, FolderEdit, FileSpreadsheet, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, Upload, Copy, Check, Package2, FolderEdit, FileSpreadsheet, Search, List, Grid, Save, X } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
 import { auth, db } from '../../../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -24,6 +24,11 @@ export default function IngredientManagement() {
   const [error, setError] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  
+  // Inline editing states
+  const [inlineEditing, setInlineEditing] = useState<Record<string, boolean>>({});
+  const [inlineValues, setInlineValues] = useState<Record<string, Partial<Ingredient>>>({});
 
   const loadCategories = useCallback(async () => {
     try {
@@ -88,6 +93,15 @@ export default function IngredientManagement() {
     return () => unsubscribe();
   }, [loadCategories]);
 
+  // Initialize inline values from ingredients
+  useEffect(() => {
+    const values: Record<string, Partial<Ingredient>> = {};
+    ingredients.forEach(ingredient => {
+      values[ingredient.id] = { ...ingredient };
+    });
+    setInlineValues(values);
+  }, [ingredients]);
+
   const handleSubmit = async (data: Omit<Ingredient, 'id'>) => {
     try {
       if (editingIngredient) {
@@ -143,6 +157,62 @@ export default function IngredientManagement() {
     }
   };
   
+  // Start inline editing for an ingredient
+  const startInlineEdit = (ingredientId: string) => {
+    setInlineEditing(prev => ({
+      ...prev,
+      [ingredientId]: true
+    }));
+    // Ensure we have current values to edit
+    setInlineValues(prev => ({
+      ...prev,
+      [ingredientId]: {
+        ...ingredients.find(i => i.id === ingredientId)!
+      }
+    }));
+  };
+  
+  // Cancel inline editing
+  const cancelInlineEdit = (ingredientId: string) => {
+    setInlineEditing(prev => ({
+      ...prev,
+      [ingredientId]: false
+    }));
+    // Reset to original values
+    setInlineValues(prev => ({
+      ...prev,
+      [ingredientId]: {
+        ...ingredients.find(i => i.id === ingredientId)!
+      }
+    }));
+  };
+  
+  // Save inline edits
+  const saveInlineEdit = async (ingredientId: string) => {
+    try {
+      const updates = inlineValues[ingredientId];
+      await updateIngredient(ingredientId, updates);
+      setInlineEditing(prev => ({
+        ...prev,
+        [ingredientId]: false
+      }));
+    } catch (error) {
+      console.error('Error updating ingredient:', error);
+      alert('Failed to update ingredient. Please try again.');
+    }
+  };
+  
+  // Handle inline value changes
+  const handleInlineChange = (ingredientId: string, field: keyof Ingredient, value: any) => {
+    setInlineValues(prev => ({
+      ...prev,
+      [ingredientId]: {
+        ...prev[ingredientId],
+        [field]: value
+      }
+    }));
+  };
+  
   // Filter ingredients based on search term
   const filteredIngredients = ingredients.filter(ingredient => 
     searchTerm === '' || 
@@ -156,6 +226,23 @@ export default function IngredientManagement() {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">Ingredients</h2>
         <div className="flex gap-2">
+          <button
+            onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
+            className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
+            title={viewMode === 'card' ? "Switch to list view" : "Switch to card view"}
+          >
+            {viewMode === 'card' ? (
+              <>
+                <List className="w-4 h-4" />
+                List View
+              </>
+            ) : (
+              <>
+                <Grid className="w-4 h-4" />
+                Card View
+              </>
+            )}
+          </button>
           <button
             onClick={handleExportToExcel}
             className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
@@ -238,129 +325,299 @@ export default function IngredientManagement() {
         </div>
       )}
 
-      <div className="bg-white shadow-sm rounded-lg divide-y">
-        {filteredIngredients.length > 0 ? (
-          filteredIngredients.map(ingredient => (
-            <div key={ingredient.id}>
-              {editingIngredient?.id === ingredient.id ? ( 
-                <div className="p-4">
-                  <IngredientForm
-                    ingredient={ingredient}
-                    onSubmit={handleSubmit}
-                    onCancel={() => setEditingIngredient(null)}
-                  />
-                </div>
-              ) : (
-                <div className="p-4 flex justify-between items-center hover:bg-gray-50">
-                  <div>
-                    <h3 className="font-medium">{ingredient.name}</h3>
-                    <div className="mt-1 space-y-1">
-                      <p className="text-sm text-gray-600">
-                        {formatIDR(ingredient.price)} per {ingredient.packageSize} {ingredient.packageUnit}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Used in: {ingredient.unit}
-                      </p>
-                      <div className="relative inline-block">
-                        <div className="flex items-center gap-2">
-                          <label className="text-sm text-gray-600">Categories:</label>
-                          {editingCategoryId === ingredient.id ? (
-                            <div className="flex items-center gap-2">
-                              <select
-                                className="text-sm border rounded-md px-2 py-1 pr-8 bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                                value={selectedCategories[ingredient.id] || []}
-                                onChange={(e) => {
-                                  const selected = Array.from(e.target.selectedOptions).map(option => option.value);
-                                  handleCategoryChange(ingredient.id, selected);
-                                }}
-                                multiple
-                                size={4}
-                                onClick={(e) => e.stopPropagation()}
-                                disabled={savingCategories.has(ingredient.id)}
-                              >
-                                {stockCategories.map(category => (
-                                  <option 
-                                    key={category.id} 
-                                    value={category.id}
-                                    className="py-1 px-2 hover:bg-gray-100"
-                                  >
-                                    {category.name}
-                                  </option>
-                                ))}
-                              </select>
-                              {savingCategories.has(ingredient.id) && (
-                                <span className="text-xs text-gray-500">Saving...</span>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-gray-600">
-                                {selectedCategories[ingredient.id]?.length
-                                  ? stockCategories
-                                      .filter(c => selectedCategories[ingredient.id]?.includes(c.id))
-                                      .map(c => c.name)
-                                      .join(', ')
-                                  : 'None'}
-                              </span>
-                              <button
-                                onClick={() => setEditingCategoryId(ingredient.id)}
-                                className="p-1 hover:bg-gray-100 rounded-full"
-                              >
-                                <FolderEdit className="w-4 h-4 text-gray-400" />
-                              </button>
-                            </div>
-                          )}
+      {viewMode === 'card' ? (
+        // Card View
+        <div className="bg-white shadow-sm rounded-lg divide-y">
+          {filteredIngredients.length > 0 ? (
+            filteredIngredients.map(ingredient => (
+              <div key={ingredient.id}>
+                {editingIngredient?.id === ingredient.id ? ( 
+                  <div className="p-4">
+                    <IngredientForm
+                      ingredient={ingredient}
+                      onSubmit={handleSubmit}
+                      onCancel={() => setEditingIngredient(null)}
+                    />
+                  </div>
+                ) : (
+                  <div className="p-4 flex justify-between items-center hover:bg-gray-50">
+                    <div>
+                      <h3 className="font-medium">{ingredient.name}</h3>
+                      <div className="mt-1 space-y-1">
+                        <p className="text-sm text-gray-600">
+                          {formatIDR(ingredient.price)} per {ingredient.packageSize} {ingredient.packageUnit}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Used in: {ingredient.unit}
+                        </p>
+                        <div className="relative inline-block">
+                          <div className="flex items-center gap-2">
+                            <label className="text-sm text-gray-600">Categories:</label>
+                            {editingCategoryId === ingredient.id ? (
+                              <div className="flex items-center gap-2">
+                                <select
+                                  className="text-sm border rounded-md px-2 py-1 pr-8 bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                                  value={selectedCategories[ingredient.id] || []}
+                                  onChange={(e) => {
+                                    const selected = Array.from(e.target.selectedOptions).map(option => option.value);
+                                    handleCategoryChange(ingredient.id, selected);
+                                  }}
+                                  multiple
+                                  size={4}
+                                  onClick={(e) => e.stopPropagation()}
+                                  disabled={savingCategories.has(ingredient.id)}
+                                >
+                                  {stockCategories.map(category => (
+                                    <option 
+                                      key={category.id} 
+                                      value={category.id}
+                                      className="py-1 px-2 hover:bg-gray-100"
+                                    >
+                                      {category.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                {savingCategories.has(ingredient.id) && (
+                                  <span className="text-xs text-gray-500">Saving...</span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-600">
+                                  {selectedCategories[ingredient.id]?.length
+                                    ? stockCategories
+                                        .filter(c => selectedCategories[ingredient.id]?.includes(c.id))
+                                        .map(c => c.name)
+                                        .join(', ')
+                                    : 'None'}
+                                </span>
+                                <button
+                                  onClick={() => setEditingCategoryId(ingredient.id)}
+                                  className="p-1 hover:bg-gray-100 rounded-full"
+                                >
+                                  <FolderEdit className="w-4 h-4 text-gray-400" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleCopyIngredient(ingredient)}
+                        className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                        title="Copy ingredient"
+                      >
+                        {copiedId === ingredient.id ? (
+                          <>
+                            <Check className="w-4 h-4 text-green-500" />
+                            <span className="text-green-500">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4" />
+                            Copy
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setEditingIngredient(ingredient)}
+                        className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteIngredient(ingredient.id)}
+                        className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleCopyIngredient(ingredient)}
-                      className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-                      title="Copy ingredient"
-                    >
-                      {copiedId === ingredient.id ? (
-                        <>
-                          <Check className="w-4 h-4 text-green-500" />
-                          <span className="text-green-500">Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" />
-                          Copy
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setEditingIngredient(ingredient)}
-                      className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => deleteIngredient(ingredient.id)}
-                      className="flex items-center gap-2 px-3 py-1 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete
-                    </button>
-                  </div>
-                </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="p-8 text-center text-gray-500">
+              {searchTerm ? (
+                <p>No ingredients match your search term "{searchTerm}"</p>
+              ) : (
+                <p>No ingredients found. Add your first ingredient to get started.</p>
               )}
             </div>
-          ))
-        ) : (
-          <div className="p-8 text-center text-gray-500">
-            {searchTerm ? (
-              <p>No ingredients match your search term "{searchTerm}"</p>
-            ) : (
-              <p>No ingredients found. Add your first ingredient to get started.</p>
-            )}
+          )}
+        </div>
+      ) : (
+        // List View with inline editing
+        <div className="bg-white shadow-sm rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package Size</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package Unit</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Categories</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredIngredients.length > 0 ? (
+                  filteredIngredients.map(ingredient => {
+                    const isEditing = inlineEditing[ingredient.id] || false;
+                    const inlineVals = inlineValues[ingredient.id] || ingredient;
+                    const unitPrice = inlineVals.price / inlineVals.packageSize;
+                    
+                    return (
+                      <tr key={ingredient.id} className={isEditing ? "bg-blue-50" : "hover:bg-gray-50"}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {isEditing ? (
+                            <input 
+                              type="text" 
+                              value={inlineVals.name}
+                              onChange={e => handleInlineChange(ingredient.id, 'name', e.target.value)}
+                              className="w-full px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                            />
+                          ) : (
+                            <div className="text-sm font-medium text-gray-900">{ingredient.name}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {isEditing ? (
+                            <input 
+                              type="text" 
+                              value={inlineVals.unit}
+                              onChange={e => handleInlineChange(ingredient.id, 'unit', e.target.value)}
+                              className="w-full px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                            />
+                          ) : (
+                            <div className="text-sm text-gray-900">{ingredient.unit}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {isEditing ? (
+                            <input 
+                              type="number" 
+                              value={inlineVals.packageSize}
+                              onChange={e => handleInlineChange(ingredient.id, 'packageSize', parseFloat(e.target.value))}
+                              min="0.01"
+                              step="0.01"
+                              className="w-full px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                            />
+                          ) : (
+                            <div className="text-sm text-gray-900">{ingredient.packageSize}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {isEditing ? (
+                            <input 
+                              type="text" 
+                              value={inlineVals.packageUnit}
+                              onChange={e => handleInlineChange(ingredient.id, 'packageUnit', e.target.value)}
+                              className="w-full px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                            />
+                          ) : (
+                            <div className="text-sm text-gray-900">{ingredient.packageUnit}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                          {isEditing ? (
+                            <input 
+                              type="number" 
+                              value={inlineVals.price}
+                              onChange={e => handleInlineChange(ingredient.id, 'price', parseFloat(e.target.value))}
+                              min="0"
+                              step="1"
+                              className="w-full px-2 py-1 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500 text-right"
+                            />
+                          ) : (
+                            formatIDR(ingredient.price)
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-right">
+                          {formatIDR(unitPrice)} / {ingredient.unit}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className="text-xs text-gray-600">
+                            {selectedCategories[ingredient.id]?.length
+                              ? stockCategories
+                                  .filter(c => selectedCategories[ingredient.id]?.includes(c.id))
+                                  .map(c => c.name)
+                                  .join(', ')
+                              : 'None'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex justify-end space-x-2">
+                            {isEditing ? (
+                              <>
+                                <button
+                                  onClick={() => saveInlineEdit(ingredient.id)}
+                                  className="p-1 text-green-600 hover:bg-green-50 rounded-full"
+                                  title="Save changes"
+                                >
+                                  <Save className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => cancelInlineEdit(ingredient.id)}
+                                  className="p-1 text-gray-400 hover:bg-gray-50 rounded-full"
+                                  title="Cancel"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => startInlineEdit(ingredient.id)}
+                                  className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                                  title="Edit ingredient"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleCopyIngredient(ingredient)}
+                                  className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                                  title="Copy ingredient"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => deleteIngredient(ingredient.id)}
+                                  className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full"
+                                  title="Delete ingredient"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                      {searchTerm ? (
+                        <p>No ingredients match your search term "{searchTerm}"</p>
+                      ) : (
+                        <p>No ingredients found. Add your first ingredient to get started.</p>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

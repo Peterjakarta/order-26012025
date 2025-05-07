@@ -4,7 +4,7 @@ import type { Order, Product, Recipe, Ingredient } from '../types/types';
 import { getBranchName } from '../data/branches';
 import { calculateMouldCount } from './mouldCalculations';
 import { calculateExpiryDate } from './dateUtils';
-import { calculateRecipeCost } from './recipeCalculations';
+import { calculateRecipeCost, calculateSellPrice, calculateTotalProductionCost } from './recipeCalculations';
 import { isBonBonCategory, isPralinesCategory } from './quantityUtils';
 import { formatIDR } from './currencyFormatter';
 
@@ -318,21 +318,40 @@ export function generateRecipePDF(recipe: Recipe, ingredients: Ingredient[], qua
   // Create PDF document
   const doc = new jsPDF();
   
-  // Calculate costs based on the provided quantity (not the default yield)
+  // Calculate base cost (ingredients only)
   const baseCost = calculateRecipeCost(recipe, ingredients);
-  const scaledCost = (baseCost / recipe.yield) * quantity;
+  const scaledBaseCost = (baseCost / recipe.yield) * quantity;
+  
+  // Additional costs
   const laborCost = recipe.laborCost ? (recipe.laborCost / recipe.yield) * quantity : 0;
   const packagingCost = recipe.packagingCost ? (recipe.packagingCost / recipe.yield) * quantity : 0;
-  const totalCost = scaledCost + laborCost + packagingCost;
-  const costPerUnit = totalCost / quantity;
-
-  // Calculate total weight based on the specified quantity
-  const totalWeight = recipe.ingredients.reduce((total, item) => {
-    const ingredient = ingredients.find(i => i.id === item.ingredientId);
-    if (!ingredient) return total;
-    const scaledAmount = (item.amount / recipe.yield) * quantity;
-    return total + scaledAmount;
-  }, 0);
+  const equipmentCost = recipe.equipmentCost ? (recipe.equipmentCost / recipe.yield) * quantity : 0;
+  
+  // Production cost (before reject adjustment)
+  const productionCost = scaledBaseCost + laborCost + packagingCost + equipmentCost;
+  
+  // Reject cost (if applicable)
+  const rejectPercentage = recipe.rejectPercentage || 0;
+  const rejectCost = productionCost * (rejectPercentage / 100);
+  
+  // Total production cost with reject adjustment
+  const totalProductionCost = productionCost + rejectCost;
+  
+  // Cost per unit
+  const costPerUnit = totalProductionCost / quantity;
+  
+  // Selling price calculation
+  const marginPercentage = recipe.marginPercentage || 30; // Default 30%
+  const taxPercentage = recipe.taxPercentage || 10; // Default 10%
+  
+  // Calculate selling price without tax
+  const baseSellingPrice = costPerUnit / (1 - (marginPercentage / 100));
+  
+  // Calculate selling price with tax
+  const sellingPriceWithTax = baseSellingPrice * (1 + (taxPercentage / 100));
+  
+  // Rounded selling price
+  const roundedSellingPrice = Math.ceil(sellingPriceWithTax / 1000) * 1000;
 
   // Header
   doc.setFontSize(20);
@@ -378,17 +397,34 @@ export function generateRecipePDF(recipe: Recipe, ingredients: Ingredient[], qua
 
   // Add total weight
   const finalY = (doc as any).lastAutoTable.finalY + 10;
-  doc.text(`Total Weight: ${totalWeight.toFixed(2)} ${recipe.ingredients[0]?.unit}`, 14, finalY);
+  
+  // Calculate total weight
+  const totalWeight = recipe.ingredients.reduce((total, item) => {
+    const ingredient = ingredients.find(i => i.id === item.ingredientId);
+    if (!ingredient) return total;
+    const scaledAmount = (item.amount / recipe.yield) * quantity;
+    return total + scaledAmount;
+  }, 0);
+  
+  // Get common unit (assuming all ingredients use the same unit)
+  const commonUnit = recipe.ingredients.length > 0 && ingredients.find(i => i.id === recipe.ingredients[0].ingredientId)?.unit || '';
+  
+  if (commonUnit) {
+    doc.text(`Total Weight: ${totalWeight.toFixed(2)} ${commonUnit}`, 14, finalY);
+  }
 
-  // Cost breakdown
+  // Production cost breakdown
   const costStartY = finalY + 15;
-  doc.text('Cost Breakdown:', 14, costStartY);
+  doc.setFontSize(14);
+  doc.text('Production Costs:', 14, costStartY);
   
   const costData = [
-    ['Base Cost:', formatIDR(scaledCost)],
+    ['Base Ingredient Cost:', formatIDR(scaledBaseCost)],
     ['Labor Cost:', formatIDR(laborCost)],
     ['Packaging Cost:', formatIDR(packagingCost)],
-    ['Total Cost:', formatIDR(totalCost)],
+    ['Equipment Cost:', formatIDR(equipmentCost)],
+    [`Reject Cost (${rejectPercentage}%):`, formatIDR(rejectCost)],
+    ['Total Production Cost:', formatIDR(totalProductionCost)],
     [`Cost per ${recipe.yieldUnit}:`, formatIDR(costPerUnit)]
   ];
 
@@ -397,10 +433,59 @@ export function generateRecipePDF(recipe: Recipe, ingredients: Ingredient[], qua
     body: costData,
     theme: 'plain',
     columnStyles: {
-      0: { cellWidth: 60, fontStyle: 'bold' },
+      0: { cellWidth: 80, fontStyle: 'bold' },
       1: { cellWidth: 60, halign: 'right' }
     }
   });
+
+  // Pricing information
+  const pricingY = (doc as any).lastAutoTable.finalY + 15;
+  
+  // Check if we need a new page
+  if (pricingY > 250) {
+    doc.addPage();
+    doc.setFontSize(14);
+    doc.text('Pricing:', 14, 20);
+    
+    const pricingData = [
+      [`Margin (${marginPercentage}%):`, formatIDR(baseSellingPrice - costPerUnit)],
+      ['Selling Price (before tax):', formatIDR(baseSellingPrice)],
+      [`Tax (${taxPercentage}%):`, formatIDR(sellingPriceWithTax - baseSellingPrice)],
+      ['Selling Price (with tax):', formatIDR(sellingPriceWithTax)],
+      ['Rounded Selling Price:', formatIDR(roundedSellingPrice)]
+    ];
+
+    autoTable(doc, {
+      startY: 25,
+      body: pricingData,
+      theme: 'plain',
+      columnStyles: {
+        0: { cellWidth: 80, fontStyle: 'bold' },
+        1: { cellWidth: 60, halign: 'right' }
+      }
+    });
+  } else {
+    doc.setFontSize(14);
+    doc.text('Pricing:', 14, pricingY);
+    
+    const pricingData = [
+      [`Margin (${marginPercentage}%):`, formatIDR(baseSellingPrice - costPerUnit)],
+      ['Selling Price (before tax):', formatIDR(baseSellingPrice)],
+      [`Tax (${taxPercentage}%):`, formatIDR(sellingPriceWithTax - baseSellingPrice)],
+      ['Selling Price (with tax):', formatIDR(sellingPriceWithTax)],
+      ['Rounded Selling Price:', formatIDR(roundedSellingPrice)]
+    ];
+
+    autoTable(doc, {
+      startY: pricingY + 5,
+      body: pricingData,
+      theme: 'plain',
+      columnStyles: {
+        0: { cellWidth: 80, fontStyle: 'bold' },
+        1: { cellWidth: 60, halign: 'right' }
+      }
+    });
+  }
 
   return doc;
 }

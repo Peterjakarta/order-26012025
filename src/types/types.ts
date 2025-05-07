@@ -135,6 +135,10 @@ export interface Recipe {
   ingredients: RecipeIngredient[];
   laborCost?: number;
   packagingCost?: number;
+  equipmentCost?: number; // New field: equipment usage cost
+  rejectPercentage?: number; // New field: reject amount in %
+  taxPercentage?: number; // New field: tax in %
+  marginPercentage?: number; // New field: margin in %
   notes?: string;
 }
 

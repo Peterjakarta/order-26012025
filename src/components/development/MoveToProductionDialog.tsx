@@ -129,7 +129,7 @@ export default function MoveToProductionDialog({
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="px-6 py-4 border-b flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ArrowUpRight className="w-5 h-5 text-cyan-600" />

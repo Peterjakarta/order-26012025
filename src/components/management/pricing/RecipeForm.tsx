@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Copy } from 'lucide-react';
 import type { Recipe, RecipeIngredient } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
@@ -90,6 +90,14 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
       parseFloat(formData.get('laborCost') as string) : undefined;
     const packagingCost = formData.get('packagingCost') ? 
       parseFloat(formData.get('packagingCost') as string) : undefined;
+    const equipmentCost = formData.get('equipmentCost') ? 
+      parseFloat(formData.get('equipmentCost') as string) : undefined;
+    const rejectPercentage = formData.get('rejectPercentage') ? 
+      parseFloat(formData.get('rejectPercentage') as string) : undefined;
+    const taxPercentage = formData.get('taxPercentage') ? 
+      parseFloat(formData.get('taxPercentage') as string) : undefined;
+    const marginPercentage = formData.get('marginPercentage') ? 
+      parseFloat(formData.get('marginPercentage') as string) : undefined;
 
     // Validate required fields
     if (!category || !yieldUnit || !selectedProduct) {
@@ -125,6 +133,18 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
     }
     if (!isNaN(packagingCost!) && packagingCost! > 0) {
       recipeData.packagingCost = packagingCost;
+    }
+    if (!isNaN(equipmentCost!) && equipmentCost! > 0) {
+      recipeData.equipmentCost = equipmentCost;
+    }
+    if (!isNaN(rejectPercentage!) && rejectPercentage! >= 0) {
+      recipeData.rejectPercentage = rejectPercentage;
+    }
+    if (!isNaN(taxPercentage!) && taxPercentage! >= 0) {
+      recipeData.taxPercentage = taxPercentage;
+    }
+    if (!isNaN(marginPercentage!) && marginPercentage! >= 0) {
+      recipeData.marginPercentage = marginPercentage;
     }
 
     onSubmit(recipeData);
@@ -297,7 +317,6 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
                     onChange={(e) => updateIngredient(index, 'amount', e.target.value)}
                     required
                     min="0"
-                    step="1"
                     step="0.01"
                     className="block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
                     placeholder="Amount"
@@ -361,6 +380,79 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
             </p>
           )}
         </div>
+
+        {/* New fields for additional costs and calculations */}
+        <div>
+          <label htmlFor="equipmentCost" className="block text-sm font-medium text-gray-700">
+            Equipment Cost (IDR)
+          </label>
+          <input
+            type="number"
+            id="equipmentCost"
+            name="equipmentCost"
+            defaultValue={recipe?.equipmentCost || ''}
+            min="0"
+            step="1"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
+            placeholder="Optional"
+          />
+          {recipe?.equipmentCost && (
+            <p className="mt-1 text-sm text-gray-500">
+              Current cost: {formatIDR(recipe.equipmentCost)}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="rejectPercentage" className="block text-sm font-medium text-gray-700">
+            Reject Percentage (%)
+          </label>
+          <input
+            type="number"
+            id="rejectPercentage"
+            name="rejectPercentage"
+            defaultValue={recipe?.rejectPercentage || ''}
+            min="0"
+            max="100"
+            step="0.1"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
+            placeholder="e.g. 5%"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="taxPercentage" className="block text-sm font-medium text-gray-700">
+            Tax Percentage (%)
+          </label>
+          <input
+            type="number"
+            id="taxPercentage"
+            name="taxPercentage"
+            defaultValue={recipe?.taxPercentage || ''}
+            min="0"
+            max="100"
+            step="0.1"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
+            placeholder="e.g. 10%"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="marginPercentage" className="block text-sm font-medium text-gray-700">
+            Margin Percentage (%)
+          </label>
+          <input
+            type="number"
+            id="marginPercentage"
+            name="marginPercentage"
+            defaultValue={recipe?.marginPercentage || ''}
+            min="0"
+            max="100"
+            step="0.1"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
+            placeholder="e.g. 30%"
+          />
+        </div>
       </div>
 
       <div>
@@ -372,7 +464,6 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
           name="notes"
           defaultValue={recipe?.notes}
           rows={3}
-          step="1"
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
           placeholder="Additional notes or instructions"
         />
