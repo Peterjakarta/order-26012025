@@ -1,6 +1,8 @@
-import { RDCategory, RDProduct } from '../types/rd-types';
+import { RDCategory, RDProduct, TestResult, RecipeIngredient } from '../types/rd-types';
 import { createLogEntry } from '../lib/firebase';
 import { auth } from '../lib/firebase';
+import { db, COLLECTIONS } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 // Storage keys
 export const RD_CATEGORIES_KEY = 'rd-categories-data';
@@ -360,6 +362,21 @@ export function updateRDProduct(id: string, productData: Partial<Omit<RDProduct,
   
   if (index === -1) return null;
   
+  // Check if status is changing from planning to testing
+  const oldStatus = products[index].status;
+  const newStatus = productData.status || oldStatus;
+  
+  // Create an order for this product if status changing from planning to testing
+  if (oldStatus === 'planning' && newStatus === 'testing') {
+    createOrderFromRDProduct(products[index])
+      .then(() => {
+        console.log(`Created testing order for R&D product: ${products[index].name}`);
+      })
+      .catch(error => {
+        console.error('Error creating testing order:', error);
+      });
+  }
+  
   const updatedProduct = {
     ...products[index],
     ...productData,
@@ -370,6 +387,54 @@ export function updateRDProduct(id: string, productData: Partial<Omit<RDProduct,
   saveRDProducts(products);
   
   return updatedProduct;
+}
+
+// Create a production order from an R&D product
+async function createOrderFromRDProduct(product: RDProduct): Promise<void> {
+  try {
+    // Create order delivery date (10 days from now)
+    const deliveryDate = new Date();
+    deliveryDate.setDate(deliveryDate.getDate() + 10);
+    
+    // Create order object - match the Order type structure
+    const orderData = {
+      branchId: 'production', // Use production branch
+      orderedBy: product.createdBy || 'R&D Department',
+      orderDate: new Date().toISOString().split('T')[0],
+      deliveryDate: deliveryDate.toISOString().split('T')[0],
+      poNumber: `RD-${product.id.slice(-5)}`,
+      products: [
+        {
+          productId: product.id,
+          quantity: product.minOrder || 1
+        }
+      ],
+      notes: `R&D Testing Order: ${product.name}\n\nThis is an automatic order created when the product development status changed to Testing. Please produce this order for testing purposes.\n\n${product.notes || ''}`,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      isRDProduct: true,
+      rdProductData: product
+    };
+
+    // Add to Firestore orders collection
+    await addDoc(collection(db, COLLECTIONS.ORDERS), orderData);
+    
+    // Create log entry
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      createLogEntry({
+        userId: currentUser.uid,
+        username: currentUser.email || 'unknown',
+        action: 'R&D Product Moved to Testing',
+        category: 'feature',
+        details: `Product "${product.name}" moved to testing phase. Created testing order.`
+      }).catch(console.error);
+    }
+  } catch (error) {
+    console.error('Error creating order from R&D product:', error);
+    throw error;
+  }
 }
 
 // Delete a product

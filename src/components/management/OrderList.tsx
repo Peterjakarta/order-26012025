@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package2, AlertCircle, Calendar, FileDown, RefreshCw } from 'lucide-react';
+import { Package2, AlertCircle, Calendar, FileDown, RefreshCw, ChevronDown, ChevronRight, Beaker } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '../../hooks/useOrders';
 import { useBranches } from '../../hooks/useBranches';
@@ -17,6 +17,7 @@ export default function OrderList() {
   const location = useLocation();
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
   // Reset selected orders when orders change
   useEffect(() => {
@@ -66,6 +67,18 @@ export default function OrderList() {
 
   const handleToggleSelect = (orderId: string) => {
     setSelectedOrders(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const toggleOrderExpanded = (orderId: string) => {
+    setExpandedOrders(prev => {
       const next = new Set(prev);
       if (next.has(orderId)) {
         next.delete(orderId);
@@ -169,58 +182,121 @@ export default function OrderList() {
           {pendingOrders.map(order => {
             const branch = branches.find(b => b.id === order.branchId);
             const branchStyles = getBranchStyles(order.branchId);
+            const isExpanded = expandedOrders.has(order.id);
             
             return (
               <div key={order.id} className="relative">
-                <div className="absolute left-4 top-4 z-10">
-                  <input
-                    type="checkbox"
-                    checked={selectedOrders.has(order.id)}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      handleToggleSelect(order.id);
-                    }}
-                    className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-                  />
-                </div>
-                <div className="pl-12">
-                  <OrderItem 
-                    order={order} 
-                    onRemove={() => removeOrder(order.id)}
-                    onUpdateStatus={handleUpdateStatus}
-                    onDownloadExcel={handleDownloadExcel}
-                    onDownloadPDF={handleDownloadPDF}
-                    selected={selectedOrders.has(order.id)}
-                    extraActions={
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded-md text-sm ${branchStyles.base}`}>
-                          {branch?.name}
-                        </span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={(e) => {
+                {/* Add an R&D indicator if this is an R&D product */}
+                {order.isRDProduct && (
+                  <div className="absolute top-0 right-0 transform -translate-y-1/2 translate-x-1/2 z-10">
+                    <div className="bg-cyan-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg">
+                      <Beaker className="w-3.5 h-3.5" />
+                      <span>R&D</span>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="pl-4">
+                  <div className={`bg-white rounded-lg shadow-sm border overflow-hidden transition-all duration-200 ${
+                    selectedOrders.has(order.id) ? 'ring-2 ring-pink-500' : ''
+                  }`}>
+                    {/* Collapsible Header */}
+                    <div 
+                      className="p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => toggleOrderExpanded(order.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {isExpanded ? (
+                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                          ) : (
+                            <ChevronRight className="w-5 h-5 text-gray-400" />
+                          )}
+                          <div className={`px-3 py-1 rounded-lg ${branchStyles.base}`}>
+                            {order.branchId}
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">
+                              Order #{order.id.slice(0, 8)}
+                              {order.poNumber && (
+                                <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
+                                  PO: {order.poNumber}
+                                </span>
+                              )}
+                            </p>
+                            <div className="flex items-center gap-3 text-sm text-gray-500">
+                              <span>Ordered: {new Date(order.orderDate).toLocaleDateString()}</span>
+                              <span>•</span>
+                              <span>By: {order.orderedBy}</span>
+                              {order.isRDProduct && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-cyan-600 font-medium flex items-center gap-1">
+                                    <Beaker className="w-3.5 h-3.5" />
+                                    R&D Test Product
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedOrders.has(order.id)}
+                            onChange={(e) => {
                               e.stopPropagation();
-                              handleDownloadExcel(order);
+                              handleToggleSelect(order.id);
                             }}
-                            className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-indigo-500 hover:bg-indigo-600 text-white rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
-                          >
-                            <FileDown className="w-4 h-4" />
-                            Excel
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDownloadPDF(order);
-                            }}
-                            className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-purple-500 hover:bg-purple-600 text-white rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
-                          >
-                            <FileDown className="w-4 h-4" />
-                            PDF
-                          </button>
+                            className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                          />
                         </div>
                       </div>
-                    }
-                  />
+                    </div>
+
+                    {/* Content */}
+                    {isExpanded && (
+                      <div className="p-4 border-t">
+                        <OrderItem 
+                          order={order} 
+                          onRemove={() => removeOrder(order.id)}
+                          onUpdateStatus={handleUpdateStatus}
+                          onDownloadExcel={handleDownloadExcel}
+                          onDownloadPDF={handleDownloadPDF}
+                          extraActions={
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded-md text-sm ${branchStyles.base}`}>
+                                {branch?.name}
+                              </span>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDownloadExcel(order);
+                                  }}
+                                  className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-indigo-500 hover:bg-indigo-600 text-white rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                                >
+                                  <FileDown className="w-4 h-4" />
+                                  Excel
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDownloadPDF(order);
+                                  }}
+                                  className="w-36 h-10 flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-purple-500 hover:bg-purple-600 text-white rounded-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                                >
+                                  <FileDown className="w-4 h-4" />
+                                  PDF
+                                </button>
+                              </div>
+                            </div>
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );

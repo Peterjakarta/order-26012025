@@ -4,6 +4,7 @@ import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../hooks/useAuth';
 import { RDProduct, RDCategory, TestResult } from '../../types/rd-types';
 import Beaker from '../common/BeakerIcon';
+import { useNavigate } from 'react-router-dom';
 
 interface RecipeIngredient {
   ingredientId: string;
@@ -27,6 +28,7 @@ export default function RDProductForm({
 }: RDProductFormProps) {
   const { categories, ingredients } = useStore();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string>(product?.category || initialCategory || '');
   const [images, setImages] = useState<string[]>(product?.imageUrls || []);
   const [imageUrl, setImageUrl] = useState('');
@@ -41,6 +43,7 @@ export default function RDProductForm({
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropzoneRef = useRef<HTMLDivElement>(null);
+  const [showOrderCreatedAlert, setShowOrderCreatedAlert] = useState(false);
   
   // Recipe ingredients state
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(
@@ -291,6 +294,9 @@ export default function RDProductForm({
       const description = formData.get('description') as string || undefined;
       const unit = formData.get('unit') as string || undefined;
 
+      // Check if we're changing status from planning to testing
+      const isChangingToTesting = product && product.status === 'planning' && status === 'testing';
+
       const productData: Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'> = {
         name,
         category,
@@ -314,6 +320,16 @@ export default function RDProductForm({
       };
 
       await onSubmit(productData);
+
+      // Show feedback and redirect if changing to testing
+      if (isChangingToTesting) {
+        setShowOrderCreatedAlert(true);
+        
+        // Redirect to orders page after a delay
+        setTimeout(() => {
+          navigate('/management/orders');
+        }, 3000);
+      }
     } catch (err) {
       console.error('Error submitting form:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while saving the product');
@@ -335,6 +351,17 @@ export default function RDProductForm({
         <div className="flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <p>{error}</p>
+        </div>
+      )}
+
+      {showOrderCreatedAlert && (
+        <div className="flex items-center gap-2 p-4 bg-green-50 text-green-700 rounded-lg">
+          <Check className="w-5 h-5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">Test order created!</p>
+            <p className="text-sm">This product has been moved to Testing status and a production order has been automatically created.</p>
+            <p className="text-sm mt-1">Redirecting to Orders page...</p>
+          </div>
         </div>
       )}
 
@@ -872,6 +899,12 @@ export default function RDProductForm({
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
             </select>
+            
+            {status === 'testing' && product?.status === 'planning' && (
+              <p className="mt-1 text-sm text-cyan-600">
+                Changing status to Testing will create a production test order automatically.
+              </p>
+            )}
           </div>
         </div>
       </div>
