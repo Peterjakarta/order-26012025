@@ -13,6 +13,7 @@ export interface RDProduct extends Omit<Product, 'id'> {
   updatedAt: string;
   createdAt: string;
   recipeIngredients?: RecipeIngredient[];
+  orderReference?: string; // Reference to the order in the production system
 }
 
 export interface RecipeIngredient {

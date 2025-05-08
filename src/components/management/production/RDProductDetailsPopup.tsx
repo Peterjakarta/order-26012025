@@ -57,38 +57,14 @@ export default function RDProductDetailsPopup({ product, onClose }: RDProductDet
       [''],
       ['Cost & Pricing'],
       ['Unit:', product.unit || 'N/A'],
-      ['Min Order:', product.minOrder?.toString() || 'N/A'],
       ['Price:', product.price ? formatIDR(product.price) : 'N/A'],
+      ['Min Order:', product.minOrder || 'N/A'],
       ['Cost Estimate:', product.costEstimate ? formatIDR(product.costEstimate) : 'N/A'],
       [''],
       ['Description:', product.description || ''],
       [''],
       ['Notes:', product.notes || '']
     ];
-
-    // Add recipe information if available
-    if (recipe) {
-      data.push([''], ['Recipe Information']);
-      data.push(['Yield:', `${recipe.yield} ${recipe.yieldUnit}`]);
-      data.push(['Labor Cost:', recipe.laborCost ? formatIDR(recipe.laborCost) : 'N/A']);
-      data.push(['Packaging Cost:', recipe.packagingCost ? formatIDR(recipe.packagingCost) : 'N/A']);
-      
-      if (recipe.ingredients.length > 0) {
-        data.push([''], ['Ingredients']);
-        data.push(['Name', 'Amount', 'Unit']);
-        
-        recipe.ingredients.forEach(item => {
-          const ingredient = ingredients.find(i => i.id === item.ingredientId);
-          if (ingredient) {
-            data.push([
-              ingredient.name,
-              item.amount.toString(),
-              ingredient.unit
-            ]);
-          }
-        });
-      }
-    }
     
     // Generate and download Excel
     const wb = generateExcelData(data, 'RD Product Details');
@@ -156,54 +132,6 @@ export default function RDProductDetailsPopup({ product, onClose }: RDProductDet
       const splitNotes = doc.splitTextToSize(product.notes, 180);
       doc.text(splitNotes, 14, y);
       y += splitNotes.length * 5 + 10;
-    }
-    
-    // Add recipe info if available
-    if (recipe) {
-      // Check if we need a new page
-      if (y > 250) {
-        doc.addPage();
-        y = 20;
-      }
-      
-      doc.setFontSize(14);
-      doc.text('Recipe Information', 14, y);
-      y += 10;
-      
-      doc.setFontSize(10);
-      doc.text(`Yield: ${recipe.yield} ${recipe.yieldUnit}`, 14, y);
-      y += 7;
-      
-      if (recipe.laborCost) {
-        doc.text(`Labor Cost: ${formatIDR(recipe.laborCost)}`, 14, y);
-        y += 7;
-      }
-      
-      if (recipe.packagingCost) {
-        doc.text(`Packaging Cost: ${formatIDR(recipe.packagingCost)}`, 14, y);
-        y += 7;
-      }
-      
-      // Ingredients table
-      if (recipe.ingredients.length > 0) {
-        autoTable(doc, {
-          startY: y + 5,
-          head: [['Ingredient', 'Amount', 'Unit']],
-          body: recipe.ingredients.map(item => {
-            const ingredient = ingredients.find(i => i.id === item.ingredientId);
-            return ingredient ? [
-              ingredient.name,
-              item.amount.toString(),
-              ingredient.unit
-            ] : [];
-          }).filter(row => row.length > 0),
-          theme: 'striped',
-          headStyles: {
-            fillColor: [0, 183, 183],
-            textColor: [255, 255, 255]
-          }
-        });
-      }
     }
     
     // Save PDF
@@ -434,6 +362,23 @@ export default function RDProductDetailsPopup({ product, onClose }: RDProductDet
                   )}
                 </div>
               </div>
+              
+              {/* Order Status Information */}
+              {product.orderReference && (
+                <div className="bg-cyan-50 p-4 rounded-lg border border-cyan-100">
+                  <h3 className="font-medium text-cyan-800 mb-2 flex items-center gap-2">
+                    <Beaker className="w-4 h-4" />
+                    Production Status
+                  </h3>
+                  <p className="text-cyan-700 text-sm">
+                    This R&D product is being tracked in the production system.
+                  </p>
+                  <div className="mt-2 text-sm">
+                    <span className="font-medium text-cyan-800">Order Reference:</span>
+                    <span className="ml-2 text-cyan-700">#{product.orderReference.slice(0, 8)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           
@@ -452,7 +397,7 @@ export default function RDProductDetailsPopup({ product, onClose }: RDProductDet
           {recipe && (
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="font-medium mb-3 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-cyan-600" />
+                <ClipboardList className="w-4 h-4 text-cyan-600" />
                 Recipe Information
               </h3>
               

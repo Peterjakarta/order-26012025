@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Printer, Mail, FileDown, AlertCircle, CheckCircle2, Beaker } from 'lucide-react';
+import { X, Printer, Mail, FileDown, AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { Order } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
 import { useOrderActions } from '../../../hooks/useOrderActions';
@@ -51,7 +51,6 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
 
   const branch = branches.find(b => b.id === order.branchId);
   const isEditing = order.status === 'completed';
-  const isRDProduct = order.isRDProduct === true;
 
   // Add ESC key handler
   useEffect(() => {
@@ -147,20 +146,6 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
           </button>
         )}
       </div>
-
-      {isRDProduct && (
-        <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-4 mb-4">
-          <div className="flex items-start gap-2">
-            <Beaker className="w-5 h-5 text-cyan-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-cyan-800">R&D Testing Order</h4>
-              <p className="text-sm text-cyan-700">
-                This is an order created from R&D for testing purposes. After completion, results will be tracked in the R&D system.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* PO Number Input */}
       <div>

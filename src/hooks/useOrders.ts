@@ -91,7 +91,9 @@ export function useOrders() {
                 completedAt: completedAt?.toISOString(),
                 productionStartDate: data.productionStartDate,
                 productionEndDate: data.productionEndDate,
-                stockReduced: data.stockReduced || false
+                stockReduced: data.stockReduced || false,
+                isRDProduct: data.isRDProduct || false,
+                rdProductData: data.rdProductData
               } as Order);
             } catch (err) {
               console.error('Error parsing order:', doc.id, err);
@@ -169,14 +171,16 @@ export function useOrders() {
       const orderNumber = generateOrderNumber(orderData.branchId, orderData.orderDate);
 
       // Generate a unique ID for the order
-      const orderId = `${orderData.branchId}-${Date.now()}`;
+      const orderId = orderData.isRDProduct ? 
+        `rd-${Date.now()}` : 
+        `${orderData.branchId}-${Date.now()}`;
 
       // Prepare order data with proper timestamps
       const now = serverTimestamp();
       const order = {
         ...orderData,
         orderNumber,
-        status: 'pending' as const,
+        status: orderData.isRDProduct ? 'processing' : 'pending',
         createdAt: now,
         updatedAt: now,
         orderDate: new Date(orderData.orderDate).toISOString(),
@@ -196,7 +200,7 @@ export function useOrders() {
         id: orderId,
         ...orderData,
         orderNumber,
-        status: 'pending' as const,
+        status: orderData.isRDProduct ? 'processing' : 'pending',
         createdAt: new Date().toISOString()
       };
     } catch (error) {
@@ -212,8 +216,7 @@ export function useOrders() {
       
       await updateDoc(orderRef, {
         ...orderData,
-        updatedAt: now,
-        status: orderData.status || 'pending'
+        updatedAt: now
       });
       
       // Force refresh after updating

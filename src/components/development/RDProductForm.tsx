@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, Upload, Star, Trash2, Plus, X, Check, AlertCircle, FileText, ClipboardList, PlusCircle, Image } from 'lucide-react';
+import { Calendar, Upload, Star, Trash2, Plus, X, Check, AlertCircle, FileText, ClipboardList, PlusCircle, Image, ArrowUpRight } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../hooks/useAuth';
+import { useOrders } from '../../hooks/useOrders';
 import { RDProduct, RDCategory, TestResult } from '../../types/rd-types';
 import Beaker from '../common/BeakerIcon';
-import { useNavigate } from 'react-router-dom';
+import { createOrderFromRDProduct, syncRDProductWithOrder } from '../../utils/rdOrderIntegration';
 
 interface RecipeIngredient {
   ingredientId: string;
@@ -28,7 +29,7 @@ export default function RDProductForm({
 }: RDProductFormProps) {
   const { categories, ingredients } = useStore();
   const { user } = useAuth();
-  const navigate = useNavigate();
+  const { addOrder, updateOrder } = useOrders();
   const [selectedCategory, setSelectedCategory] = useState<string>(product?.category || initialCategory || '');
   const [images, setImages] = useState<string[]>(product?.imageUrls || []);
   const [imageUrl, setImageUrl] = useState('');
@@ -40,10 +41,10 @@ export default function RDProductForm({
   const [targetDate, setTargetDate] = useState(product?.targetProductionDate || '');
   const [error, setError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [syncingWithProduction, setSyncingWithProduction] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropzoneRef = useRef<HTMLDivElement>(null);
-  const [showOrderCreatedAlert, setShowOrderCreatedAlert] = useState(false);
   
   // Recipe ingredients state
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(
@@ -259,6 +260,45 @@ export default function RDProductForm({
     setTestResults(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Function to create or update order in production system
+  const syncWithProductionSystem = async (productData: Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>, productId?: string): Promise<string | null> => {
+    try {
+      setSyncingWithProduction(true);
+      
+      // Only proceed if we have both development date and target production date
+      if (!productData.developmentDate || !productData.targetProductionDate) {
+        return null;
+      }
+      
+      // If the product already has an order reference, update the existing order
+      if (product?.orderReference) {
+        await syncRDProductWithOrder(
+          { ...productData, id: product.id } as RDProduct,
+          product.orderReference,
+          updateOrder
+        );
+        return product.orderReference;
+      } else {
+        // Create a new order for this R&D product
+        const tempProduct: RDProduct = {
+          ...productData,
+          id: productId || product?.id || `rd-product-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: user?.email || 'unknown'
+        };
+        
+        const orderId = await createOrderFromRDProduct(tempProduct, addOrder);
+        return orderId;
+      }
+    } catch (err) {
+      console.error('Error syncing with production system:', err);
+      throw err;
+    } finally {
+      setSyncingWithProduction(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -294,9 +334,6 @@ export default function RDProductForm({
       const description = formData.get('description') as string || undefined;
       const unit = formData.get('unit') as string || undefined;
 
-      // Check if we're changing status from planning to testing
-      const isChangingToTesting = product && product.status === 'planning' && status === 'testing';
-
       const productData: Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'> = {
         name,
         category,
@@ -316,20 +353,28 @@ export default function RDProductForm({
         imageUrls: images,
         costEstimate,
         recipeIngredients: recipeIngredients,
-        testResults: testResults
+        testResults: testResults,
+        orderReference: product?.orderReference
       };
 
-      await onSubmit(productData);
-
-      // Show feedback and redirect if changing to testing
-      if (isChangingToTesting) {
-        setShowOrderCreatedAlert(true);
-        
-        // Redirect to orders page after a delay
-        setTimeout(() => {
-          navigate('/management/orders');
-        }, 3000);
+      // If both development date and target production date are set,
+      // create or update an order in the production system
+      let orderReference = product?.orderReference;
+      
+      if (developmentDate && targetDate) {
+        try {
+          const orderId = await syncWithProductionSystem(productData);
+          if (orderId) {
+            orderReference = orderId;
+            productData.orderReference = orderId;
+          }
+        } catch (syncError) {
+          console.error('Failed to sync with production system:', syncError);
+          // Continue with the save even if sync fails
+        }
       }
+
+      await onSubmit(productData);
     } catch (err) {
       console.error('Error submitting form:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while saving the product');
@@ -351,17 +396,6 @@ export default function RDProductForm({
         <div className="flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <p>{error}</p>
-        </div>
-      )}
-
-      {showOrderCreatedAlert && (
-        <div className="flex items-center gap-2 p-4 bg-green-50 text-green-700 rounded-lg">
-          <Check className="w-5 h-5 flex-shrink-0" />
-          <div>
-            <p className="font-medium">Test order created!</p>
-            <p className="text-sm">This product has been moved to Testing status and a production order has been automatically created.</p>
-            <p className="text-sm mt-1">Redirecting to Orders page...</p>
-          </div>
         </div>
       )}
 
@@ -881,6 +915,9 @@ export default function RDProductForm({
               min={developmentDate}
               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
             />
+            <p className="mt-1 text-sm text-gray-500">
+              Setting this date will automatically create an entry in the production schedule
+            </p>
           </div>
 
           <div className="sm:col-span-2">
@@ -899,13 +936,22 @@ export default function RDProductForm({
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
             </select>
-            
-            {status === 'testing' && product?.status === 'planning' && (
-              <p className="mt-1 text-sm text-cyan-600">
-                Changing status to Testing will create a production test order automatically.
-              </p>
-            )}
           </div>
+          
+          {/* Display current production status if this product is linked to an order */}
+          {product?.orderReference && (
+            <div className="sm:col-span-2 bg-cyan-50 p-4 rounded-lg border border-cyan-200">
+              <div className="flex items-center gap-2 text-cyan-800">
+                <ArrowUpRight className="w-5 h-5 text-cyan-600" />
+                <p className="font-medium">
+                  Linked to Production Order #{product.orderReference.slice(0, 8)}
+                </p>
+              </div>
+              <p className="text-sm text-cyan-700 mt-1 ml-7">
+                Changes to dates and development information will automatically sync with the production system
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1049,9 +1095,22 @@ export default function RDProductForm({
         <button
           type="submit"
           className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 flex items-center gap-2"
+          disabled={syncingWithProduction}
         >
-          <Check className="w-4 h-4" />
-          {product ? 'Update' : 'Create'} R&D Product
+          {syncingWithProduction ? (
+            <>
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Syncing...
+            </>
+          ) : (
+            <>
+              <Check className="w-4 h-4" />
+              {product ? 'Update' : 'Create'} R&D Product
+            </>
+          )}
         </button>
       </div>
     </form>
