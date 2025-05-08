@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Copy } from 'lucide-react';
+import { Plus, Trash2, Copy, Beaker, Info } from 'lucide-react';
 import type { Recipe, RecipeIngredient } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
 import { formatIDR } from '../../../utils/currencyFormatter';
+import { calculateRecipeWeight, applyWeightBasedCosts, loadGlobalCostRates } from '../../../utils/recipeWeightCalculations';
 
 interface RecipeFormProps {
   recipe?: Recipe | null;
@@ -21,6 +22,17 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
+  const [useWeightBasedCalculation, setUseWeightBasedCalculation] = useState(true);
+  const [recipeWeight, setRecipeWeight] = useState(0);
+  
+  // Update weight whenever ingredients change
+  useEffect(() => {
+    // Check if there's a recipe and it has a yield value
+    if (recipe?.yield) {
+      const weight = calculateRecipeWeight({...recipe, ingredients: recipeIngredients}, ingredients);
+      setRecipeWeight(weight);
+    }
+  }, [recipeIngredients, ingredients, recipe]);
 
   // Update products when category changes
   useEffect(() => {
@@ -40,6 +52,17 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
       setSelectedProduct(null);
     }
   }, [selectedCategory, getProductsByCategory, recipe]);
+
+  // Apply weight-based cost rates when enabled
+  useEffect(() => {
+    if (recipe && useWeightBasedCalculation && recipeWeight > 0) {
+      const weightBasedCosts = applyWeightBasedCosts(
+        { ...recipe, ingredients: recipeIngredients },
+        ingredients,
+        loadGlobalCostRates()
+      );
+    }
+  }, [useWeightBasedCalculation, recipeWeight, recipe, recipeIngredients, ingredients]);
 
   const handlePasteIngredients = () => {
     try {
@@ -67,7 +90,7 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
@@ -115,6 +138,28 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
       return;
     }
 
+    // If weight-based calculation is enabled and we have a recipe weight,
+    // calculate costs based on weight
+    let finalLaborCost = laborCost;
+    let finalPackagingCost = packagingCost;
+    let finalEquipmentCost = equipmentCost;
+    
+    if (useWeightBasedCalculation && recipeWeight > 0) {
+      const weightBasedCosts = applyWeightBasedCosts(
+        { 
+          ...recipe, 
+          yield: yieldAmount, 
+          ingredients: validIngredients 
+        }, 
+        ingredients,
+        loadGlobalCostRates()
+      );
+      
+      finalLaborCost = weightBasedCosts.laborCost;
+      finalPackagingCost = weightBasedCosts.packagingCost;
+      finalEquipmentCost = weightBasedCosts.equipmentCost;
+    }
+
     // Create the recipe data object using the product name
     const recipeData: Omit<Recipe, 'id'> = {
       name: selectedProduct.name,
@@ -128,14 +173,14 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
     };
 
     // Only include optional costs if they are valid numbers
-    if (!isNaN(laborCost!) && laborCost! > 0) {
-      recipeData.laborCost = laborCost;
+    if (finalLaborCost !== undefined && !isNaN(finalLaborCost) && finalLaborCost > 0) {
+      recipeData.laborCost = finalLaborCost;
     }
-    if (!isNaN(packagingCost!) && packagingCost! > 0) {
-      recipeData.packagingCost = packagingCost;
+    if (finalPackagingCost !== undefined && !isNaN(finalPackagingCost) && finalPackagingCost > 0) {
+      recipeData.packagingCost = finalPackagingCost;
     }
-    if (!isNaN(equipmentCost!) && equipmentCost! > 0) {
-      recipeData.equipmentCost = equipmentCost;
+    if (finalEquipmentCost !== undefined && !isNaN(finalEquipmentCost) && finalEquipmentCost > 0) {
+      recipeData.equipmentCost = finalEquipmentCost;
     }
     if (!isNaN(rejectPercentage!) && rejectPercentage! >= 0) {
       recipeData.rejectPercentage = rejectPercentage;
@@ -336,122 +381,165 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
             );
           })}
         </div>
+        
+        {recipeWeight > 0 && (
+          <div className="mt-4 bg-purple-50 p-3 rounded-lg text-sm">
+            <div className="flex items-center gap-2">
+              <Beaker className="w-4 h-4 text-purple-600" />
+              <span className="font-medium text-purple-800">Recipe Weight: {recipeWeight.toFixed(0)} grams</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <div>
-          <label htmlFor="laborCost" className="block text-sm font-medium text-gray-700">
-            Labor Cost (IDR)
-          </label>
-          <input
-            type="number"
-            id="laborCost"
-            name="laborCost"
-            defaultValue={recipe?.laborCost || ''}
-            min="0"
-            step="1"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
-            placeholder="Optional"
-          />
-          {recipe?.laborCost && (
-            <p className="mt-1 text-sm text-gray-500">
-              Current cost: {formatIDR(recipe.laborCost)}
-            </p>
-          )}
+      <div className="border-t pt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-medium text-gray-900">Overhead Costs</h3>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="useWeightBasedCost"
+              checked={useWeightBasedCalculation}
+              onChange={(e) => setUseWeightBasedCalculation(e.target.checked)}
+              className="mr-2 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+            />
+            <label htmlFor="useWeightBasedCost" className="text-sm font-medium">
+              Use weight-based calculation
+            </label>
+          </div>
         </div>
+        
+        {useWeightBasedCalculation && (
+          <div className="bg-purple-50 p-4 rounded-lg mb-4 border border-purple-200">
+            <div className="flex items-start gap-2">
+              <Info className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-purple-800">
+                <p className="font-medium mb-1">Weight-Based Cost Calculation</p>
+                <p>Costs will be calculated automatically based on recipe weight (grams) and global cost rates.</p>
+                <p className="mt-1">These fields will be auto-filled when you save the recipe.</p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div>
+            <label htmlFor="laborCost" className="block text-sm font-medium text-gray-700">
+              Labor Cost (IDR)
+            </label>
+            <input
+              type="number"
+              id="laborCost"
+              name="laborCost"
+              defaultValue={recipe?.laborCost || ''}
+              min="0"
+              step="1"
+              disabled={useWeightBasedCalculation}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              placeholder="Optional"
+            />
+            {recipe?.laborCost && (
+              <p className="mt-1 text-sm text-gray-500">
+                Current cost: {formatIDR(recipe.laborCost)}
+              </p>
+            )}
+          </div>
 
-        <div>
-          <label htmlFor="packagingCost" className="block text-sm font-medium text-gray-700">
-            Packaging Cost (IDR)
-          </label>
-          <input
-            type="number"
-            id="packagingCost"
-            name="packagingCost"
-            defaultValue={recipe?.packagingCost || ''}
-            min="0"
-            step="1"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
-            placeholder="Optional"
-          />
-          {recipe?.packagingCost && (
-            <p className="mt-1 text-sm text-gray-500">
-              Current cost: {formatIDR(recipe.packagingCost)}
-            </p>
-          )}
-        </div>
+          <div>
+            <label htmlFor="packagingCost" className="block text-sm font-medium text-gray-700">
+              Electricity Cost (IDR)
+            </label>
+            <input
+              type="number"
+              id="packagingCost"
+              name="packagingCost"
+              defaultValue={recipe?.packagingCost || ''}
+              min="0"
+              step="1"
+              disabled={useWeightBasedCalculation}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              placeholder="Optional"
+            />
+            {recipe?.packagingCost && (
+              <p className="mt-1 text-sm text-gray-500">
+                Current cost: {formatIDR(recipe.packagingCost)}
+              </p>
+            )}
+          </div>
 
-        {/* New fields for additional costs and calculations */}
-        <div>
-          <label htmlFor="equipmentCost" className="block text-sm font-medium text-gray-700">
-            Equipment Cost (IDR)
-          </label>
-          <input
-            type="number"
-            id="equipmentCost"
-            name="equipmentCost"
-            defaultValue={recipe?.equipmentCost || ''}
-            min="0"
-            step="1"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
-            placeholder="Optional"
-          />
-          {recipe?.equipmentCost && (
-            <p className="mt-1 text-sm text-gray-500">
-              Current cost: {formatIDR(recipe.equipmentCost)}
-            </p>
-          )}
-        </div>
+          {/* New fields for additional costs and calculations */}
+          <div>
+            <label htmlFor="equipmentCost" className="block text-sm font-medium text-gray-700">
+              Equipment Cost (IDR)
+            </label>
+            <input
+              type="number"
+              id="equipmentCost"
+              name="equipmentCost"
+              defaultValue={recipe?.equipmentCost || ''}
+              min="0"
+              step="1"
+              disabled={useWeightBasedCalculation}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              placeholder="Optional"
+            />
+            {recipe?.equipmentCost && (
+              <p className="mt-1 text-sm text-gray-500">
+                Current cost: {formatIDR(recipe.equipmentCost)}
+              </p>
+            )}
+          </div>
 
-        <div>
-          <label htmlFor="rejectPercentage" className="block text-sm font-medium text-gray-700">
-            Reject Percentage (%)
-          </label>
-          <input
-            type="number"
-            id="rejectPercentage"
-            name="rejectPercentage"
-            defaultValue={recipe?.rejectPercentage || ''}
-            min="0"
-            max="100"
-            step="0.1"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
-            placeholder="e.g. 5%"
-          />
-        </div>
+          <div>
+            <label htmlFor="rejectPercentage" className="block text-sm font-medium text-gray-700">
+              Reject Percentage (%)
+            </label>
+            <input
+              type="number"
+              id="rejectPercentage"
+              name="rejectPercentage"
+              defaultValue={recipe?.rejectPercentage || ''}
+              min="0"
+              max="100"
+              step="0.1"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
+              placeholder="e.g. 5%"
+            />
+          </div>
 
-        <div>
-          <label htmlFor="taxPercentage" className="block text-sm font-medium text-gray-700">
-            Tax Percentage (%)
-          </label>
-          <input
-            type="number"
-            id="taxPercentage"
-            name="taxPercentage"
-            defaultValue={recipe?.taxPercentage || ''}
-            min="0"
-            max="100"
-            step="0.1"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
-            placeholder="e.g. 10%"
-          />
-        </div>
+          <div>
+            <label htmlFor="taxPercentage" className="block text-sm font-medium text-gray-700">
+              Tax Percentage (%)
+            </label>
+            <input
+              type="number"
+              id="taxPercentage"
+              name="taxPercentage"
+              defaultValue={recipe?.taxPercentage || ''}
+              min="0"
+              max="100"
+              step="0.1"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
+              placeholder="e.g. 10%"
+            />
+          </div>
 
-        <div>
-          <label htmlFor="marginPercentage" className="block text-sm font-medium text-gray-700">
-            Margin Percentage (%)
-          </label>
-          <input
-            type="number"
-            id="marginPercentage"
-            name="marginPercentage"
-            defaultValue={recipe?.marginPercentage || ''}
-            min="0"
-            max="100"
-            step="0.1"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
-            placeholder="e.g. 30%"
-          />
+          <div>
+            <label htmlFor="marginPercentage" className="block text-sm font-medium text-gray-700">
+              Margin Percentage (%)
+            </label>
+            <input
+              type="number"
+              id="marginPercentage"
+              name="marginPercentage"
+              defaultValue={recipe?.marginPercentage || ''}
+              min="0"
+              max="100"
+              step="0.1"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
+              placeholder="e.g. 30%"
+            />
+          </div>
         </div>
       </div>
 

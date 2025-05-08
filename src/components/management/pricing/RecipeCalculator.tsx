@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { X, FileDown, FileSpreadsheet, Copy, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, FileDown, FileSpreadsheet, Copy, Check, Info } from 'lucide-react';
 import type { Recipe } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
 import { calculateRecipeCost, calculateTotalProductionCost, calculateSellPrice } from '../../../utils/recipeCalculations';
+import { calculateRecipeWeight, applyWeightBasedCosts, loadGlobalCostRates } from '../../../utils/recipeWeightCalculations';
 import { formatIDR } from '../../../utils/currencyFormatter';
 import { generateExcelData, saveWorkbook } from '../../../utils/excelGenerator';
 import { generateRecipePDF } from '../../../utils/pdfGenerator';
@@ -16,15 +17,50 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
   const { ingredients } = useStore();
   const [quantity, setQuantity] = useState(recipe.yield);
   const [copied, setCopied] = useState(false);
+  const [useWeightBasedCalculation, setUseWeightBasedCalculation] = useState(true);
+  const [overheadCosts, setOverheadCosts] = useState({
+    laborCost: recipe.laborCost || 0,
+    electricityCost: recipe.packagingCost || 0,
+    equipmentCost: recipe.equipmentCost || 0
+  });
+  
+  // Calculate recipe weight
+  const recipeWeight = calculateRecipeWeight(recipe, ingredients);
   
   // Calculate base cost (ingredients only)
   const baseCost = calculateRecipeCost(recipe, ingredients);
   const scaledBaseCost = (baseCost / recipe.yield) * quantity;
   
+  // Load global cost rates
+  useEffect(() => {
+    if (useWeightBasedCalculation) {
+      const scaledWeight = (recipeWeight / recipe.yield) * quantity;
+      const globalRates = loadGlobalCostRates();
+      const weightBasedCosts = applyWeightBasedCosts(
+        { ...recipe, yield: quantity },
+        ingredients, 
+        globalRates
+      );
+      
+      setOverheadCosts({
+        laborCost: weightBasedCosts.laborCost || 0,
+        electricityCost: weightBasedCosts.packagingCost || 0,
+        equipmentCost: weightBasedCosts.equipmentCost || 0
+      });
+    } else {
+      // Use manual costs
+      setOverheadCosts({
+        laborCost: recipe.laborCost ? (recipe.laborCost / recipe.yield) * quantity : 0,
+        electricityCost: recipe.packagingCost ? (recipe.packagingCost / recipe.yield) * quantity : 0,
+        equipmentCost: recipe.equipmentCost ? (recipe.equipmentCost / recipe.yield) * quantity : 0
+      });
+    }
+  }, [recipe, quantity, useWeightBasedCalculation, ingredients, recipeWeight]);
+  
   // Additional costs
-  const laborCost = recipe.laborCost ? (recipe.laborCost / recipe.yield) * quantity : 0;
-  const packagingCost = recipe.packagingCost ? (recipe.packagingCost / recipe.yield) * quantity : 0;
-  const equipmentCost = recipe.equipmentCost ? (recipe.equipmentCost / recipe.yield) * quantity : 0;
+  const laborCost = overheadCosts.laborCost;
+  const packagingCost = overheadCosts.electricityCost;
+  const equipmentCost = overheadCosts.equipmentCost;
   
   // Production cost (before reject adjustment)
   const productionCost = scaledBaseCost + laborCost + packagingCost + equipmentCost;
@@ -92,6 +128,7 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
       [''],
       ['Recipe:', recipe.name],
       ['Quantity:', `${quantity} ${recipe.yieldUnit}`], // Use current quantity
+      ['Total Weight:', `${totalWeight.toFixed(2)} ${commonUnit}`], 
       [''],
       ['Ingredients'],
       ['Name', 'Amount', 'Unit', 'Unit Price', 'Cost'],
@@ -103,12 +140,10 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
         formatIDR(usage.cost)
       ]),
       [''],
-      commonUnit ? ['Total Weight:', `${totalWeight.toFixed(2)} ${commonUnit}`] : [],
-      [''],
       ['Production Costs'],
       ['Base Ingredient Cost:', formatIDR(scaledBaseCost)],
       ['Labor Cost:', formatIDR(laborCost)],
-      ['Packaging Cost:', formatIDR(packagingCost)],
+      ['Electricity:', formatIDR(packagingCost)],
       ['Equipment Cost:', formatIDR(equipmentCost)],
       [`Reject Cost (${rejectPercentage}%):`, formatIDR(rejectCost)],
       ['Total Production Cost:', formatIDR(totalProductionCost)],
@@ -173,19 +208,67 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
         </div>
 
         <div className="p-6 space-y-6 overflow-y-auto">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Production Quantity ({recipe.yieldUnit})
-            </label>
-            <input
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(Math.max(0, parseFloat(e.target.value) || 0))}
-              min="0"
-              step="1"
-              className="w-full p-2 border rounded-md"
-            />
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Production Quantity ({recipe.yieldUnit})
+              </label>
+              <input
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(0, parseFloat(e.target.value) || 0))}
+                min="0"
+                step="1"
+                className="w-full p-2 border rounded-md"
+              />
+            </div>
+            
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total Recipe Weight
+              </label>
+              <div className="flex items-center h-10">
+                <span className="px-3 py-2 border rounded-md bg-gray-50 font-medium">
+                  {(recipeWeight / recipe.yield * quantity).toFixed(0)} grams
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex-1">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                <input
+                  type="checkbox"
+                  checked={useWeightBasedCalculation}
+                  onChange={(e) => setUseWeightBasedCalculation(e.target.checked)}
+                  className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                />
+                Weight-Based Costs
+              </label>
+              <div className="text-xs text-gray-500">
+                {useWeightBasedCalculation ? (
+                  <span className="text-purple-600">Using global cost rates per gram</span>
+                ) : (
+                  <span>Using manual cost values</span>
+                )}
+              </div>
+            </div>
           </div>
+          
+          {useWeightBasedCalculation && (
+            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+              <div className="flex items-start gap-2">
+                <Info className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-purple-800">
+                  <p className="font-medium mb-1">Weight-Based Calculation Active</p>
+                  <p>Labor, Electricity, and Equipment costs are calculated automatically based on:</p>
+                  <ul className="list-disc ml-5 mt-1">
+                    <li>Recipe weight: {(recipeWeight / recipe.yield * quantity).toFixed(0)} grams</li>
+                    <li>Global cost rates: per-gram rates defined in settings</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="bg-gray-50 rounded-lg p-4 space-y-4">
             <h3 className="font-medium">Ingredient Usage & Costs</h3>
@@ -259,7 +342,7 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
                 <span>{formatIDR(laborCost)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Packaging Cost:</span>
+                <span>Electricity:</span>
                 <span>{formatIDR(packagingCost)}</span>
               </div>
               <div className="flex justify-between text-sm">

@@ -6,6 +6,7 @@ import { calculateExpiryDate } from './dateUtils';
 import { isBonBonCategory, isPralinesCategory } from './quantityUtils';
 import { formatIDR } from './currencyFormatter';
 import { calculateRecipeCost } from './recipeCalculations';
+import { ExportOptions } from '../components/management/pricing/ExportOptionsDialog';
 
 // Function to generate Excel for orders
 export function generateOrderExcel(order: Order, products: Product[], poNumber?: string) {
@@ -598,8 +599,18 @@ export function generateSelectedRecipesExcel(
   allRecipes: Recipe[],
   products: Product[],
   ingredients: Ingredient[],
-  categories: Record<string, { name: string }>
-) {
+  categories: Record<string, { name: string }>,
+  options?: ExportOptions
+): WorkBook {
+  // Default options if not provided
+  const exportOptions = options || {
+    includeCosts: true,
+    includeOverheadCosts: true,
+    includeIngredients: true,
+    includeNotes: true,
+    exportFormat: 'excel'
+  };
+
   // Create workbook
   const wb = utils.book_new();
 
@@ -607,35 +618,54 @@ export function generateSelectedRecipesExcel(
   const summaryHeaderRows = [
     ['Selected Recipes Summary'],
     ['Generated on:', new Date().toLocaleString()],
-    ['Selected Recipes:', selectedRecipes.length.toString()],
     [''],
-    ['Recipe Name', 'Category', 'Product', 'Yield', 'Yield Unit', 'Base Cost', 'Labor Cost', 'Packaging Cost', 'Total Cost', 'Unit Cost']
   ];
+  
+  // Add header columns based on options
+  const headerColumns = ['Recipe Name', 'Category', 'Product', 'Yield', 'Yield Unit'];
+  
+  if (exportOptions.includeCosts) {
+    headerColumns.push('Base Cost');
+    if (exportOptions.includeOverheadCosts) {
+      headerColumns.push('Labor Cost', 'Packaging Cost', 'Equipment Cost');
+    }
+    headerColumns.push('Total Cost', 'Unit Cost');
+  }
+  
+  summaryHeaderRows.push(headerColumns);
 
   // Create recipe rows for summary sheet
   const recipeRows = selectedRecipes.map(recipe => {
     const product = products.find(p => p.id === recipe.productId);
     const categoryName = categories[recipe.category]?.name || recipe.category;
     
-    // Calculate costs
-    const baseCost = calculateRecipeCost(recipe, ingredients);
-    const laborCost = recipe.laborCost || 0;
-    const packagingCost = recipe.packagingCost || 0;
-    const totalCost = baseCost + laborCost + packagingCost;
-    const unitCost = recipe.yield > 0 ? totalCost / recipe.yield : 0;
+    // Calculate costs if needed
+    const baseCost = exportOptions.includeCosts ? calculateRecipeCost(recipe, ingredients) : 0;
+    const laborCost = exportOptions.includeOverheadCosts ? (recipe.laborCost || 0) : 0;
+    const packagingCost = exportOptions.includeOverheadCosts ? (recipe.packagingCost || 0) : 0;
+    const equipmentCost = exportOptions.includeOverheadCosts ? (recipe.equipmentCost || 0) : 0;
+    const totalCost = exportOptions.includeCosts ? baseCost + laborCost + packagingCost + equipmentCost : 0;
+    const unitCost = exportOptions.includeCosts ? (recipe.yield > 0 ? totalCost / recipe.yield : 0) : 0;
     
-    return [
+    // Create row with base fields
+    const row = [
       recipe.name,
       categoryName,
       product?.name || 'Unknown Product',
       recipe.yield,
-      recipe.yieldUnit,
-      formatIDR(baseCost),
-      formatIDR(laborCost),
-      formatIDR(packagingCost),
-      formatIDR(totalCost),
-      formatIDR(unitCost)
+      recipe.yieldUnit
     ];
+    
+    // Add cost fields if enabled
+    if (exportOptions.includeCosts) {
+      row.push(formatIDR(baseCost));
+      if (exportOptions.includeOverheadCosts) {
+        row.push(formatIDR(laborCost), formatIDR(packagingCost), formatIDR(equipmentCost));
+      }
+      row.push(formatIDR(totalCost), formatIDR(unitCost));
+    }
+    
+    return row;
   });
 
   // Combine all rows for summary
@@ -652,105 +682,113 @@ export function generateSelectedRecipesExcel(
     { wch: 15 }, // Base Cost
     { wch: 15 }, // Labor Cost
     { wch: 15 }, // Packaging Cost
+    { wch: 15 }, // Equipment Cost
     { wch: 15 }, // Total Cost
     { wch: 15 }  // Unit Cost
   ];
   wsSummary['!cols'] = summaryColWidths;
 
   // Add summary worksheet
-  utils.book_append_sheet(wb, wsSummary, 'Selected Recipes');
+  utils.book_append_sheet(wb, wsSummary, 'All Recipes');
   
-  // Create individual worksheets for each selected recipe with detailed information
-  selectedRecipes.forEach(recipe => {
-    // Skip if invalid recipe or no ingredients
-    if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) return;
-    
-    const product = products.find(p => p.id === recipe.productId);
-    const categoryName = categories[recipe.category]?.name || recipe.category;
-    
-    // Calculate costs
-    const baseCost = calculateRecipeCost(recipe, ingredients);
-    const laborCost = recipe.laborCost || 0;
-    const packagingCost = recipe.packagingCost || 0;
-    const totalCost = baseCost + laborCost + packagingCost;
-    const unitCost = recipe.yield > 0 ? totalCost / recipe.yield : 0;
-    
-    // Create recipe header
-    const recipeHeaderRows = [
-      [recipe.name],
-      ['Category:', categoryName],
-      ['Product:', product?.name || 'Unknown Product'],
-      ['Yield:', `${recipe.yield} ${recipe.yieldUnit}`],
-      [''],
-      ['Ingredients']
-    ];
-    
-    // Add ingredients table header
-    recipeHeaderRows.push(['Name', 'Amount', 'Unit', 'Unit Price', 'Cost']);
-    
-    // Add ingredients rows
-    const ingredientRows = recipe.ingredients.map(item => {
-      const ingredient = ingredients.find(i => i.id === item.ingredientId);
-      if (!ingredient) return [];
+  // Only add detailed recipe sheets if ingredients are included
+  if (exportOptions.includeIngredients) {
+    // Create individual worksheets for each recipe with detailed information
+    selectedRecipes.forEach(recipe => {
+      // Get recipe data
+      const product = products.find(p => p.id === recipe.productId);
+      const categoryName = categories[recipe.category]?.name || recipe.category;
       
-      const unitPrice = ingredient.price / ingredient.packageSize;
-      const cost = unitPrice * item.amount;
-      
-      return [
-        ingredient.name,
-        item.amount,
-        ingredient.unit,
-        formatIDR(unitPrice),
-        formatIDR(cost)
+      // Create recipe header
+      const recipeHeaderRows = [
+        [recipe.name],
+        ['Category:', categoryName],
+        ['Product:', product?.name || 'Unknown Product'],
+        ['Yield:', `${recipe.yield} ${recipe.yieldUnit}`],
+        ['']
       ];
-    }).filter(row => row.length > 0);
-    
-    // Add cost summary
-    const costSummaryRows = [
-      [''],
-      ['Cost Summary'],
-      ['Base Cost:', formatIDR(baseCost)],
-      ['Labor Cost:', formatIDR(laborCost)],
-      ['Packaging Cost:', formatIDR(packagingCost)],
-      ['Total Cost:', formatIDR(totalCost)],
-      [`Cost per ${recipe.yieldUnit}:`, formatIDR(unitCost)]
-    ];
-    
-    // Add notes if present
-    const notesRows = recipe.notes ? [
-      [''],
-      ['Notes:'],
-      [recipe.notes]
-    ] : [];
-    
-    // Combine all rows
-    const allRecipeRows = [
-      ...recipeHeaderRows,
-      ...ingredientRows,
-      ...costSummaryRows,
-      ...notesRows
-    ];
-    
-    // Create worksheet
-    const wsRecipe = utils.aoa_to_sheet(allRecipeRows);
-    
-    // Set column widths
-    const recipeColWidths = [
-      { wch: 40 }, // Name/Label
-      { wch: 15 }, // Amount/Value
-      { wch: 15 }, // Unit
-      { wch: 20 }, // Unit Price
-      { wch: 20 }  // Cost
-    ];
-    wsRecipe['!cols'] = recipeColWidths;
-    
-    // Add worksheet - use safe sheet name (max 31 chars)
-    const safeRecipeName = recipe.name.length > 25 
-      ? recipe.name.substring(0, 25) + "..."
-      : recipe.name;
       
-    utils.book_append_sheet(wb, wsRecipe, safeRecipeName);
-  });
+      // Add ingredients table if needed
+      if (recipe.ingredients.length > 0) {
+        recipeHeaderRows.push(['Ingredients']);
+        
+        // Determine columns based on options
+        const ingredientColumns = ['Name', 'Amount', 'Unit'];
+        if (exportOptions.includeCosts) {
+          ingredientColumns.push('Unit Price', 'Cost');
+        }
+        
+        recipeHeaderRows.push(ingredientColumns);
+        
+        // Add ingredient rows
+        const ingredientRows = recipe.ingredients.map(item => {
+          const ingredient = ingredients.find(i => i.id === item.ingredientId);
+          if (!ingredient) return [];
+          
+          // Base row with name, amount, unit
+          const row = [
+            ingredient.name,
+            item.amount,
+            ingredient.unit
+          ];
+          
+          // Add cost columns if needed
+          if (exportOptions.includeCosts) {
+            const unitPrice = ingredient.price / ingredient.packageSize;
+            const cost = unitPrice * item.amount;
+            row.push(formatIDR(unitPrice), formatIDR(cost));
+          }
+          
+          return row;
+        }).filter(row => row.length > 0);
+        
+        recipeHeaderRows.push(...ingredientRows);
+      }
+      
+      // Add cost summary if needed
+      if (exportOptions.includeCosts) {
+        const baseCost = calculateRecipeCost(recipe, ingredients);
+        const laborCost = recipe.laborCost || 0;
+        const packagingCost = recipe.packagingCost || 0;
+        const equipmentCost = recipe.equipmentCost || 0;
+        const totalCost = baseCost + (exportOptions.includeOverheadCosts ? 
+          (laborCost + packagingCost + equipmentCost) : 0);
+        const unitCost = recipe.yield > 0 ? totalCost / recipe.yield : 0;
+        
+        recipeHeaderRows.push([''], ['Cost Summary']);
+        
+        recipeHeaderRows.push(['Base Cost:', formatIDR(baseCost)]);
+        
+        if (exportOptions.includeOverheadCosts) {
+          recipeHeaderRows.push(
+            ['Labor Cost:', formatIDR(laborCost)],
+            ['Packaging Cost:', formatIDR(packagingCost)],
+            ['Equipment Cost:', formatIDR(equipmentCost)]
+          );
+        }
+        
+        recipeHeaderRows.push(
+          ['Total Cost:', formatIDR(totalCost)],
+          [`Cost per ${recipe.yieldUnit}:`, formatIDR(unitCost)]
+        );
+      }
+      
+      // Add notes if present and enabled
+      if (exportOptions.includeNotes && recipe.notes) {
+        recipeHeaderRows.push([''], ['Notes:'], [recipe.notes]);
+      }
+      
+      // Create worksheet
+      const wsRecipe = utils.aoa_to_sheet(recipeHeaderRows);
+      
+      // Add worksheet - use safe sheet name (max 31 chars)
+      const safeRecipeName = recipe.name.length > 25 
+        ? recipe.name.substring(0, 25) + "..."
+        : recipe.name;
+        
+      utils.book_append_sheet(wb, wsRecipe, safeRecipeName);
+    });
+  }
   
   return wb;
 }

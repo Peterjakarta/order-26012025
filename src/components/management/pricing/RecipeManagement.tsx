@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Calculator, Copy, ChevronDown, ChevronRight, Upload, Package2, Eye, EyeOff, FileSpreadsheet, Check, Clipboard } from 'lucide-react';
+import { Plus, Edit2, Trash2, Calculator, Copy, ChevronDown, ChevronRight, Upload, Package2, Eye, EyeOff, FileSpreadsheet, Check, Clipboard, RefreshCw } from 'lucide-react';
 import { useStore } from '../../../store/StoreContext';
 import type { Recipe, RecipeIngredient, Product } from '../../../types/types';
 import RecipeForm from './RecipeForm';
@@ -9,7 +9,11 @@ import BulkIngredientImport from './recipe/BulkIngredientImport';
 import ProductImport from './recipe/ProductImport';
 import ProductToRecipeImport from './recipe/ProductToRecipeImport';
 import ConfirmDialog from '../../common/ConfirmDialog';
+import { generateRecipePDF } from '../../../utils/pdfGenerator';
 import { generateSelectedRecipesExcel, saveWorkbook } from '../../../utils/excelGenerator';
+import { calculateRecipeCost, calculateTotalProductionCost } from '../../../utils/recipeCalculations';
+import BatchCostUpdate from './BatchCostUpdate';
+import ExportOptionsDialog, { ExportOptions } from './ExportOptionsDialog';
 
 export default function RecipeManagement() {
   const { recipes, categories, addRecipe, updateRecipe, deleteRecipe, products, ingredients, addIngredient } = useStore();
@@ -33,6 +37,9 @@ export default function RecipeManagement() {
   const [showPasteConfirmation, setShowPasteConfirmation] = useState(false);
   const [targetRecipeForPaste, setTargetRecipeForPaste] = useState<Recipe | null>(null);
   const [copiedIngredientsData, setCopiedIngredientsData] = useState<string>('');
+  const [updatingCosts, setUpdatingCosts] = useState(false);
+  const [showBatchCostUpdate, setShowBatchCostUpdate] = useState(false);
+  const [showExportOptions, setShowExportOptions] = useState(false);
 
   const handleSubmit = async (data: Omit<Recipe, 'id'>) => {
     try {
@@ -302,36 +309,94 @@ export default function RecipeManagement() {
     });
   };
 
-  const handleBatchExport = async () => {
+  const handleShowExportOptions = () => {
+    if (selectedRecipes.size === 0) {
+      const confirm = window.confirm('No recipes are selected. Do you want to export all recipes?');
+      if (!confirm) {
+        return;
+      }
+    }
+    setShowExportOptions(true);
+  };
+
+  const handleExport = (options: ExportOptions) => {
     try {
       setExportLoading(true);
       
-      // If no recipes are selected, prompt the user
-      if (selectedRecipes.size === 0) {
-        const confirm = window.confirm('No recipes are selected. Do you want to export all recipes?');
-        if (!confirm) {
-          setExportLoading(false);
-          return;
-        }
-        
-        // Export all recipes
-        const wb = generateSelectedRecipesExcel(recipes, recipes, products, ingredients, categories);
-        saveWorkbook(wb, 'all-recipes.xlsx');
-        setExportLoading(false);
-        return;
+      // Get the selected recipes
+      const recipesToExport = selectedRecipes.size > 0 
+        ? recipes.filter(recipe => selectedRecipes.has(recipe.id))
+        : recipes;
+      
+      if (options.exportFormat === 'excel') {
+        // Export to Excel
+        const wb = generateSelectedRecipesExcel(
+          recipesToExport, 
+          recipes, 
+          products, 
+          ingredients, 
+          categories,
+          options
+        );
+        saveWorkbook(wb, `recipes-export-${recipesToExport.length}.xlsx`);
+      } else {
+        // Export to PDF - handle each recipe individually
+        recipesToExport.forEach(recipe => {
+          const doc = generateRecipePDF(recipe, ingredients, recipe.yield, options);
+          doc.save(`recipe-${recipe.name.toLowerCase().replace(/\s+/g, '-')}.pdf`);
+        });
       }
       
-      // Get the selected recipes
-      const recipesToExport = recipes.filter(recipe => selectedRecipes.has(recipe.id));
-      
-      // Export selected recipes
-      const wb = generateSelectedRecipesExcel(recipesToExport, recipes, products, ingredients, categories);
-      saveWorkbook(wb, `selected-recipes-${selectedRecipes.size}.xlsx`);
+      setShowExportOptions(false);
     } catch (error) {
       console.error('Error exporting recipes:', error);
       alert('Failed to export recipes. Please try again.');
     } finally {
       setExportLoading(false);
+    }
+  };
+
+  const updateRecipeCosts = async () => {
+    try {
+      setUpdatingCosts(true);
+      
+      // If no recipes are selected, prompt the user
+      if (selectedRecipes.size === 0) {
+        const confirm = window.confirm('No recipes are selected. Do you want to update costs for all recipes?');
+        if (!confirm) {
+          setUpdatingCosts(false);
+          return;
+        }
+        
+        // Show the batch update dialog with all recipes
+        setShowBatchCostUpdate(true);
+      } else {
+        // Show the batch update dialog with selected recipes
+        setShowBatchCostUpdate(true);
+      }
+    } catch (error) {
+      console.error('Error updating recipe costs:', error);
+      alert('Failed to update recipe costs. Please try again.');
+    } finally {
+      setUpdatingCosts(false);
+    }
+  };
+  
+  const handleBatchUpdate = async (recipeUpdates: Record<string, Partial<Recipe>>) => {
+    try {
+      // Update each recipe with the provided updates
+      for (const [recipeId, updates] of Object.entries(recipeUpdates)) {
+        const recipe = recipes.find(r => r.id === recipeId);
+        if (recipe) {
+          await updateRecipe(recipeId, {
+            ...recipe,
+            ...updates
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error updating recipes:', error);
+      throw error;
     }
   };
 
@@ -371,15 +436,29 @@ export default function RecipeManagement() {
             <Check className="w-4 h-4" />
             {selectMode ? `Selected: ${selectedRecipes.size}` : 'Select Recipes'}
           </button>
-          {selectMode && (
-            <button
-              onClick={handleBatchExport}
-              disabled={exportLoading}
-              className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50 disabled:opacity-50"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              {exportLoading ? 'Exporting...' : 'Export Selected'}
-            </button>
+          {selectMode && selectedRecipes.size > 0 && (
+            <>
+              <button
+                onClick={updateRecipeCosts}
+                disabled={updatingCosts}
+                className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50 disabled:opacity-50"
+              >
+                {updatingCosts ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Calculator className="w-4 h-4" />
+                )}
+                {updatingCosts ? 'Updating...' : 'Update Costs'}
+              </button>
+              <button
+                onClick={handleShowExportOptions}
+                disabled={exportLoading}
+                className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50 disabled:opacity-50"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                {exportLoading ? 'Exporting...' : 'Export Selected'}
+              </button>
+            </>
           )}
           {!selectMode && (
             <>
@@ -661,6 +740,29 @@ export default function RecipeManagement() {
           setTargetRecipeForPaste(null);
         }}
       />
+
+      {/* Batch Cost Update Dialog */}
+      {showBatchCostUpdate && (
+        <BatchCostUpdate
+          recipes={selectedRecipes.size > 0 
+            ? recipes.filter(recipe => selectedRecipes.has(recipe.id))
+            : recipes
+          }
+          ingredients={ingredients}
+          onUpdate={handleBatchUpdate}
+          onClose={() => setShowBatchCostUpdate(false)}
+        />
+      )}
+
+      {/* Export Options Dialog */}
+      {showExportOptions && (
+        <ExportOptionsDialog
+          isOpen={showExportOptions}
+          onClose={() => setShowExportOptions(false)}
+          onExport={handleExport}
+          selectedCount={selectedRecipes.size > 0 ? selectedRecipes.size : recipes.length}
+        />
+      )}
     </div>
   );
 }
