@@ -9,8 +9,8 @@ import BulkIngredientImport from './recipe/BulkIngredientImport';
 import ProductImport from './recipe/ProductImport';
 import ProductToRecipeImport from './recipe/ProductToRecipeImport';
 import ConfirmDialog from '../../common/ConfirmDialog';
-import { generateRecipePDF } from '../../../utils/pdfGenerator';
 import { generateSelectedRecipesExcel, saveWorkbook } from '../../../utils/excelGenerator';
+import { generateRecipePDF } from '../../../utils/pdfGenerator';
 import { calculateRecipeCost, calculateTotalProductionCost } from '../../../utils/recipeCalculations';
 import BatchCostUpdate from './BatchCostUpdate';
 import ExportOptionsDialog, { ExportOptions } from './ExportOptionsDialog';
@@ -575,7 +575,6 @@ export default function RecipeManagement() {
                           }}
                           className={`
                             h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500
-                            ${someCategoryRecipesSelected ? 'indeterminate' : ''}
                           `}
                           title="Select all recipes in this category"
                         />
@@ -640,7 +639,7 @@ export default function RecipeManagement() {
                                   <span>Labor: {formatIDR(recipe.laborCost)}</span>
                                 )}
                                 {recipe.packagingCost && (
-                                  <span>Packaging: {formatIDR(recipe.packagingCost)}</span>
+                                  <span>Electricity: {formatIDR(recipe.packagingCost)}</span>
                                 )}
                               </div>
                             </div>
@@ -695,7 +694,25 @@ export default function RecipeManagement() {
                           {/* Display ingredients only when expanded */}
                           {recipe.ingredients.length > 0 && expandedRecipes.has(recipe.id) && (
                             <div className="mt-4 p-3 bg-gray-50 rounded-md">
-                              <h5 className="font-medium mb-2 text-sm">Ingredients:</h5>
+                              <div className="flex items-center justify-between">
+                                <h5 className="font-medium mb-2 text-sm">Ingredients:</h5>
+                                {!selectMode && (
+                                  <div className="flex gap-2">
+                                    <button 
+                                      onClick={() => handleImportIngredients(recipe)}
+                                      className="text-xs px-2 py-1 border rounded hover:bg-white"
+                                    >
+                                      Add More
+                                    </button>
+                                    <button 
+                                      onClick={() => handleImportProducts(recipe)}
+                                      className="text-xs px-2 py-1 border rounded hover:bg-white"
+                                    >
+                                      Add From Products
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                               <div className="space-y-1">
                                 {recipe.ingredients.map((item, idx) => {
                                   const ingredient = ingredients.find(i => i.id === item.ingredientId);
