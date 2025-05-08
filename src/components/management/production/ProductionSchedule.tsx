@@ -275,7 +275,7 @@ export default function ProductionSchedule() {
                         {product.status}
                       </span>
                     </div>
-                    <p className="text-sm text-cyan-700">
+                    <p className="text-cyan-700 text-sm">
                       Target Date: {new Date(product.targetProductionDate || '').toLocaleDateString()}
                     </p>
                   </div>

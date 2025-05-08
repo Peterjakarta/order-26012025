@@ -170,49 +170,12 @@ export default function OrderList() {
         </div>
       </div>
 
-      {/* R&D Product Orders */}
+      {/* R&D Product Orders Section */}
       {rdOrders.length > 0 && (
-        <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200 mb-6">
-          <h3 className="font-medium text-lg mb-4 flex items-center gap-2 text-cyan-800">
-            <Beaker className="w-5 h-5" />
-            R&D Products in Production Pipeline
-          </h3>
-          
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {rdOrders.map(order => (
-              <div 
-                key={order.id} 
-                className="bg-white rounded-lg p-4 border border-cyan-100 shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-medium text-cyan-900">
-                      {order.rdProductData?.name || "R&D Product"}
-                    </h4>
-                    <p className="text-sm text-cyan-700">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        Target: {new Date(order.deliveryDate).toLocaleDateString()}
-                      </span>
-                    </p>
-                  </div>
-                  <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800">
-                    {order.rdProductData?.status || "development"}
-                  </span>
-                </div>
-                
-                <div className="mt-4 pt-4 border-t border-cyan-100 flex justify-end">
-                  <button
-                    onClick={() => handleViewRDProduct(order)}
-                    className="px-3 py-1.5 text-sm bg-cyan-100 text-cyan-700 rounded-md hover:bg-cyan-200"
-                  >
-                    View Details
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <RDProductionView 
+          rdOrders={rdOrders}
+          onRefresh={refreshOrders}
+        />
       )}
 
       {pendingOrders.length === 0 ? (

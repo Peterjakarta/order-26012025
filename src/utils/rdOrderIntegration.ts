@@ -1,6 +1,26 @@
 import { Order } from '../types/types';
 import { RDProduct } from '../types/rd-types';
 
+// Helper function to sanitize data for Firestore (convert undefined to null)
+function sanitizeForFirestore(data: any): any {
+  if (data === undefined) {
+    return null;
+  }
+  
+  if (data === null || typeof data !== 'object' || data instanceof Date) {
+    return data;
+  }
+  
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeForFirestore(item));
+  }
+  
+  return Object.entries(data).reduce((result, [key, value]) => {
+    result[key] = sanitizeForFirestore(value);
+    return result;
+  }, {} as Record<string, any>);
+}
+
 // Convert an R&D product to an order format
 export async function createOrderFromRDProduct(
   rdProduct: RDProduct,
@@ -10,6 +30,9 @@ export async function createOrderFromRDProduct(
     if (!rdProduct.targetProductionDate) {
       throw new Error('Target production date is required');
     }
+
+    // Sanitize the R&D product data to replace undefined with null for Firestore
+    const sanitizedRdProduct = sanitizeForFirestore(rdProduct);
 
     // Create order data
     const orderData: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'> = {
@@ -28,7 +51,7 @@ export async function createOrderFromRDProduct(
       productionStartDate: rdProduct.developmentDate,
       productionEndDate: rdProduct.targetProductionDate,
       isRDProduct: true, // Flag to identify R&D products in orders
-      rdProductData: rdProduct // Store original data
+      rdProductData: sanitizedRdProduct // Store sanitized data
     };
 
     // Add order
@@ -52,13 +75,16 @@ export async function syncRDProductWithOrder(
       throw new Error('Target production date is required');
     }
 
+    // Sanitize the R&D product data to replace undefined with null for Firestore
+    const sanitizedRdProduct = sanitizeForFirestore(rdProduct);
+
     // Update order data
     await updateOrderFn(orderId, {
       deliveryDate: rdProduct.targetProductionDate,
       productionStartDate: rdProduct.developmentDate,
       productionEndDate: rdProduct.targetProductionDate,
       notes: `R&D Product: ${rdProduct.name}\n\n${rdProduct.notes || ''}`,
-      rdProductData: rdProduct
+      rdProductData: sanitizedRdProduct
     });
 
     return true;
