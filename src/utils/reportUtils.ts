@@ -151,6 +151,7 @@ export function generateReportExcel(
   startDate: string,
   endDate: string,
   orders: Order[] = [],
+  recipes: Recipe[] = [], // Added recipes parameter here
   options: ReportExportOptions
 ): WorkBook {
   const wb = utils.book_new();
@@ -292,13 +293,22 @@ export function generateReportExcel(
 
   // If 'individual' organization is selected, create a sheet for each order
   if (options.organization === 'individual' && options.format !== 'summary') {
-    orders.forEach(order => {
+    // Keep track of worksheet names to avoid duplicates
+    const usedSheetNames = new Set<string>();
+    
+    orders.forEach((order, index) => {
       const orderData: any[][] = [
         [`Order #${order.id.slice(0, 8)}`],
         ['Order Date:', new Date(order.orderDate).toLocaleDateString()],
         ['Completion Date:', order.completedAt ? new Date(order.completedAt).toLocaleDateString() : 'Not completed'],
-        ['']
       ];
+      
+      // Add PO number if available
+      if (order.poNumber) {
+        orderData.push(['PO Number:', order.poNumber]);
+      }
+      
+      orderData.push(['']);
 
       if (options.content.products) {
         orderData.push(['Products']);
@@ -408,9 +418,34 @@ export function generateReportExcel(
       // Create worksheet for this order
       const wsOrder = utils.aoa_to_sheet(orderData);
       
-      // Add worksheet with a safe name (max 31 chars)
-      const safeOrderId = `Order-${order.id.slice(0, 8)}`;
-      utils.book_append_sheet(wb, wsOrder, safeOrderId);
+      // Generate a unique worksheet name for this order
+      // Include PO number if available to make it clearer which order it is
+      let baseSheetName = order.poNumber 
+        ? `PO-${order.poNumber}-${index + 1}` 
+        : `Order-${order.id.slice(0, 8)}-${index + 1}`;
+      
+      // Remove any invalid characters for Excel worksheet names
+      const sanitizedName = baseSheetName.replace(/[\[\]\*\/\\\?:]/g, '');
+      
+      // Limit to Excel's 31 character limit
+      let safeSheetName = sanitizedName.substring(0, 31);
+      
+      // Ensure uniqueness by adding a counter if needed
+      let counter = 1;
+      let finalSheetName = safeSheetName;
+      
+      while (usedSheetNames.has(finalSheetName)) {
+        // If duplicate exists, create a new name with a counter
+        const suffix = `-${counter}`;
+        finalSheetName = safeSheetName.substring(0, 31 - suffix.length) + suffix;
+        counter++;
+      }
+      
+      // Add to used names
+      usedSheetNames.add(finalSheetName);
+      
+      // Add worksheet with the safe, unique name
+      utils.book_append_sheet(wb, wsOrder, finalSheetName);
     });
   }
 
@@ -693,6 +728,11 @@ export function generateReportPDF(
       
       if (order.completedAt) {
         doc.text(`Completion Date: ${new Date(order.completedAt).toLocaleDateString()}`, 14, yPos);
+        yPos += 5;
+      }
+      
+      if (order.poNumber) {
+        doc.text(`PO Number: ${order.poNumber}`, 14, yPos);
         yPos += 5;
       }
       

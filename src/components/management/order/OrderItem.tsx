@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, FileDown, FileSpreadsheet, Scale, ChevronLeft, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileDown, FileSpreadsheet, Scale, ChevronLeft, Trash2, Eye } from 'lucide-react';
 import type { Order } from '../../../types/types';
 import OrderDetails from './OrderDetails';
 import OrderProducts from './OrderProducts';
@@ -13,10 +13,11 @@ interface OrderItemProps {
   onToggleStock?: (orderId: string, isReduced: boolean) => Promise<void>;
   selected?: boolean;
   onSelect?: () => void;
-  extraActions?: React.ReactNode;
+  extraActions?: (order: Order) => React.ReactNode;
   onDownloadExcel?: (order: Order) => void;
   onDownloadPDF?: (order: Order) => void;
   onReopen?: (order: Order) => void;
+  onViewDetails?: (order: Order) => void;
 }
 
 export default function OrderItem({ 
@@ -29,7 +30,8 @@ export default function OrderItem({
   extraActions,
   onDownloadExcel,
   onDownloadPDF,
-  onReopen
+  onReopen,
+  onViewDetails
 }: OrderItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const styles = getBranchStyles(order.branchId);
@@ -100,6 +102,14 @@ export default function OrderItem({
 
             <div className="flex items-center gap-2">
               <button
+                onClick={(e) => handleButtonClick(e, () => onViewDetails?.(order))}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                title="View order details"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+
+              <button
                 onClick={(e) => handleButtonClick(e, () => onDownloadExcel?.(order))}
                 className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm bg-indigo-500 hover:bg-indigo-600 text-white rounded-md"
               >
@@ -143,7 +153,7 @@ export default function OrderItem({
             <OrderProducts order={order} />
             {extraActions && (
               <div className="pt-4 border-t">
-                {extraActions}
+                {extraActions(order)}
               </div>
             )}
           </div>

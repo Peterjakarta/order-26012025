@@ -1,39 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Eye, 
-  EyeOff, 
-  FileDown, 
-  ChevronDown, 
+  Package2, 
+  AlertCircle, 
   Calendar, 
+  FileDown, 
   RefreshCw, 
   Edit2, 
+  X, 
+  ChevronDown, 
+  ChevronRight, 
+  ClipboardCheck, 
   FileSpreadsheet, 
-  CheckCircle2, 
-  Calculator,
-  AlertCircle,
+  Check,
+  CheckCircle2,
   Scale,
   ClipboardList,
   Upload,
   FileText,
   Printer,
-  Mail
+  Mail,
+  Save
 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '../../hooks/useOrders';
 import { useStore } from '../../store/StoreContext';
 import { useBranches } from '../../hooks/useBranches';
 import OrderItem from './order/OrderItem';
+import { useOrderActions } from '../../hooks/useOrderActions';
 import { generateOrderExcel, saveWorkbook } from '../../utils/excelGenerator';
 import { generateOrderPDF } from '../../utils/pdfGenerator';
 import ConfirmDialog from '../common/ConfirmDialog';
 import IngredientUsageCalculator from './order/IngredientUsageCalculator';
-import { useLocation } from 'react-router-dom';
+import { getBranchStyles } from '../../utils/branchStyles';
 import { generateReport, generateReportExcel, generateReportPDF } from '../../utils/reportUtils';
 import ReportExportDialog, { ReportExportOptions } from './reports/ReportExportDialog';
+import CompletedOrderPopup from './order/CompletedOrderPopup';
 
 export default function CompletedOrders() {
-  const { orders, removeOrder, updateOrderStatus, refreshOrders, updateStockReduction } = useOrders();
+  const { orders, removeOrder, updateOrderStatus, refreshOrders, updateStockReduction, updateOrder } = useOrders();
   const { products, recipes, ingredients } = useStore();
   const { branches } = useBranches();
   const location = useLocation();
@@ -45,7 +49,7 @@ export default function CompletedOrders() {
   const [success, setSuccess] = useState<string | null>(null);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [hasInitialized, setHasInitialized] = useState(false);
+  const [hasInitialized, setIsInitialized] = useState(false);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [editingProductionDate, setEditingProductionDate] = useState<{
@@ -54,14 +58,20 @@ export default function CompletedOrders() {
   } | null>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [showReportDialog, setShowReportDialog] = useState(false);
+  const [editingPoNumber, setEditingPoNumber] = useState<{
+    orderId: string;
+    poNumber: string;
+  } | null>(null);
+  const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   
   const ordersByMonth = React.useMemo(() => {
     const completedOrders = orders
       .filter(order => order.status === 'completed')
       .sort((a, b) => {
-        const dateA = new Date(a.completedAt || a.updatedAt);
-        const dateB = new Date(b.completedAt || b.updatedAt);
-        return dateB.getTime() - dateA.getTime();
+        // Sort by updatedAt timestamp for most recent changes
+        const timeA = new Date(b.completedAt || b.updatedAt).getTime();
+        const timeB = new Date(a.completedAt || a.updatedAt).getTime();
+        return timeA - timeB;
       });
     
     const grouped = completedOrders.reduce((acc, order) => {
@@ -116,7 +126,7 @@ export default function CompletedOrders() {
         setIsRefreshing(true);
         await refreshOrders();
         setIsRefreshing(false);
-        setHasInitialized(true);
+        setIsInitialized(true);
       }
     };
     
@@ -148,7 +158,7 @@ export default function CompletedOrders() {
 
   const handleDownloadExcel = (order: Order) => {
     try {
-      const wb = generateOrderExcel(order, products, poNumber);
+      const wb = generateOrderExcel(order, products, order.poNumber || poNumber);
       saveWorkbook(wb, `order-${order.orderNumber || order.id.slice(0, 8)}.xlsx`);
     } catch (err) {
       console.error('Error generating Excel:', err);
@@ -158,7 +168,7 @@ export default function CompletedOrders() {
 
   const handleDownloadPDF = (order: Order) => {
     try {
-      const doc = generateOrderPDF(order, products, poNumber);
+      const doc = generateOrderPDF(order, products, order.poNumber || poNumber);
       doc.save(`order-${order.orderNumber || order.id.slice(0, 8)}.pdf`);
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -202,13 +212,31 @@ export default function CompletedOrders() {
       const order = orders.find(o => o.id === orderId);
       if (!order) return;
 
-      await updateOrderStatus(orderId, 'completed', undefined, undefined, undefined, undefined, newDate);
+      await updateOrderStatus(orderId, 'completed', undefined, undefined, undefined, undefined, undefined, newDate);
       setEditingProductionDate(null);
       setSuccess('Production date updated successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error('Error updating production date:', err);
       setError('Failed to update production date');
+    }
+  };
+
+  const handleUpdatePoNumber = async (orderId: string) => {
+    if (!editingPoNumber) return;
+    
+    try {
+      setError(null);
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      await updateOrder(orderId, { poNumber: editingPoNumber.poNumber });
+      setEditingPoNumber(null);
+      setSuccess('PO Number updated successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error updating PO Number:', err);
+      setError('Failed to update PO Number');
     }
   };
 
@@ -260,6 +288,7 @@ export default function CompletedOrders() {
           startDate, 
           endDate, 
           filteredOrders,
+          recipes, // Make sure to pass the recipes here
           options
         );
         saveWorkbook(wb, 'production-report.xlsx');
@@ -284,6 +313,25 @@ export default function CompletedOrders() {
       setError('Failed to generate report');
       setShowReportDialog(false);
     }
+  };
+
+  const handleSavePONumber = async (orderId: string, newPoNumber: string) => {
+    try {
+      setError(null);
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      await updateOrder(orderId, { poNumber: newPoNumber });
+      setSuccess('PO Number updated successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error updating PO Number:', err);
+      setError('Failed to update PO Number');
+    }
+  };
+  
+  const handleViewOrder = (order: Order) => {
+    setViewingOrder(order);
   };
 
   const selectedOrdersData = orders.filter(order => 
@@ -330,6 +378,53 @@ export default function CompletedOrders() {
               })}
               className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
               title="Edit production date"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
+      
+      <div className="flex items-center gap-2 mr-4">
+        <span className="text-sm text-gray-600">PO Number:</span>
+        {editingPoNumber?.orderId === order.id ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={editingPoNumber.poNumber}
+              onChange={(e) => setEditingPoNumber({
+                orderId: order.id,
+                poNumber: e.target.value
+              })}
+              className="px-2 py-1 border rounded-md text-sm"
+              placeholder="Enter PO number"
+            />
+            <button
+              onClick={() => handleUpdatePoNumber(order.id)}
+              className="px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600"
+            >
+              <Save className="w-3 h-3 mr-1 inline-block" />
+              Save
+            </button>
+            <button
+              onClick={() => setEditingPoNumber(null)}
+              className="px-2 py-1 text-sm border rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-sm">
+              {order.poNumber || 'Not set'}
+            </span>
+            <button
+              onClick={() => setEditingPoNumber({
+                orderId: order.id,
+                poNumber: order.poNumber || ''
+              })}
+              className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+              title="Edit PO number"
             >
               <Edit2 className="w-4 h-4" />
             </button>
@@ -476,7 +571,8 @@ export default function CompletedOrders() {
                           onReopen={() => setReopeningOrder(order.id)}
                           selected={selectedOrders.has(order.id)}
                           onToggleStock={handleToggleStockReduction}
-                          extraActions={extraActions}
+                          extraActions={() => extraActions(order)}
+                          onViewDetails={() => handleViewOrder(order)}
                         />
                       </div>
                     </div>
@@ -500,6 +596,15 @@ export default function CompletedOrders() {
         <IngredientUsageCalculator
           selectedOrders={selectedOrdersData}
           onClose={() => setShowIngredientCalculator(false)}
+        />
+      )}
+
+      {viewingOrder && (
+        <CompletedOrderPopup 
+          order={viewingOrder}
+          isOpen={!!viewingOrder}
+          onClose={() => setViewingOrder(null)}
+          onSavePO={handleSavePONumber}
         />
       )}
 

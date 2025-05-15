@@ -10,16 +10,18 @@ interface CompletedOrderPopupProps {
   order: Order;
   isOpen: boolean;
   onClose: () => void;
+  onSavePO?: (orderId: string, poNumber: string) => Promise<void>;
 }
 
 export default function CompletedOrderPopup({ 
   order, 
   isOpen, 
-  onClose 
+  onClose,
+  onSavePO
 }: CompletedOrderPopupProps) {
   const { products } = useStore();
   const { printOrder, emailOrder, downloadPDF } = useOrderActions();
-  const [poNumber, setPoNumber] = useState('');
+  const [poNumber, setPoNumber] = useState(order.poNumber || '');
   const branch = branches.find(b => b.id === order.branchId);
 
   if (!isOpen) return null;
@@ -34,6 +36,12 @@ export default function CompletedOrderPopup({
 
   const handleDownloadPDF = () => {
     downloadPDF(order, poNumber);
+  };
+
+  const handleSavePO = async () => {
+    if (onSavePO) {
+      await onSavePO(order.id, poNumber);
+    }
   };
 
   return (
@@ -59,13 +67,23 @@ export default function CompletedOrderPopup({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               PO Number
             </label>
-            <input
-              type="text"
-              value={poNumber}
-              onChange={(e) => setPoNumber(e.target.value)}
-              className="w-full p-2 border rounded-md"
-              placeholder="Enter PO number"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                className="w-full p-2 border rounded-md"
+                placeholder="Enter PO number"
+              />
+              {onSavePO && poNumber !== order.poNumber && (
+                <button
+                  onClick={handleSavePO}
+                  className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  Save
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="bg-gray-50 p-4 rounded-lg space-y-2">
