@@ -30,6 +30,7 @@ import ConfirmDialog from '../common/ConfirmDialog';
 import IngredientUsageCalculator from './order/IngredientUsageCalculator';
 import { useLocation } from 'react-router-dom';
 import { generateReport, generateReportExcel, generateReportPDF } from '../../utils/reportUtils';
+import ReportExportDialog, { ReportExportOptions } from './reports/ReportExportDialog';
 
 export default function CompletedOrders() {
   const { orders, removeOrder, updateOrderStatus, refreshOrders, updateStockReduction } = useOrders();
@@ -52,7 +53,8 @@ export default function CompletedOrders() {
     date: string;
   } | null>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
-
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  
   const ordersByMonth = React.useMemo(() => {
     const completedOrders = orders
       .filter(order => order.status === 'completed')
@@ -222,29 +224,65 @@ export default function CompletedOrders() {
     }
   };
 
-  const handleGenerateReport = () => {
+  const handleOpenReportDialog = () => {
+    if (startDate && endDate) {
+      setShowReportDialog(true);
+    } else {
+      setError('Please select a date range for the report');
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const handleGenerateReport = (options: ReportExportOptions) => {
     try {
       let filteredOrders = orders.filter(order => order.status === 'completed');
+      
+      // Apply date filter
       if (startDate && endDate) {
         filteredOrders = filteredOrders.filter(order => {
           const orderDate = new Date(order.completedAt || order.updatedAt);
           return orderDate >= new Date(startDate) && orderDate <= new Date(endDate);
         });
       }
+      
+      // Filter for selected orders if any are selected
+      if (selectedOrders.size > 0) {
+        filteredOrders = filteredOrders.filter(order => selectedOrders.has(order.id));
+      }
 
       const reportData = generateReport(filteredOrders, products, recipes, ingredients);
 
-      const wb = generateReportExcel(reportData, products, ingredients, startDate, endDate);
-      saveWorkbook(wb, 'production-report.xlsx');
+      if (options.fileType === 'excel') {
+        const wb = generateReportExcel(
+          reportData, 
+          products, 
+          ingredients, 
+          startDate, 
+          endDate, 
+          filteredOrders,
+          options
+        );
+        saveWorkbook(wb, 'production-report.xlsx');
+      } else {
+        const doc = generateReportPDF(
+          reportData, 
+          products, 
+          ingredients, 
+          startDate, 
+          endDate,
+          filteredOrders,
+          options
+        );
+        doc.save('production-report.pdf');
+      }
 
-      const doc = generateReportPDF(reportData, products, ingredients, startDate, endDate);
-      doc.save('production-report.pdf');
-
-      setSuccess('Reports generated successfully');
+      setShowReportDialog(false);
+      setSuccess('Report generated successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error('Error generating reports:', err);
-      setError('Failed to generate reports');
+      setError('Failed to generate report');
+      setShowReportDialog(false);
     }
   };
 
@@ -352,7 +390,7 @@ export default function CompletedOrders() {
             <h3 className="text-sm font-medium text-gray-700">Actions</h3>
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={handleGenerateReport}
+                onClick={handleOpenReportDialog}
                 disabled={!startDate || !endDate}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:opacity-50"
               >
@@ -464,6 +502,15 @@ export default function CompletedOrders() {
           onClose={() => setShowIngredientCalculator(false)}
         />
       )}
+
+      <ReportExportDialog
+        isOpen={showReportDialog}
+        onClose={() => setShowReportDialog(false)}
+        onExport={handleGenerateReport}
+        selectedOrders={selectedOrdersData}
+        startDate={startDate}
+        endDate={endDate}
+      />
     </div>
   );
 }
