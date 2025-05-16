@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckSquare, FileCode, ArrowUpRight, AlertCircle, Beaker, Edit2 } from 'lucide-react';
+import { X, CheckSquare, FileCode, ArrowUpRight, AlertCircle, Beaker, Edit2, FileDown } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { RDProduct } from '../../types/rd-types';
 import type { Product, Recipe } from '../../types/types';
+import { generateRDApprovalPDF } from '../../utils/rdApprovalForm';
 
 interface MoveToProductionDialogProps {
   product: RDProduct;
@@ -28,7 +29,7 @@ export default function MoveToProductionDialog({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isAlreadyMigrated, setIsAlreadyMigrated] = useState(false);
-
+  
   // Check if product has already been migrated to production
   useEffect(() => {
     // Check if there's already a product with a similar name in production
@@ -127,6 +128,16 @@ export default function MoveToProductionDialog({
     }
   };
   
+  const handleDownloadApproval = () => {
+    try {
+      const doc = generateRDApprovalPDF(product);
+      doc.save(`${product.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-approval-form.pdf`);
+    } catch (err) {
+      console.error('Error generating approval PDF:', err);
+      setError('Failed to generate approval PDF');
+    }
+  };
+  
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -169,6 +180,15 @@ export default function MoveToProductionDialog({
               <p className="text-gray-600">
                 {productName} has been successfully moved to the production system.
               </p>
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={handleDownloadApproval}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <FileDown className="w-4 h-4" />
+                  Download Approval Form
+                </button>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -263,6 +283,7 @@ export default function MoveToProductionDialog({
                         <li>Create a recipe with {product.recipeIngredients.length} ingredients</li>
                       )}
                       <li>Mark this R&D product as "Approved" and finalize its development</li>
+                      <li>Generate an approval form that can be downloaded</li>
                     </ul>
                   </div>
                 </div>
