@@ -153,7 +153,7 @@ export default function OrderItem({
             <OrderProducts order={order} />
             {extraActions && (
               <div className="pt-4 border-t">
-                {extraActions(order)}
+                {typeof extraActions === 'function' ? extraActions(order) : extraActions}
               </div>
             )}
           </div>

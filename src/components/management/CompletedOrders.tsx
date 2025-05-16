@@ -324,8 +324,8 @@ export default function CompletedOrders() {
       await updateOrder(orderId, { poNumber: newPoNumber });
       setSuccess('PO Number updated successfully');
       setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      console.error('Error updating PO Number:', err);
+    } catch (error) {
+      console.error('Error updating PO Number:', error);
       setError('Failed to update PO Number');
     }
   };
@@ -571,7 +571,7 @@ export default function CompletedOrders() {
                           onReopen={() => setReopeningOrder(order.id)}
                           selected={selectedOrders.has(order.id)}
                           onToggleStock={handleToggleStockReduction}
-                          extraActions={() => extraActions(order)}
+                          extraActions={(order) => extraActions(order)}
                           onViewDetails={() => handleViewOrder(order)}
                         />
                       </div>
@@ -619,3 +619,30 @@ export default function CompletedOrders() {
     </div>
   );
 }
+
+// For TypeScript compatibility
+const Calculator = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <rect width="16" height="20" x="4" y="2" rx="2" />
+    <line x1="8" x2="16" y1="6" y2="6" />
+    <line x1="16" x2="16" y1="14" y2="18" />
+    <path d="M16 10h.01" />
+    <path d="M12 10h.01" />
+    <path d="M8 10h.01" />
+    <path d="M12 14h.01" />
+    <path d="M8 14h.01" />
+    <path d="M12 18h.01" />
+    <path d="M8 18h.01" />
+  </svg>
+);

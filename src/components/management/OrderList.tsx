@@ -209,7 +209,7 @@ export default function OrderList() {
                     onDownloadExcel={handleDownloadExcel}
                     onDownloadPDF={handleDownloadPDF}
                     selected={selectedOrders.has(order.id)}
-                    extraActions={
+                    extraActions={(order) => (
                       <div className="flex items-center gap-2">
                         <span className={`px-2 py-0.5 rounded-md text-sm ${branchStyles.base}`}>
                           {branch?.name}
@@ -237,7 +237,7 @@ export default function OrderList() {
                           </button>
                         </div>
                       </div>
-                    }
+                    )}
                   />
                 </div>
               </div>
