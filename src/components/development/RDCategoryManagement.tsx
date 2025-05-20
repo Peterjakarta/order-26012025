@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Tag, Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Tag, Plus, Edit2, Trash2, Search, Filter, RefreshCw } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { RDCategory } from '../../types/rd-types';
 import RDCategoryForm from './RDCategoryForm';
@@ -7,7 +7,6 @@ import ConfirmDialog from '../common/ConfirmDialog';
 import Beaker from '../common/BeakerIcon';
 import { 
   loadRDCategories, 
-  saveRDCategories, 
   addRDCategory, 
   updateRDCategory, 
   deleteRDCategory,
@@ -24,26 +23,51 @@ export default function RDCategoryManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Initialize from localStorage
-  useEffect(() => {
+  // Load categories data
+  const loadCategoriesData = useCallback(async () => {
     try {
-      const categories = loadRDCategories();
+      setLoading(true);
+      setError(null);
+      const categories = await loadRDCategories();
       setRdCategories(categories);
     } catch (error) {
       console.error('Error loading R&D categories:', error);
+      setError('Failed to load categories data. Please try again.');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      setError(null);
+      await loadCategoriesData();
+    } catch (err) {
+      console.error('Error refreshing data:', err);
+      setError('Failed to refresh data. Please try again.');
+    } finally {
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 500);
+    }
+  };
+
+  // Initialize from Firestore
+  useEffect(() => {
+    loadCategoriesData();
     
     // Listen for changes from other components
     const unsubscribe = addRDDataChangeListener(() => {
-      const updatedCategories = loadRDCategories();
-      setRdCategories(updatedCategories);
+      loadCategoriesData();
     });
     
     return unsubscribe;
-  }, []);
+  }, [loadCategoriesData]);
 
   // Filter categories based on search term and status
   const filteredCategories = rdCategories.filter(category => {
@@ -56,9 +80,11 @@ export default function RDCategoryManagement() {
 
   const handleSubmit = async (categoryData: Omit<RDCategory, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
+      setError(null);
+      
       if (editingCategory) {
         // Update existing category
-        const updatedCategory = updateRDCategory(editingCategory.id, categoryData);
+        const updatedCategory = await updateRDCategory(editingCategory.id, categoryData);
         if (updatedCategory) {
           setRdCategories(prev => prev.map(c => 
             c.id === editingCategory.id ? updatedCategory : c
@@ -67,41 +93,45 @@ export default function RDCategoryManagement() {
         setEditingCategory(null);
       } else {
         // Create new category
-        const newCategory = addRDCategory(categoryData);
+        const newCategory = await addRDCategory(categoryData);
         setRdCategories(prev => [...prev, newCategory]);
         setIsAddingCategory(false);
       }
-      
-      // Notify other components that data has changed
-      dispatchRDDataChangedEvent();
     } catch (error) {
       console.error('Error saving category:', error);
+      setError('Failed to save category. Please try again.');
       throw error;
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deletingCategory) return;
     
-    deleteRDCategory(deletingCategory.id);
-    setRdCategories(prev => prev.filter(c => c.id !== deletingCategory.id));
-    setDeletingCategory(null);
-    
-    // Notify other components that data has changed
-    dispatchRDDataChangedEvent();
+    try {
+      setError(null);
+      await deleteRDCategory(deletingCategory.id);
+      setRdCategories(prev => prev.filter(c => c.id !== deletingCategory.id));
+      setDeletingCategory(null);
+    } catch (err) {
+      console.error('Error deleting category:', err);
+      setError('Failed to delete category. Please try again.');
+    }
   };
 
-  const toggleCategoryStatus = (category: RDCategory) => {
-    const newStatus = category.status === 'active' ? 'inactive' : 'active';
-    const updatedCategory = updateRDCategory(category.id, { status: newStatus });
-    
-    if (updatedCategory) {
-      setRdCategories(prev => prev.map(c => 
-        c.id === category.id ? updatedCategory : c
-      ));
+  const toggleCategoryStatus = async (category: RDCategory) => {
+    try {
+      setError(null);
+      const newStatus = category.status === 'active' ? 'inactive' : 'active';
+      const updatedCategory = await updateRDCategory(category.id, { status: newStatus });
       
-      // Notify other components that data has changed
-      dispatchRDDataChangedEvent();
+      if (updatedCategory) {
+        setRdCategories(prev => prev.map(c => 
+          c.id === category.id ? updatedCategory : c
+        ));
+      }
+    } catch (err) {
+      console.error('Error updating category status:', err);
+      setError('Failed to update category status. Please try again.');
     }
   };
 
@@ -120,13 +150,23 @@ export default function RDCategoryManagement() {
           <Tag className="w-6 h-6 text-cyan-600" />
           Test Categories
         </h2>
-        <button
-          onClick={() => setIsAddingCategory(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
-        >
-          <Plus className="w-4 h-4" />
-          Add Test Category
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title="Refresh data"
+            className="w-10 h-10 flex items-center justify-center gap-2 rounded-full border hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-cyan-600' : 'text-gray-600'}`} />
+          </button>
+          <button
+            onClick={() => setIsAddingCategory(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
+          >
+            <Plus className="w-4 h-4" />
+            Add Test Category
+          </button>
+        </div>
       </div>
 
       <div className="bg-white p-4 rounded-lg shadow-sm border space-y-4">
@@ -160,6 +200,13 @@ export default function RDCategoryManagement() {
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" />
+          <p>{error}</p>
+        </div>
+      )}
 
       {isAddingCategory && (
         <div className="mb-6">

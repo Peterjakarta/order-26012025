@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { GraduationCap, Tag, Settings, FileText, Sparkles } from 'lucide-react';
+import { GraduationCap, Tag, Settings, FileText, Sparkles, Loader, RefreshCw, AlertCircle } from 'lucide-react';
 import RDProductManagement from '../components/development/RDProductManagement';
 import { useAuth } from '../hooks/useAuth';
+import { initializeRDData } from '../services/rdDataService'; 
 
 interface MenuItem {
   path: string;
@@ -16,6 +17,24 @@ interface MenuItem {
 export default function Development() {
   const location = useLocation();
   const { hasPermission } = useAuth();
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [initError, setInitError] = useState<string | null>(null);
+  
+  // Initialize R&D data when the component mounts
+  useEffect(() => {
+    const init = async () => {
+      try {
+        await initializeRDData();
+      } catch (error) {
+        console.error('Error initializing R&D data:', error);
+        setInitError('Failed to initialize development data. Please try again.');
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    
+    init();
+  }, []);
   
   const menuItems: MenuItem[] = [
     {
@@ -57,6 +76,67 @@ export default function Development() {
         <p className="text-gray-600">
           You don't have permission to access the development features.
         </p>
+      </div>
+    );
+  }
+
+  // Show loading state during initialization
+  if (isInitializing) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-cyan-100 rounded-lg">
+            <GraduationCap className="w-6 h-6 text-cyan-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Product Development</h1>
+            <p className="text-gray-600">Initializing development environment...</p>
+          </div>
+        </div>
+        <div className="bg-white p-12 rounded-xl text-center shadow">
+          <Loader className="w-10 h-10 text-cyan-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading development data...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show error if initialization failed
+  if (initError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-cyan-100 rounded-lg">
+            <GraduationCap className="w-6 h-6 text-cyan-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Product Development</h1>
+            <p className="text-gray-600">Research and development workspace</p>
+          </div>
+        </div>
+        <div className="bg-red-50 border border-red-200 p-6 rounded-lg">
+          <div className="flex items-center gap-3 mb-2 text-red-800">
+            <AlertCircle className="w-6 h-6 text-red-600" />
+            <h3 className="font-medium text-lg">Initialization Error</h3>
+          </div>
+          <p className="text-red-600 mb-4">{initError}</p>
+          <p className="text-gray-600 mb-4">
+            Unable to connect to the database. Don't worry - we'll use local storage mode instead.
+            Your data will be saved in your browser but won't be synchronized across devices.
+          </p>
+          <div className="flex justify-center">
+            <button
+              onClick={() => {
+                setInitError(null);
+                setIsInitializing(false);
+              }}
+              className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
+            >
+              <RefreshCw className="w-4 h-4 mr-2 inline-block" />
+              Continue in Local Mode
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
