@@ -29,7 +29,7 @@ export default function RDCategoryForm({ category, onSubmit, onCancel }: RDCateg
       
       await onSubmit({
         name: name.trim(),
-        description: description.trim() || undefined,
+        description: description.trim() || null,
         status
       });
     } catch (err) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Eye, ArrowUpRight, Calendar, Star, FileText, Check, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, ClipboardList, FileDown, Tag, Search, Filter, RefreshCw } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../hooks/useAuth';
@@ -10,8 +10,8 @@ import ConfirmDialog from '../common/ConfirmDialog';
 import Beaker from '../common/BeakerIcon';
 import MoveToProductionDialog from './MoveToProductionDialog';
 import { 
-  loadRDCategories, 
   loadRDProducts, 
+  loadRDCategories, 
   addRDProduct, 
   updateRDProduct, 
   deleteRDProduct,
@@ -21,14 +21,14 @@ import {
   scheduleRDProductForProduction,
   dispatchRDDataChangedEvent,
   addRDDataChangeListener,
-  setupRDDataListeners
+  setupRDDataListeners,
+  initializeRDCollections
 } from '../../services/rdDataService';
 
 export default function RDProductManagement() {
   const { categories, ingredients, products, recipes } = useStore();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [rdProducts, setRdProducts] = useState<RDProduct[]>([]);
-  const [rdCategories, setRdCategories] = useState<RDCategory[]>([]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<RDProduct | null>(null);
   const [viewingProduct, setViewingProduct] = useState<RDProduct | null>(null);
@@ -39,6 +39,7 @@ export default function RDProductManagement() {
   const [movingToProduction, setMovingToProduction] = useState<RDProduct | null>(null);
   
   // Category management state
+  const [rdCategories, setRdCategories] = useState<RDCategory[]>([]);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [editingCategory, setEditingCategory] = useState<RDCategory | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<RDCategory | null>(null);
@@ -54,44 +55,102 @@ export default function RDProductManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Load data using real-time listeners
+  
+  // Load data on component mount
   useEffect(() => {
-    setLoading(true);
-
-    // Set up real-time listener
-    const unsubscribe = setupRDDataListeners(
-      // Categories update callback
-      (categories) => {
-        setRdCategories(categories);
-      },
-      // Products update callback
-      (products) => {
-        setRdProducts(products);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
-
-  // Manual refresh handler
-  const handleRefresh = async () => {
-    try {
-      setIsRefreshing(true);
+    let mounted = true;
+    let cleanup: (() => void) | undefined;
+    
+    const initializeData = async () => {
+      if (!mounted) return;
+      
+      setLoading(true);
       setError(null);
       
+      try {
+        console.log('Initializing RD Product Management...');
+        
+        if (!isAuthenticated) {
+          throw new Error('User must be authenticated to access R&D data');
+        }
+        
+        // Initialize collections first
+        await initializeRDCollections();
+        
+        // Load initial data
+        const [categoriesData, productsData] = await Promise.all([
+          loadRDCategories(),
+          loadRDProducts()
+        ]);
+        
+        if (mounted) {
+          console.log(`Loaded ${categoriesData.length} categories and ${productsData.length} products`);
+          setRdCategories(categoriesData);
+          setRdProducts(productsData);
+        }
+        
+        // Setup real-time listeners
+        const listeners = setupRDDataListeners(
+          (updatedCategories) => {
+            console.log(`Listener received ${updatedCategories.length} categories`);
+            if (mounted) setRdCategories(updatedCategories);
+          },
+          (updatedProducts) => {
+            console.log(`Listener received ${updatedProducts.length} products`);
+            if (mounted) setRdProducts(updatedProducts);
+          }
+        );
+        
+        cleanup = listeners?.cleanup;
+      } catch (err) {
+        console.error('Error initializing R&D data:', err);
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load R&D data');
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    initializeData();
+    
+    // Setup data change listener for changes from other components
+    const unsubscribe = addRDDataChangeListener(() => {
+      if (mounted) {
+        console.log('R&D data changed event received');
+        // Just refresh the data - listeners should handle updates
+        initializeData();
+      }
+    });
+    
+    return () => {
+      mounted = false;
+      if (cleanup) cleanup();
+      unsubscribe();
+    };
+  }, [isAuthenticated]);
+
+  // Manual refresh function
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    setError(null);
+    
+    try {
       const [categoriesData, productsData] = await Promise.all([
         loadRDCategories(),
         loadRDProducts()
       ]);
       
+      console.log(`Refreshed ${categoriesData.length} categories and ${productsData.length} products`);
       setRdCategories(categoriesData);
       setRdProducts(productsData);
     } catch (err) {
-      console.error('Error refreshing data:', err);
-      setError('Failed to refresh data. Please try again.');
+      console.error('Error refreshing R&D data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to refresh R&D data');
     } finally {
+      // Add a small delay to make the refresh button feedback more noticeable
       setTimeout(() => {
         setIsRefreshing(false);
       }, 500);
@@ -200,58 +259,74 @@ export default function RDProductManagement() {
   };
 
   const handleSubmitProduct = async (data: Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => {
+    setError(null);
+    
     try {
-      setError(null);
-      
       if (editingProduct) {
         // Update existing product
         const updatedProduct = await updateRDProduct(editingProduct.id, data);
         if (updatedProduct) {
-          // The real-time listener will update the UI
-          setEditingProduct(null);
+          setRdProducts(prev => prev.map(p => 
+            p.id === editingProduct.id ? updatedProduct : p
+          ));
         }
+        setEditingProduct(null);
       } else {
         // Create new product
-        await addRDProduct(data);
+        const newProduct = await addRDProduct(data);
+        setRdProducts(prev => [...prev, newProduct]);
         setIsAddingProduct(false);
       }
+      
+      // Notify other components that data has changed
+      dispatchRDDataChangedEvent();
     } catch (error) {
       console.error('Error saving product:', error);
-      setError('Failed to save product. Please try again.');
-      throw error;
+      setError(error instanceof Error ? error.message : 'Failed to save product');
     }
   };
 
   const handleDeleteProduct = async () => {
     if (!deletingProduct) return;
     
+    setError(null);
     try {
-      setError(null);
       await deleteRDProduct(deletingProduct.id);
+      setRdProducts(prev => prev.filter(p => p.id !== deletingProduct.id));
       setDeletingProduct(null);
-    } catch (err) {
-      console.error('Error deleting product:', err);
-      setError('Failed to delete product. Please try again.');
+      
+      // Notify other components that data has changed
+      dispatchRDDataChangedEvent();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete product');
     }
   };
 
   const handleApproveForProduction = async (product: RDProduct) => {
+    setError(null);
     try {
-      setError(null);
-      
       const targetDate = product.targetProductionDate || new Date().toISOString().split('T')[0];
       const updatedProduct = await scheduleRDProductForProduction(product.id, targetDate);
       
       if (updatedProduct) {
-        await updateRDProduct(product.id, { status: 'approved' as const });
-        setViewingProduct(null);
+        const statusUpdated = await updateRDProduct(product.id, { status: 'approved' as const });
+        if (statusUpdated) {
+          setRdProducts(prev => prev.map(p => 
+            p.id === product.id ? statusUpdated : p
+          ));
+          setViewingProduct(statusUpdated);
+        }
       }
       
       // Show confirmation to user
       alert(`${product.name} is scheduled for production on ${new Date(targetDate).toLocaleDateString()}`);
-    } catch (err) {
-      console.error('Error approving product for production:', err);
-      setError('Failed to approve product for production. Please try again.');
+      
+      // Notify other components that data has changed
+      dispatchRDDataChangedEvent();
+    } catch (error) {
+      console.error('Error approving product for production:', error);
+      setError(error instanceof Error ? error.message : 'Failed to approve product');
     }
   };
 
@@ -260,24 +335,88 @@ export default function RDProductManagement() {
   };
 
   const handleProductionSuccess = () => {
-    // Firestore listener will update the products automatically
+    // Reload data after successful migration
+    refreshData();
   };
+
+  const handleSubmitCategory = async (categoryData: Omit<RDCategory, 'id' | 'createdAt' | 'updatedAt'>) => {
+    setError(null);
+    try {
+      if (editingCategory) {
+        // Update existing category
+        const updatedCategory = await updateRDCategory(editingCategory.id, categoryData);
+        if (updatedCategory) {
+          setRdCategories(prev => prev.map(c => 
+            c.id === editingCategory.id ? updatedCategory : c
+          ));
+        }
+        setEditingCategory(null);
+      } else {
+        // Create new category
+        const newCategory = await addRDCategory(categoryData);
+        setRdCategories(prev => [...prev, newCategory]);
+        setIsAddingCategory(false);
+      }
+      
+      // Notify other components that data has changed
+      dispatchRDDataChangedEvent();
+    } catch (err) {
+      console.error('Error saving category:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save category');
+      throw err;
+    }
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!deletingCategory) return;
+    
+    setError(null);
+    try {
+      const success = await deleteRDCategory(deletingCategory.id);
+      if (success) {
+        setRdCategories(prev => prev.filter(c => c.id !== deletingCategory.id));
+        setDeletingCategory(null);
+        
+        // Notify other components that data has changed
+        dispatchRDDataChangedEvent();
+      }
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete category');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-12">
+        <div className="w-8 h-8 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <Beaker className="w-6 h-6 text-cyan-600" />
-          R&D Products
-        </h2>
+          <div>
+            <h2 className="text-xl font-semibold">R&D Products</h2>
+            <div className="text-sm text-gray-500">{rdProducts.length} products in database</div>
+          </div>
+          {isRefreshing && (
+            <RefreshCw className="w-5 h-5 animate-spin text-cyan-500 ml-2" />
+          )}
+        </div>
         <div className="flex gap-2">
           <button
-            onClick={handleRefresh}
+            onClick={refreshData}
             disabled={isRefreshing}
-            title="Refresh data"
-            className="w-10 h-10 flex items-center justify-center gap-2 rounded-full border hover:bg-gray-50 disabled:opacity-50"
+            className={`flex items-center gap-2 px-4 py-2 border rounded-lg ${
+              isRefreshing ? 'bg-gray-100 text-gray-400' : 'hover:bg-gray-50'
+            }`}
           >
-            <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-cyan-600' : 'text-gray-600'}`} />
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
           <button
             onClick={() => setShowCategories(prev => !prev)}
@@ -297,6 +436,16 @@ export default function RDProductManagement() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">Error</p>
+            <p className="text-sm">{error}</p>
+          </div>
+        </div>
+      )}
 
       {/* Category Management Section */}
       {showCategories && (
@@ -318,16 +467,7 @@ export default function RDProductManagement() {
           {isAddingCategory && (
             <div className="mb-4">
               <RDCategoryForm
-                onSubmit={async (categoryData) => {
-                  try {
-                    setError(null);
-                    await addRDCategory(categoryData);
-                    setIsAddingCategory(false);
-                  } catch (err) {
-                    console.error('Error adding category:', err);
-                    setError('Failed to add category. Please try again.');
-                  }
-                }}
+                onSubmit={handleSubmitCategory}
                 onCancel={() => setIsAddingCategory(false)}
               />
             </div>
@@ -337,22 +477,13 @@ export default function RDProductManagement() {
             <div className="mb-4">
               <RDCategoryForm
                 category={editingCategory}
-                onSubmit={async (categoryData) => {
-                  try {
-                    setError(null);
-                    await updateRDCategory(editingCategory.id, categoryData);
-                    setEditingCategory(null);
-                  } catch (err) {
-                    console.error('Error updating category:', err);
-                    setError('Failed to update category. Please try again.');
-                  }
-                }}
+                onSubmit={handleSubmitCategory}
                 onCancel={() => setEditingCategory(null)}
               />
             </div>
           )}
 
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {rdCategories.map(category => (
               <div 
                 key={category.id}
@@ -385,13 +516,20 @@ export default function RDProductManagement() {
                   <button
                     onClick={async () => {
                       try {
-                        setError(null);
                         await updateRDCategory(category.id, { 
                           status: category.status === 'active' ? 'inactive' : 'active' 
                         });
-                      } catch (err) {
-                        console.error('Error updating category status:', err);
-                        setError('Failed to update category status. Please try again.');
+                        
+                        setRdCategories(prev => prev.map(c => 
+                          c.id === category.id ? 
+                          {...c, status: c.status === 'active' ? 'inactive' : 'active'} 
+                          : c
+                        ));
+                        
+                        dispatchRDDataChangedEvent();
+                      } catch (error) {
+                        console.error('Error updating category status:', error);
+                        setError(error instanceof Error ? error.message : 'Failed to update category status');
                       }
                     }}
                     className={`text-sm px-3 py-1.5 rounded-md ${
@@ -419,6 +557,16 @@ export default function RDProductManagement() {
                 </div>
               </div>
             ))}
+            
+            {rdCategories.length === 0 && (
+              <div className="col-span-full bg-gray-50 p-12 rounded-lg border text-center">
+                <Beaker className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-xl font-medium text-gray-700 mb-2">No test categories found</h3>
+                <p className="text-gray-500 mb-6">
+                  Get started by adding your first test category.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -486,18 +634,7 @@ export default function RDProductManagement() {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-5 h-5" />
-          <p>{error}</p>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex justify-center items-center p-12">
-          <div className="w-8 h-8 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      ) : isAddingProduct ? (
+      {isAddingProduct && (
         <div className="mb-6">
           <h3 className="text-lg font-medium mb-3">New R&D Product</h3>
           <RDProductForm
@@ -507,7 +644,9 @@ export default function RDProductManagement() {
             rdCategories={rdCategories.filter(cat => cat.status === 'active')}
           />
         </div>
-      ) : editingProduct ? (
+      )}
+
+      {editingProduct && (
         <div className="mb-6">
           <h3 className="text-lg font-medium mb-3">Edit R&D Product</h3>
           <RDProductForm
@@ -517,7 +656,9 @@ export default function RDProductManagement() {
             rdCategories={rdCategories.filter(cat => cat.status === 'active')}
           />
         </div>
-      ) : viewingProduct ? (
+      )}
+
+      {viewingProduct && (
         <RDProductDetails
           product={viewingProduct}
           onClose={() => setViewingProduct(null)}
@@ -527,7 +668,10 @@ export default function RDProductManagement() {
           }}
           onApprove={() => handleApproveForProduction(viewingProduct)}
         />
-      ) : Object.keys(productsByCategory).length > 0 ? (
+      )}
+
+      {/* Products Listed by Category */}
+      {Object.keys(productsByCategory).length > 0 ? (
         <div className="space-y-4">
           {Object.entries(productsByCategory).map(([categoryId, products]) => {
             // Skip categories with no products
@@ -552,10 +696,6 @@ export default function RDProductManagement() {
                       )}
                       <h3 className="font-medium">{categoryName}</h3>
                       <span className="text-sm text-gray-500">({products.length} products)</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      {/* Category stats/indicators could go here */}
                     </div>
                   </div>
                 </div>
@@ -750,18 +890,7 @@ export default function RDProductManagement() {
         isOpen={!!deletingCategory}
         title="Delete Test Category"
         message={`Are you sure you want to delete "${deletingCategory?.name}"? This action cannot be undone.`}
-        onConfirm={async () => {
-          if (!deletingCategory) return;
-          
-          try {
-            setError(null);
-            await deleteRDCategory(deletingCategory.id);
-            setDeletingCategory(null);
-          } catch (err) {
-            console.error('Error deleting category:', err);
-            setError('Failed to delete category. Please try again.');
-          }
-        }}
+        onConfirm={handleDeleteCategory}
         onCancel={() => setDeletingCategory(null)}
       />
 

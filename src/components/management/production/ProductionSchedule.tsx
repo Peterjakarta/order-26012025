@@ -77,7 +77,13 @@ export default function ProductionSchedule() {
   const loadRDData = () => {
     try {
       // Load products from localStorage
-      const allProducts = loadRDProducts();
+      let allProducts = loadRDProducts();
+      
+      // Check if allProducts is an array before filtering
+      if (!Array.isArray(allProducts)) {
+        console.warn("allProducts is not an array, converting to empty array");
+        allProducts = [];
+      }
       
       // Only keep products with target production dates AND not approved
       const productsWithDates = allProducts.filter(p => 

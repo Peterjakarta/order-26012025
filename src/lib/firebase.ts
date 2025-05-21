@@ -11,7 +11,9 @@ import {
   enableIndexedDbPersistence,
   disableNetwork,
   enableNetwork,
-  setLogLevel
+  setLogLevel,
+  getDocs,
+  query
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
@@ -36,7 +38,7 @@ const missingEnvVars = requiredEnvVars.filter(varName => !import.meta.env[varNam
 
 if (missingEnvVars.length > 0) {
   console.error('Missing required environment variables:', missingEnvVars);
-  console.warn('The application will continue with limited functionality.');
+  throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
 }
 
 // Network status management
@@ -83,75 +85,31 @@ async function attemptReconnect() {
   }
 }
 
-// Default Firebase config if environment variables are missing
-const defaultConfig = {
-  apiKey: "AIzaSyBR8Wzs6GQkRFZcGLEP-5kAQHyFsLOu7tk", // Demo project API key
-  authDomain: "demo-project.firebaseapp.com",
-  projectId: "demo-project",
-  storageBucket: "demo-project.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:a1b2c3d4e5f6a1b2c3d4e5"
-};
-
-// Get Firebase config from environment variables, fallback to default if needed
+// Get Firebase config from environment variables
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || defaultConfig.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || defaultConfig.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || defaultConfig.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || defaultConfig.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || defaultConfig.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || defaultConfig.appId,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
   // Explicitly set Node.js runtime version
   functions: {
     runtime: 'nodejs18'
   }
 };
 
-console.log('Firebase configuration:', {
-  ...firebaseConfig,
-  apiKey: firebaseConfig.apiKey ? "***** (masked for security)" : "undefined"
-});
-
 // Initialize Firebase with Node.js 18 runtime
-let app;
-
-try {
-  app = initializeApp(firebaseConfig);
-  console.log('Firebase app initialized successfully');
-} catch (error) {
-  console.error('Error initializing Firebase app:', error);
-  console.warn('The application will continue with limited functionality.');
-}
+const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with default settings
-let db;
-
-try {
-  db = getFirestore(app);
-  console.log('Firestore initialized successfully');
-} catch (error) {
-  console.error('Error initializing Firestore:', error);
-  console.warn('The application will continue without database functionality.');
-}
+const db = getFirestore(app);
 
 // Initialize Auth
-let auth;
-
-try {
-  auth = getAuth(app);
-  console.log('Firebase Auth initialized successfully');
-} catch (error) {
-  console.error('Error initializing Firebase Auth:', error);
-  console.warn('The application will continue without authentication functionality.');
-}
+const auth = getAuth(app);
 
 // Initialize persistence with improved error handling
 const initializePersistence = async () => {
-  if (!db) {
-    console.warn('Cannot enable persistence: Firestore not initialized');
-    return;
-  }
-
   try {
     await enableIndexedDbPersistence(db);
     console.log('Persistence enabled successfully');
@@ -187,11 +145,6 @@ window.addEventListener('offline', async () => {
   console.log('Browser reports offline status');
   isOnline = false;
   dispatchConnectionEvent('disconnected');
-  
-  if (!db) {
-    return;
-  }
-  
   try {
     console.log('Disabling Firestore network connection...');
     await disableNetwork(db);
@@ -224,8 +177,8 @@ export const COLLECTIONS = {
 // Helper function to create log entries
 export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) {
   try {
-    if (!db || !isOnline) {
-      console.warn('Skipping log entry creation - offline mode or Firestore unavailable');
+    if (!isOnline) {
+      console.warn('Skipping log entry creation - offline mode');
       return;
     }
 
@@ -239,11 +192,51 @@ export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) 
   }
 }
 
+// Helper function to check if a collection exists and create it if not
+export async function ensureCollectionExists(collectionName: string, demoData?: any[]) {
+  try {
+    const collectionRef = collection(db, collectionName);
+    const snapshot = await getDocs(query(collectionRef));
+    
+    // If collection is empty and we have demo data, insert it
+    if (snapshot.empty && demoData && demoData.length > 0) {
+      console.log(`Initializing ${collectionName} with demo data...`);
+      const batch = writeBatch(db);
+      
+      for (const item of demoData) {
+        if (item.id) {
+          const docRef = doc(collectionRef, item.id);
+          batch.set(docRef, {
+            ...item,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          // Generate a unique ID if none provided
+          const docRef = doc(collectionRef);
+          batch.set(docRef, {
+            ...item,
+            id: docRef.id,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+      
+      await batch.commit();
+      console.log(`Successfully initialized ${collectionName}`);
+      return true;
+    }
+    
+    return !snapshot.empty;
+  } catch (error) {
+    console.error(`Error checking/initializing ${collectionName}:`, error);
+    return false;
+  }
+}
+
 // Helper functions for batch operations
 export function getBatch() {
-  if (!db) {
-    throw new Error('Firestore not initialized');
-  }
   return writeBatch(db);
 }
 
@@ -255,9 +248,7 @@ export async function commitBatchIfNeeded(batch: any, operationCount: number, li
   return { batch, operationCount };
 }
 
-// Initialize persistence only if Firestore is available
-if (db) {
-  initializePersistence().catch(console.error);
-}
+// Initialize persistence and export
+initializePersistence().catch(console.error);
 
 export { db, auth };

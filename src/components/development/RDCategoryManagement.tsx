@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tag, Plus, Edit2, Trash2, Search, Filter, RefreshCw, AlertCircle } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { RDCategory } from '../../types/rd-types';
@@ -7,11 +7,13 @@ import ConfirmDialog from '../common/ConfirmDialog';
 import Beaker from '../common/BeakerIcon';
 import { 
   loadRDCategories, 
+  saveRDCategories, 
   addRDCategory, 
   updateRDCategory, 
   deleteRDCategory,
   dispatchRDDataChangedEvent,
   addRDDataChangeListener,
+  initializeRDCollections,
   setupRDDataListeners
 } from '../../services/rdDataService';
 
@@ -27,49 +29,83 @@ export default function RDCategoryManagement() {
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Load categories data with real-time updates
+  // Initialize and load data
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-
-    // Initial load
-    loadRDCategories()
-      .then(categories => {
-        setRdCategories(categories);
-        setLoading(false);
-      })
-      .catch(error => {
-        console.error('Error loading R&D categories:', error);
-        setError('Failed to load categories data. Please try again.');
-        setLoading(false);
-      });
-
-    // Set up real-time listener
-    const unsubscribe = setupRDDataListeners(
-      // Categories update callback
-      (categories) => {
-        setRdCategories(categories);
-        setLoading(false);
-      },
-      // Products update callback (unused here)
-      () => {}
-    );
+    let mounted = true;
+    let cleanup: (() => void) | undefined;
     
-    // Clean up listener on unmount
-    return () => unsubscribe();
+    const loadData = async () => {
+      if (!mounted) return;
+      
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Initialize Firestore collections if needed
+        await initializeRDCollections();
+        
+        // Load categories from Firestore
+        const categories = await loadRDCategories();
+        
+        if (mounted) {
+          console.log(`Loaded ${categories.length} R&D categories`);
+          setRdCategories(categories);
+        }
+        
+        // Setup real-time listeners
+        const listeners = setupRDDataListeners(
+          (updatedCategories) => {
+            console.log(`Listener received ${updatedCategories.length} categories`);
+            if (mounted) setRdCategories(updatedCategories);
+          },
+          () => {} // We don't need product updates in this component
+        );
+        
+        cleanup = listeners?.cleanup;
+      } catch (error) {
+        console.error('Error loading R&D categories:', error);
+        if (mounted) {
+          setError(error instanceof Error ? error.message : 'Failed to load R&D categories');
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    loadData();
+    
+    // Listen for data changes from other components
+    const unsubscribe = addRDDataChangeListener(() => {
+      if (mounted) {
+        console.log('R&D data changed event received');
+        // Just refresh the data - listeners should handle updates
+        loadData();
+      }
+    });
+    
+    return () => {
+      mounted = false;
+      if (cleanup) cleanup();
+      unsubscribe();
+    };
   }, []);
 
-  // Manual refresh handler
-  const handleRefresh = async () => {
+  // Manual refresh function
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    setError(null);
+    
     try {
-      setIsRefreshing(true);
-      setError(null);
+      // Load categories from Firestore
       const categories = await loadRDCategories();
       setRdCategories(categories);
-    } catch (err) {
-      console.error('Error refreshing data:', err);
-      setError('Failed to refresh data. Please try again.');
+    } catch (error) {
+      console.error('Error refreshing R&D categories:', error);
+      setError(error instanceof Error ? error.message : 'Failed to refresh R&D categories');
     } finally {
+      // Add a small delay for feedback
       setTimeout(() => {
         setIsRefreshing(false);
       }, 500);
@@ -86,8 +122,13 @@ export default function RDCategoryManagement() {
   });
 
   const handleSubmit = async (categoryData: Omit<RDCategory, 'id' | 'createdAt' | 'updatedAt'>) => {
+    setError(null);
+    
     try {
-      setError(null);
+      if (!categoryData.name.trim()) {
+        setError('Category name is required');
+        return;
+      }
       
       if (editingCategory) {
         // Update existing category
@@ -104,9 +145,12 @@ export default function RDCategoryManagement() {
         setRdCategories(prev => [...prev, newCategory]);
         setIsAddingCategory(false);
       }
+      
+      // Notify other components that data has changed
+      dispatchRDDataChangedEvent();
     } catch (error) {
       console.error('Error saving category:', error);
-      setError('Failed to save category. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to save category');
       throw error;
     }
   };
@@ -114,20 +158,25 @@ export default function RDCategoryManagement() {
   const handleDelete = async () => {
     if (!deletingCategory) return;
     
+    setError(null);
+    
     try {
-      setError(null);
       await deleteRDCategory(deletingCategory.id);
       setRdCategories(prev => prev.filter(c => c.id !== deletingCategory.id));
       setDeletingCategory(null);
-    } catch (err) {
-      console.error('Error deleting category:', err);
-      setError('Failed to delete category. Please try again.');
+      
+      // Notify other components that data has changed
+      dispatchRDDataChangedEvent();
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete category');
     }
   };
 
   const toggleCategoryStatus = async (category: RDCategory) => {
+    setError(null);
+    
     try {
-      setError(null);
       const newStatus = category.status === 'active' ? 'inactive' : 'active';
       const updatedCategory = await updateRDCategory(category.id, { status: newStatus });
       
@@ -135,10 +184,13 @@ export default function RDCategoryManagement() {
         setRdCategories(prev => prev.map(c => 
           c.id === category.id ? updatedCategory : c
         ));
+        
+        // Notify other components that data has changed
+        dispatchRDDataChangedEvent();
       }
-    } catch (err) {
-      console.error('Error updating category status:', err);
-      setError('Failed to update category status. Please try again.');
+    } catch (error) {
+      console.error('Error updating category status:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update category status');
     }
   };
 
@@ -153,18 +205,26 @@ export default function RDCategoryManagement() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <Tag className="w-6 h-6 text-cyan-600" />
-          Test Categories
-        </h2>
+          <div>
+            <h2 className="text-xl font-semibold">Test Categories</h2>
+            <div className="text-sm text-gray-500">{rdCategories.length} categories in database</div>
+          </div>
+          {isRefreshing && (
+            <RefreshCw className="w-5 h-5 animate-spin text-cyan-500 ml-2" />
+          )}
+        </div>
         <div className="flex gap-2">
           <button
-            onClick={handleRefresh}
+            onClick={refreshData}
             disabled={isRefreshing}
-            title="Refresh data"
-            className="w-10 h-10 flex items-center justify-center gap-2 rounded-full border hover:bg-gray-50 disabled:opacity-50"
+            className={`flex items-center gap-2 px-4 py-2 border rounded-lg ${
+              isRefreshing ? 'bg-gray-100 text-gray-400' : 'hover:bg-gray-50'
+            }`}
           >
-            <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-cyan-600' : 'text-gray-600'}`} />
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
           <button
             onClick={() => setIsAddingCategory(true)}
@@ -175,6 +235,16 @@ export default function RDCategoryManagement() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">Error</p>
+            <p className="text-sm">{error}</p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white p-4 rounded-lg shadow-sm border space-y-4">
         <div className="flex items-center gap-2 text-gray-700">
@@ -207,13 +277,6 @@ export default function RDCategoryManagement() {
           </div>
         </div>
       </div>
-
-      {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-5 h-5" />
-          <p>{error}</p>
-        </div>
-      )}
 
       {isAddingCategory && (
         <div className="mb-6">
