@@ -19,7 +19,6 @@ export default function App() {
       } catch (error) {
         console.error('Failed to initialize R&D data in App component:', error);
         // Continue app initialization even if R&D data fails
-        // Individual components will handle the fallback
       }
     };
     

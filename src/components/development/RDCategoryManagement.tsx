@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Tag, Plus, Edit2, Trash2, Search, Filter, RefreshCw } from 'lucide-react';
+import { Tag, Plus, Edit2, Trash2, Search, Filter, RefreshCw, AlertCircle } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { RDCategory } from '../../types/rd-types';
 import RDCategoryForm from './RDCategoryForm';
@@ -11,7 +11,8 @@ import {
   updateRDCategory, 
   deleteRDCategory,
   dispatchRDDataChangedEvent,
-  addRDDataChangeListener
+  addRDDataChangeListener,
+  setupRDDataListeners
 } from '../../services/rdDataService';
 
 export default function RDCategoryManagement() {
@@ -26,19 +27,36 @@ export default function RDCategoryManagement() {
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Load categories data
-  const loadCategoriesData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const categories = await loadRDCategories();
-      setRdCategories(categories);
-    } catch (error) {
-      console.error('Error loading R&D categories:', error);
-      setError('Failed to load categories data. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  // Load categories data with real-time updates
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+
+    // Initial load
+    loadRDCategories()
+      .then(categories => {
+        setRdCategories(categories);
+        setLoading(false);
+      })
+      .catch(error => {
+        console.error('Error loading R&D categories:', error);
+        setError('Failed to load categories data. Please try again.');
+        setLoading(false);
+      });
+
+    // Set up real-time listener
+    const unsubscribe = setupRDDataListeners(
+      // Categories update callback
+      (categories) => {
+        setRdCategories(categories);
+        setLoading(false);
+      },
+      // Products update callback (unused here)
+      () => {}
+    );
+    
+    // Clean up listener on unmount
+    return () => unsubscribe();
   }, []);
 
   // Manual refresh handler
@@ -46,7 +64,8 @@ export default function RDCategoryManagement() {
     try {
       setIsRefreshing(true);
       setError(null);
-      await loadCategoriesData();
+      const categories = await loadRDCategories();
+      setRdCategories(categories);
     } catch (err) {
       console.error('Error refreshing data:', err);
       setError('Failed to refresh data. Please try again.');
@@ -56,18 +75,6 @@ export default function RDCategoryManagement() {
       }, 500);
     }
   };
-
-  // Initialize from Firestore
-  useEffect(() => {
-    loadCategoriesData();
-    
-    // Listen for changes from other components
-    const unsubscribe = addRDDataChangeListener(() => {
-      loadCategoriesData();
-    });
-    
-    return unsubscribe;
-  }, [loadCategoriesData]);
 
   // Filter categories based on search term and status
   const filteredCategories = rdCategories.filter(category => {

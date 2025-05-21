@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { GraduationCap, Tag, Settings, FileText, Sparkles, Loader, RefreshCw, AlertCircle } from 'lucide-react';
 import RDProductManagement from '../components/development/RDProductManagement';
+import RDCategoryManagement from '../components/development/RDCategoryManagement';
 import { useAuth } from '../hooks/useAuth';
 import { initializeRDData } from '../services/rdDataService'; 
 
@@ -25,6 +26,7 @@ export default function Development() {
     const init = async () => {
       try {
         await initializeRDData();
+        console.log('R&D data initialized successfully in Development component');
       } catch (error) {
         console.error('Error initializing R&D data:', error);
         setInitError('Failed to initialize development data. Please try again.');
@@ -44,6 +46,14 @@ export default function Development() {
       description: "Manage products under development",
       requiredPermissions: ['manage_products'],
       element: <RDProductManagement />
+    },
+    {
+      path: "/development/categories",
+      label: "R&D Categories", 
+      icon: <Tag className="w-4 h-4" />,
+      description: "Manage test categories",
+      requiredPermissions: ['manage_products'],
+      element: <RDCategoryManagement />
     },
     {
       path: "/development/documentation",
@@ -121,19 +131,28 @@ export default function Development() {
           </div>
           <p className="text-red-600 mb-4">{initError}</p>
           <p className="text-gray-600 mb-4">
-            Unable to connect to the database. Don't worry - we'll use local storage mode instead.
-            Your data will be saved in your browser but won't be synchronized across devices.
+            Unable to connect to the database. Please check your connection and permissions.
           </p>
           <div className="flex justify-center">
             <button
               onClick={() => {
+                setIsInitializing(true);
                 setInitError(null);
-                setIsInitializing(false);
+                initializeRDData()
+                  .then(() => {
+                    console.log('R&D data reinitialized successfully');
+                    setIsInitializing(false);
+                  })
+                  .catch(error => {
+                    console.error('Error reinitializing R&D data:', error);
+                    setInitError('Failed to initialize development data. Please try again.');
+                    setIsInitializing(false);
+                  });
               }}
               className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
             >
               <RefreshCw className="w-4 h-4 mr-2 inline-block" />
-              Continue in Local Mode
+              Retry Connection
             </button>
           </div>
         </div>

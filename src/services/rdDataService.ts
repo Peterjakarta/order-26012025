@@ -1,4 +1,4 @@
-import { RDCategory, RDProduct } from '../types/rd-types';
+import { RDCategory, RDProduct, TestResult } from '../types/rd-types';
 import { createLogEntry } from '../lib/firebase';
 import { auth, db, COLLECTIONS } from '../lib/firebase';
 import { 
@@ -13,50 +13,55 @@ import {
   orderBy,
   getDoc,
   setDoc,
-  serverTimestamp
+  serverTimestamp,
+  onSnapshot
 } from 'firebase/firestore';
 
-// Storage keys for localStorage
-export const RD_CATEGORIES_KEY = 'rd-categories-data';
-export const RD_PRODUCTS_KEY = 'rd-products-data';
+// Check if COLLECTIONS includes R&D collections
+if (!COLLECTIONS.RD_CATEGORIES) {
+  COLLECTIONS.RD_CATEGORIES = 'rd_categories';
+}
+if (!COLLECTIONS.RD_PRODUCTS) {
+  COLLECTIONS.RD_PRODUCTS = 'rd_products';
+}
 
-// Demo data for initial implementation
-export const DEMO_RD_CATEGORIES: RDCategory[] = [
+// Sample data for initial collection seeding if needed
+const SAMPLE_RD_CATEGORIES = [
   {
     id: 'rd-category-1',
     name: 'Experimental Truffles',
     description: 'New and innovative truffle flavors and designs',
     status: 'active',
-    createdAt: '2025-01-15T10:30:00Z',
-    updatedAt: '2025-01-15T10:30:00Z',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
   {
     id: 'rd-category-2',
     name: 'Sugar-Free Products',
     description: 'Chocolate products with no added sugars',
     status: 'active',
-    createdAt: '2025-02-10T14:45:00Z',
-    updatedAt: '2025-02-12T09:15:00Z',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
   {
     id: 'rd-category-3',
     name: 'Vegan Range',
     description: 'Plant-based chocolate products with no animal ingredients',
     status: 'active',
-    createdAt: '2025-02-20T11:00:00Z',
-    updatedAt: '2025-02-20T11:00:00Z',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
   {
     id: 'rd-category-4',
     name: 'Single Origin Series',
     description: 'Chocolates made from beans of specific regions',
     status: 'active',
-    createdAt: '2024-12-05T16:30:00Z',
-    updatedAt: '2025-01-10T13:20:00Z',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   }
 ];
 
-export const DEMO_RD_PRODUCTS: RDProduct[] = [
+const SAMPLE_RD_PRODUCTS = [
   {
     id: 'rd-product-1',
     name: 'Ruby Chocolate Pralines',
@@ -105,290 +110,168 @@ export const DEMO_RD_PRODUCTS: RDProduct[] = [
     createdBy: 'admin',
     createdAt: '2025-02-05T11:15:00Z',
     updatedAt: '2025-02-20T16:45:00Z'
-  },
-  {
-    id: 'rd-product-3',
-    name: 'Salted Caramel Bonbons',
-    category: 'bonbon',
-    description: 'Milk chocolate bonbons with salted caramel filling',
-    unit: 'boxes',
-    minOrder: 6,
-    price: 34.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2024-12-15',
-    status: 'approved',
-    notes: 'Recipe finalized and approved for production. First batch scheduled for June production.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1582176604856-e824b4736522?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8Y2FyYW1lbCUyMGNob2NvbGF0ZXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 16.25,
-    createdBy: 'admin',
-    createdAt: '2024-12-15T10:00:00Z',
-    updatedAt: '2025-03-01T09:30:00Z'
-  },
-  {
-    id: 'rd-product-4',
-    name: 'Vegan Dark Chocolate Truffles',
-    category: 'rd-category-3', // Vegan Range
-    description: 'Plant-based dark chocolate truffles with coconut cream',
-    unit: 'boxes',
-    minOrder: 5,
-    price: 29.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2025-02-01',
-    targetProductionDate: '2025-05-15',
-    status: 'testing',
-    notes: 'Testing shelf stability and mouthfeel. Current version is promising but needs texture adjustment.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1608221386777-6c3c1a506291?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGRhcmslMjBjaG9jb2xhdGUlMjB0cnVmZmxlfGVufDB8fDB8fHww&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 14.25,
-    createdBy: 'admin',
-    createdAt: '2025-02-01T09:15:00Z',
-    updatedAt: '2025-02-10T16:30:00Z'
-  },
-  {
-    id: 'rd-product-5',
-    name: 'Sugar-Free Milk Chocolate',
-    category: 'rd-category-2', // Sugar-Free Products
-    description: 'Milk chocolate sweetened with stevia and erythritol',
-    unit: 'bars',
-    minOrder: 10,
-    price: 5.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2025-01-20',
-    targetProductionDate: '2025-04-10',
-    status: 'development',
-    notes: 'Working on improving the aftertaste from stevia. Latest batch shows promise with new stevia extract.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1614088685112-0b05b6f1e570?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8bWlsayUyMGNob2NvbGF0ZXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 3.25,
-    createdBy: 'admin',
-    createdAt: '2025-01-20T11:30:00Z',
-    updatedAt: '2025-01-28T13:45:00Z'
-  },
-  {
-    id: 'rd-product-6',
-    name: 'Experimental Whiskey Ganache',
-    category: 'rd-category-1', // Experimental Truffles
-    description: 'Dark chocolate ganache infused with single malt whiskey',
-    unit: 'boxes',
-    minOrder: 3,
-    price: 45.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2025-01-15',
-    targetProductionDate: '2025-03-30',
-    status: 'testing',
-    notes: 'Testing different whiskey varieties. Need to balance alcohol content for flavor vs shelf stability.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1620504600375-4793e85ecbd8?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8Y2hvY29sYXRlJTIwZ2FuYWNoZXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 22.30,
-    createdBy: 'admin',
-    createdAt: '2025-01-15T15:20:00Z',
-    updatedAt: '2025-02-05T10:10:00Z'
-  },
-  {
-    id: 'rd-product-7',
-    name: 'Ghana Single Origin 75%',
-    category: 'rd-category-4', // Single Origin Series
-    description: 'Dark chocolate from single estate Ghana cocoa beans',
-    unit: 'bars',
-    minOrder: 8,
-    price: 7.99,
-    showPrice: true,
-    showDescription: true,
-    showUnit: true,
-    showMinOrder: true,
-    developmentDate: '2024-12-10',
-    targetProductionDate: '2025-04-01',
-    status: 'development',
-    notes: 'Experimenting with different roasting profiles to highlight fruity notes.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1589750602846-60c8c5ea3e56?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8ZGFyayUyMGNob2NvbGF0ZXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=800&q=60'
-    ],
-    costEstimate: 4.50,
-    createdBy: 'admin',
-    createdAt: '2024-12-10T12:00:00Z',
-    updatedAt: '2025-01-05T09:30:00Z'
   }
 ];
 
-// Check if COLLECTIONS includes R&D collections
-if (!COLLECTIONS.RD_CATEGORIES) {
-  COLLECTIONS.RD_CATEGORIES = 'rd_categories';
-}
-if (!COLLECTIONS.RD_PRODUCTS) {
-  COLLECTIONS.RD_PRODUCTS = 'rd_products';
-}
-
 /**
- * Local Storage Implementations - Used when Firestore access fails
+ * Firestore Data Access Functions
  */
 
-// Save categories to localStorage (used as fallback)
-function saveLocalRDCategories(categories: RDCategory[]): void {
-  try {
-    localStorage.setItem(RD_CATEGORIES_KEY, JSON.stringify(categories));
-    console.log('Saved categories to localStorage');
-  } catch (error) {
-    console.error('Error saving R&D categories to localStorage:', error);
-  }
-}
-
-// Save products to localStorage (used as fallback)
-function saveLocalRDProducts(products: RDProduct[]): void {
-  try {
-    localStorage.setItem(RD_PRODUCTS_KEY, JSON.stringify(products));
-    console.log('Saved products to localStorage');
-  } catch (error) {
-    console.error('Error saving R&D products to localStorage:', error);
-  }
-}
-
-// Load categories from localStorage
-function loadLocalRDCategories(): RDCategory[] {
-  try {
-    const stored = localStorage.getItem(RD_CATEGORIES_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (error) {
-    console.error('Error loading R&D categories from localStorage:', error);
-  }
-  
-  // If nothing in localStorage, return demo data
-  console.log('No categories in localStorage, using demo data');
-  return DEMO_RD_CATEGORIES;
-}
-
-// Load products from localStorage
-function loadLocalRDProducts(): RDProduct[] {
-  try {
-    const stored = localStorage.getItem(RD_PRODUCTS_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (error) {
-    console.error('Error loading R&D products from localStorage:', error);
-  }
-  
-  // If nothing in localStorage, return demo data
-  console.log('No products in localStorage, using demo data');
-  return DEMO_RD_PRODUCTS;
-}
-
-// Initialize R&D data in localStorage if not already there
-export function initializeLocalStorage(): void {
-  try {
-    // Check if localStorage already has data
-    const hasCategories = localStorage.getItem(RD_CATEGORIES_KEY);
-    const hasProducts = localStorage.getItem(RD_PRODUCTS_KEY);
-    
-    // Initialize categories if needed
-    if (!hasCategories) {
-      localStorage.setItem(RD_CATEGORIES_KEY, JSON.stringify(DEMO_RD_CATEGORIES));
-    }
-    
-    // Initialize products if needed
-    if (!hasProducts) {
-      localStorage.setItem(RD_PRODUCTS_KEY, JSON.stringify(DEMO_RD_PRODUCTS));
-    }
-    
-    console.log('LocalStorage initialized for R&D data');
-  } catch (error) {
-    console.error('Error initializing localStorage for R&D data:', error);
-  }
-}
-
-/**
- * Main API functions - Try Firestore first, fallback to localStorage if needed
- */
-
-// Load categories - try Firestore first, fallback to localStorage
+// Load categories from Firestore
 export async function loadRDCategories(): Promise<RDCategory[]> {
   try {
-    // Try to load from Firestore first
     const q = query(
       collection(db, COLLECTIONS.RD_CATEGORIES),
       orderBy('name')
     );
     
-    try {
-      const snapshot = await getDocs(q);
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      // If collection is empty, seed it with sample data
+      console.log('RD Categories collection is empty. Seeding with sample data...');
+      await seedInitialCategories();
       
-      if (!snapshot.empty) {
-        const categories: RDCategory[] = [];
-        snapshot.forEach(doc => {
-          categories.push({
-            ...doc.data(),
-            id: doc.id
-          } as RDCategory);
-        });
-        console.log(`Loaded ${categories.length} categories from Firestore`);
-        return categories;
-      }
-    } catch (firestoreError) {
-      console.error('Firestore error, falling back to localStorage:', firestoreError);
-      // Continue to localStorage fallback
+      // Fetch again after seeding
+      const newSnapshot = await getDocs(q);
+      
+      const categories: RDCategory[] = [];
+      newSnapshot.forEach(doc => {
+        categories.push({
+          ...doc.data(),
+          id: doc.id
+        } as RDCategory);
+      });
+      
+      return categories;
     }
     
-    // If Firestore failed or was empty, use localStorage
-    console.log('Using localStorage for categories');
-    return loadLocalRDCategories();
+    const categories: RDCategory[] = [];
+    snapshot.forEach(doc => {
+      categories.push({
+        ...doc.data(),
+        id: doc.id
+      } as RDCategory);
+    });
+    
+    return categories;
   } catch (error) {
-    console.error('Error in loadRDCategories, using demo data:', error);
-    return DEMO_RD_CATEGORIES;
+    console.error('Error in loadRDCategories:', error);
+    throw error;
   }
 }
 
-// Load products - try Firestore first, fallback to localStorage
+// Load products from Firestore
 export async function loadRDProducts(): Promise<RDProduct[]> {
   try {
-    // Try to load from Firestore first
     const q = query(
       collection(db, COLLECTIONS.RD_PRODUCTS),
       orderBy('name')
     );
     
-    try {
-      const snapshot = await getDocs(q);
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      // If collection is empty, seed it with sample data
+      console.log('RD Products collection is empty. Seeding with sample data...');
+      await seedInitialProducts();
       
-      if (!snapshot.empty) {
-        const products: RDProduct[] = [];
-        snapshot.forEach(doc => {
-          products.push({
-            ...doc.data(),
-            id: doc.id
-          } as RDProduct);
-        });
-        console.log(`Loaded ${products.length} products from Firestore`);
-        return products;
-      }
-    } catch (firestoreError) {
-      console.error('Firestore error, falling back to localStorage:', firestoreError);
-      // Continue to localStorage fallback
+      // Fetch again after seeding
+      const newSnapshot = await getDocs(q);
+      
+      const products: RDProduct[] = [];
+      newSnapshot.forEach(doc => {
+        products.push({
+          ...doc.data(),
+          id: doc.id
+        } as RDProduct);
+      });
+      
+      return products;
     }
     
-    // If Firestore failed or was empty, use localStorage
-    console.log('Using localStorage for products');
-    return loadLocalRDProducts();
+    const products: RDProduct[] = [];
+    snapshot.forEach(doc => {
+      products.push({
+        ...doc.data(),
+        id: doc.id
+      } as RDProduct);
+    });
+    
+    return products;
   } catch (error) {
-    console.error('Error in loadRDProducts, using demo data:', error);
-    return DEMO_RD_PRODUCTS;
+    console.error('Error in loadRDProducts:', error);
+    throw error;
+  }
+}
+
+// Seed initial categories to Firestore
+async function seedInitialCategories(): Promise<void> {
+  try {
+    const batch = db.batch ? db.batch() : null;
+    
+    if (!batch) {
+      // Use individual writes if batching is not available
+      for (const category of SAMPLE_RD_CATEGORIES) {
+        await setDoc(doc(db, COLLECTIONS.RD_CATEGORIES, category.id), {
+          ...category,
+          createdAt: category.createdAt,
+          updatedAt: serverTimestamp()
+        });
+      }
+    } else {
+      // Use batching for efficiency
+      for (const category of SAMPLE_RD_CATEGORIES) {
+        const docRef = doc(db, COLLECTIONS.RD_CATEGORIES, category.id);
+        batch.set(docRef, {
+          ...category,
+          createdAt: category.createdAt,
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      await batch.commit();
+    }
+    
+    console.log('Successfully seeded RD categories.');
+  } catch (error) {
+    console.error('Error seeding initial categories:', error);
+    throw error;
+  }
+}
+
+// Seed initial products to Firestore
+async function seedInitialProducts(): Promise<void> {
+  try {
+    const batch = db.batch ? db.batch() : null;
+    
+    if (!batch) {
+      // Use individual writes if batching is not available
+      for (const product of SAMPLE_RD_PRODUCTS) {
+        await setDoc(doc(db, COLLECTIONS.RD_PRODUCTS, product.id), {
+          ...product,
+          createdAt: product.createdAt,
+          updatedAt: serverTimestamp()
+        });
+      }
+    } else {
+      // Use batching for efficiency
+      for (const product of SAMPLE_RD_PRODUCTS) {
+        const docRef = doc(db, COLLECTIONS.RD_PRODUCTS, product.id);
+        batch.set(docRef, {
+          ...product,
+          createdAt: product.createdAt,
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      await batch.commit();
+    }
+    
+    console.log('Successfully seeded RD products.');
+  } catch (error) {
+    console.error('Error seeding initial products:', error);
+    throw error;
   }
 }
 
@@ -403,24 +286,12 @@ export async function addRDCategory(category: Omit<RDCategory, 'id' | 'createdAt
       updatedAt: now
     };
     
-    // Try to add to Firestore
-    try {
-      await setDoc(doc(db, COLLECTIONS.RD_CATEGORIES, newCategory.id), {
-        ...newCategory,
-        createdAt: now,
-        updatedAt: serverTimestamp()
-      });
-      console.log('Category added to Firestore:', newCategory.name);
-    } catch (firestoreError) {
-      console.error('Firestore error when adding category, using localStorage only:', firestoreError);
-    }
+    await setDoc(doc(db, COLLECTIONS.RD_CATEGORIES, newCategory.id), {
+      ...newCategory,
+      updatedAt: serverTimestamp()
+    });
     
-    // Always update localStorage as backup
-    const categories = await loadRDCategories();
-    const updatedCategories = [...categories, newCategory];
-    saveLocalRDCategories(updatedCategories);
-    
-    // Create log entry if possible
+    // Create log entry
     try {
       const currentUser = auth.currentUser;
       if (currentUser) {
@@ -448,38 +319,27 @@ export async function addRDCategory(category: Omit<RDCategory, 'id' | 'createdAt
 // Update an existing category
 export async function updateRDCategory(id: string, categoryData: Partial<Omit<RDCategory, 'id' | 'createdAt' | 'updatedAt'>>): Promise<RDCategory | null> {
   try {
-    // Get all categories to find the one to update
-    const categories = await loadRDCategories();
-    const existingCategoryIndex = categories.findIndex(c => c.id === id);
+    // Get the current category data
+    const categoryRef = doc(db, COLLECTIONS.RD_CATEGORIES, id);
+    const categoryDoc = await getDoc(categoryRef);
     
-    if (existingCategoryIndex === -1) {
+    if (!categoryDoc.exists()) {
       throw new Error(`Category with id ${id} not found`);
     }
     
-    const existingCategory = categories[existingCategoryIndex];
+    const existingCategory = categoryDoc.data() as RDCategory;
     const updatedCategory = {
       ...existingCategory,
       ...categoryData,
       updatedAt: new Date().toISOString()
     };
     
-    // Try to update in Firestore
-    try {
-      const categoryRef = doc(db, COLLECTIONS.RD_CATEGORIES, id);
-      await updateDoc(categoryRef, {
-        ...categoryData,
-        updatedAt: serverTimestamp()
-      });
-      console.log('Category updated in Firestore:', updatedCategory.name);
-    } catch (firestoreError) {
-      console.error('Firestore error when updating category, using localStorage only:', firestoreError);
-    }
+    await updateDoc(categoryRef, {
+      ...categoryData,
+      updatedAt: serverTimestamp()
+    });
     
-    // Always update localStorage as backup
-    categories[existingCategoryIndex] = updatedCategory;
-    saveLocalRDCategories(categories);
-    
-    // Create log entry if possible
+    // Create log entry
     try {
       const currentUser = auth.currentUser;
       if (currentUser) {
@@ -507,20 +367,9 @@ export async function updateRDCategory(id: string, categoryData: Partial<Omit<RD
 // Delete a category
 export async function deleteRDCategory(id: string): Promise<boolean> {
   try {
-    // Try to delete from Firestore
-    try {
-      await deleteDoc(doc(db, COLLECTIONS.RD_CATEGORIES, id));
-      console.log('Category deleted from Firestore:', id);
-    } catch (firestoreError) {
-      console.error('Firestore error when deleting category, using localStorage only:', firestoreError);
-    }
+    await deleteDoc(doc(db, COLLECTIONS.RD_CATEGORIES, id));
     
-    // Always update localStorage as backup
-    const categories = await loadRDCategories();
-    const filteredCategories = categories.filter(c => c.id !== id);
-    saveLocalRDCategories(filteredCategories);
-    
-    // Create log entry if possible
+    // Create log entry
     try {
       const currentUser = auth.currentUser;
       if (currentUser) {
@@ -558,24 +407,12 @@ export async function addRDProduct(product: Omit<RDProduct, 'id' | 'createdAt' |
       createdBy: currentUser?.email || 'unknown'
     };
     
-    // Try to add to Firestore
-    try {
-      await setDoc(doc(db, COLLECTIONS.RD_PRODUCTS, newProduct.id), {
-        ...newProduct,
-        createdAt: now,
-        updatedAt: serverTimestamp()
-      });
-      console.log('Product added to Firestore:', newProduct.name);
-    } catch (firestoreError) {
-      console.error('Firestore error when adding product, using localStorage only:', firestoreError);
-    }
+    await setDoc(doc(db, COLLECTIONS.RD_PRODUCTS, newProduct.id), {
+      ...newProduct,
+      updatedAt: serverTimestamp()
+    });
     
-    // Always update localStorage as backup
-    const products = await loadRDProducts();
-    const updatedProducts = [...products, newProduct];
-    saveLocalRDProducts(updatedProducts);
-    
-    // Create log entry if possible
+    // Create log entry
     try {
       if (currentUser) {
         await createLogEntry({
@@ -602,38 +439,27 @@ export async function addRDProduct(product: Omit<RDProduct, 'id' | 'createdAt' |
 // Update an existing product
 export async function updateRDProduct(id: string, productData: Partial<Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>>): Promise<RDProduct | null> {
   try {
-    // Get all products to find the one to update
-    const products = await loadRDProducts();
-    const existingProductIndex = products.findIndex(p => p.id === id);
+    // Get the current product data
+    const productRef = doc(db, COLLECTIONS.RD_PRODUCTS, id);
+    const productDoc = await getDoc(productRef);
     
-    if (existingProductIndex === -1) {
+    if (!productDoc.exists()) {
       throw new Error(`Product with id ${id} not found`);
     }
     
-    const existingProduct = products[existingProductIndex];
+    const existingProduct = productDoc.data() as RDProduct;
     const updatedProduct = {
       ...existingProduct,
       ...productData,
       updatedAt: new Date().toISOString()
     };
     
-    // Try to update in Firestore
-    try {
-      const productRef = doc(db, COLLECTIONS.RD_PRODUCTS, id);
-      await updateDoc(productRef, {
-        ...productData,
-        updatedAt: serverTimestamp()
-      });
-      console.log('Product updated in Firestore:', updatedProduct.name);
-    } catch (firestoreError) {
-      console.error('Firestore error when updating product, using localStorage only:', firestoreError);
-    }
+    await updateDoc(productRef, {
+      ...productData,
+      updatedAt: serverTimestamp()
+    });
     
-    // Always update localStorage as backup
-    products[existingProductIndex] = updatedProduct;
-    saveLocalRDProducts(products);
-    
-    // Create log entry if possible
+    // Create log entry
     try {
       const currentUser = auth.currentUser;
       if (currentUser) {
@@ -661,20 +487,9 @@ export async function updateRDProduct(id: string, productData: Partial<Omit<RDPr
 // Delete a product
 export async function deleteRDProduct(id: string): Promise<boolean> {
   try {
-    // Try to delete from Firestore
-    try {
-      await deleteDoc(doc(db, COLLECTIONS.RD_PRODUCTS, id));
-      console.log('Product deleted from Firestore:', id);
-    } catch (firestoreError) {
-      console.error('Firestore error when deleting product, using localStorage only:', firestoreError);
-    }
+    await deleteDoc(doc(db, COLLECTIONS.RD_PRODUCTS, id));
     
-    // Always update localStorage as backup
-    const products = await loadRDProducts();
-    const filteredProducts = products.filter(p => p.id !== id);
-    saveLocalRDProducts(filteredProducts);
-    
-    // Create log entry if possible
+    // Create log entry
     try {
       const currentUser = auth.currentUser;
       if (currentUser) {
@@ -702,33 +517,23 @@ export async function deleteRDProduct(id: string): Promise<boolean> {
 // Get products by category
 export async function getRDProductsByCategory(categoryId: string): Promise<RDProduct[]> {
   try {
-    // Try Firestore first
-    try {
-      const q = query(
-        collection(db, COLLECTIONS.RD_PRODUCTS),
-        where('category', '==', categoryId),
-        orderBy('name')
-      );
-      
-      const snapshot = await getDocs(q);
-      const products: RDProduct[] = [];
-      
-      snapshot.forEach(doc => {
-        products.push({
-          ...doc.data(),
-          id: doc.id
-        } as RDProduct);
-      });
-      
-      console.log(`Loaded ${products.length} products for category ${categoryId} from Firestore`);
-      return products;
-    } catch (firestoreError) {
-      console.error('Firestore error loading products by category, using localStorage:', firestoreError);
-    }
+    const q = query(
+      collection(db, COLLECTIONS.RD_PRODUCTS),
+      where('category', '==', categoryId),
+      orderBy('name')
+    );
     
-    // Fallback to localStorage
-    const products = loadLocalRDProducts();
-    return products.filter(p => p.category === categoryId);
+    const snapshot = await getDocs(q);
+    const products: RDProduct[] = [];
+    
+    snapshot.forEach(doc => {
+      products.push({
+        ...doc.data(),
+        id: doc.id
+      } as RDProduct);
+    });
+    
+    return products;
   } catch (error) {
     console.error('Error in getRDProductsByCategory:', error);
     // Return empty array as fallback
@@ -744,33 +549,23 @@ export async function scheduleRDProductForProduction(id: string, targetDate: str
 // Get R&D products scheduled for production
 export async function getScheduledRDProducts(): Promise<RDProduct[]> {
   try {
-    // Try Firestore first
-    try {
-      const q = query(
-        collection(db, COLLECTIONS.RD_PRODUCTS),
-        where('targetProductionDate', '!=', null),
-        where('status', '!=', 'approved')
-      );
-      
-      const snapshot = await getDocs(q);
-      const products: RDProduct[] = [];
-      
-      snapshot.forEach(doc => {
-        products.push({
-          ...doc.data(),
-          id: doc.id
-        } as RDProduct);
-      });
-      
-      console.log(`Loaded ${products.length} scheduled products from Firestore`);
-      return products;
-    } catch (firestoreError) {
-      console.error('Firestore error loading scheduled products, using localStorage:', firestoreError);
-    }
+    const q = query(
+      collection(db, COLLECTIONS.RD_PRODUCTS),
+      where('targetProductionDate', '!=', null),
+      where('status', '!=', 'approved')
+    );
     
-    // Fallback to localStorage
-    const products = loadLocalRDProducts();
-    return products.filter(p => p.targetProductionDate && p.status !== 'approved');
+    const snapshot = await getDocs(q);
+    const products: RDProduct[] = [];
+    
+    snapshot.forEach(doc => {
+      products.push({
+        ...doc.data(),
+        id: doc.id
+      } as RDProduct);
+    });
+    
+    return products;
   } catch (error) {
     console.error('Error in getScheduledRDProducts:', error);
     return [];
@@ -805,52 +600,21 @@ export async function initializeRDData(): Promise<void> {
   console.log('Initializing R&D data...');
   
   try {
-    // Initialize localStorage first (this always works)
-    initializeLocalStorage();
+    // Check if Firestore collections exist and have data
+    // If not, seed with sample data
+    const categoriesQuery = query(collection(db, COLLECTIONS.RD_CATEGORIES));
+    const categoriesSnapshot = await getDocs(categoriesQuery);
     
-    // Try to access Firestore to check permissions
-    try {
-      const testRef = doc(db, COLLECTIONS.RD_CATEGORIES, 'test-permissions');
-      await getDoc(testRef); // This will throw if permissions are insufficient
-      
-      console.log('Firestore access verified, checking if collections need initialization...');
-      
-      // Check if Firestore has data
-      const categoriesQuery = query(collection(db, COLLECTIONS.RD_CATEGORIES));
-      const categoriesSnapshot = await getDocs(categoriesQuery);
-      
-      const productsQuery = query(collection(db, COLLECTIONS.RD_PRODUCTS));
-      const productsSnapshot = await getDocs(productsQuery);
-      
-      // If Firestore collections are empty, populate them from localStorage
-      if (categoriesSnapshot.empty) {
-        console.log('Initializing Firestore RD_CATEGORIES collection...');
-        const localCategories = loadLocalRDCategories();
-        
-        for (const category of localCategories) {
-          await setDoc(doc(db, COLLECTIONS.RD_CATEGORIES, category.id), {
-            ...category,
-            updatedAt: serverTimestamp()
-          });
-        }
-        console.log(`${localCategories.length} categories added to Firestore`);
-      }
-      
-      if (productsSnapshot.empty) {
-        console.log('Initializing Firestore RD_PRODUCTS collection...');
-        const localProducts = loadLocalRDProducts();
-        
-        for (const product of localProducts) {
-          await setDoc(doc(db, COLLECTIONS.RD_PRODUCTS, product.id), {
-            ...product,
-            updatedAt: serverTimestamp()
-          });
-        }
-        console.log(`${localProducts.length} products added to Firestore`);
-      }
-    } catch (firestoreError) {
-      console.warn('Firestore access failed, using localStorage only:', firestoreError);
-      // Continue with localStorage only
+    const productsQuery = query(collection(db, COLLECTIONS.RD_PRODUCTS));
+    const productsSnapshot = await getDocs(productsQuery);
+    
+    // If collections are empty, seed them
+    if (categoriesSnapshot.empty) {
+      await seedInitialCategories();
+    }
+    
+    if (productsSnapshot.empty) {
+      await seedInitialProducts();
     }
     
     console.log('R&D data initialized successfully');
@@ -858,4 +622,52 @@ export async function initializeRDData(): Promise<void> {
     console.error('Error initializing R&D data:', error);
     throw error;
   }
+}
+
+// Set up real-time listeners for R&D data
+export function setupRDDataListeners(
+  onCategoriesUpdate: (categories: RDCategory[]) => void,
+  onProductsUpdate: (products: RDProduct[]) => void
+): () => void {
+  // Listen for categories changes
+  const categoriesUnsubscribe = onSnapshot(
+    query(collection(db, COLLECTIONS.RD_CATEGORIES), orderBy('name')),
+    snapshot => {
+      const categories: RDCategory[] = [];
+      snapshot.forEach(doc => {
+        categories.push({
+          ...doc.data(),
+          id: doc.id
+        } as RDCategory);
+      });
+      onCategoriesUpdate(categories);
+    },
+    error => {
+      console.error('Error in categories listener:', error);
+    }
+  );
+  
+  // Listen for products changes
+  const productsUnsubscribe = onSnapshot(
+    query(collection(db, COLLECTIONS.RD_PRODUCTS), orderBy('name')),
+    snapshot => {
+      const products: RDProduct[] = [];
+      snapshot.forEach(doc => {
+        products.push({
+          ...doc.data(),
+          id: doc.id
+        } as RDProduct);
+      });
+      onProductsUpdate(products);
+    },
+    error => {
+      console.error('Error in products listener:', error);
+    }
+  );
+  
+  // Return a function to unsubscribe from both listeners
+  return () => {
+    categoriesUnsubscribe();
+    productsUnsubscribe();
+  };
 }
