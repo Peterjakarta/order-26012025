@@ -320,10 +320,10 @@ export default function RDProductForm({
       }
 
       // Get and parse numeric values
-      const price = formData.get('price') ? parseFloat(formData.get('price') as string) : undefined;
-      const minOrder = formData.get('minOrder') ? parseInt(formData.get('minOrder') as string, 10) : undefined;
-      const quantityStep = formData.get('quantityStep') ? parseInt(formData.get('quantityStep') as string, 10) : undefined;
-      const costEstimate = formData.get('costEstimate') ? parseFloat(formData.get('costEstimate') as string) : undefined;
+      const price = formData.get('price') ? parseFloat(formData.get('price') as string) : null;
+      const minOrder = formData.get('minOrder') ? parseInt(formData.get('minOrder') as string, 10) : null;
+      const quantityStep = formData.get('quantityStep') ? parseInt(formData.get('quantityStep') as string, 10) : null;
+      const costEstimate = formData.get('costEstimate') ? parseFloat(formData.get('costEstimate') as string) : null;
 
       // Get checkbox values
       const showPrice = formData.get('showPrice') === 'on';
@@ -331,8 +331,9 @@ export default function RDProductForm({
       const showMinOrder = formData.get('showMinOrder') === 'on';
       const showUnit = formData.get('showUnit') === 'on';
 
-      const description = formData.get('description') as string || undefined;
-      const unit = formData.get('unit') as string || undefined;
+      // Changed these from undefined to null to fix Firestore error
+      const description = formData.get('description') as string || null;
+      const unit = formData.get('unit') as string || null;
 
       const productData: Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'> = {
         name,
@@ -347,9 +348,9 @@ export default function RDProductForm({
         showMinOrder,
         showUnit,
         developmentDate,
-        targetProductionDate: targetDate || undefined,
+        targetProductionDate: targetDate || null,
         status,
-        notes: notes || undefined,
+        notes: notes || null,
         imageUrls: images,
         costEstimate,
         recipeIngredients: recipeIngredients,
