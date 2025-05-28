@@ -6,6 +6,7 @@ import RDCategoryManagement from '../components/development/RDCategoryManagement
 import { useAuth } from '../hooks/useAuth';
 import { initializeRDCollections } from '../services/rdDataService';
 import Beaker from '../components/common/BeakerIcon';
+import DocumentationManager from '../components/development/documentation/DocumentationManager';
 
 interface MenuItem {
   path: string;
@@ -84,9 +85,9 @@ export default function Development() {
       path: "/development/documentation",
       label: "Documentation",
       icon: <FileText className="w-4 h-4" />,
-      description: "Product development documentation",
+      description: "Manage product documentation",
       requiredPermissions: ['manage_products'],
-      element: <RDDocumentation />
+      element: <DocumentationManager />
     },
     {
       path: "/development/settings",
@@ -173,7 +174,7 @@ export default function Development() {
         <Routes>
           <Route
             path="/"
-            element={<Navigate to="/development/products" replace />}
+            element={<Navigate to="/development/products\" replace />}
           />
           {authorizedMenuItems.map(item => (
             <Route 
@@ -184,29 +185,9 @@ export default function Development() {
           ))}
           <Route 
             path="*" 
-            element={<Navigate to="/development/products" replace />} 
+            element={<Navigate to="/development/products\" replace />} 
           />
         </Routes>
-      </div>
-    </div>
-  );
-}
-
-function RDDocumentation() {
-  return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-semibold flex items-center gap-2">
-        <FileText className="w-6 h-6 text-cyan-600" />
-        Development Documentation
-      </h2>
-      <div className="bg-gray-50 p-8 rounded-lg text-center">
-        <div className="flex flex-col items-center justify-center gap-4">
-          <Sparkles className="w-16 h-16 text-cyan-500" />
-          <h3 className="text-lg font-medium">Documentation Coming Soon</h3>
-          <p className="text-gray-600 max-w-md mx-auto">
-            This section will include product specifications, test results, and development notes.
-          </p>
-        </div>
       </div>
     </div>
   );
