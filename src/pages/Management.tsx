@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { Package2, CheckCircle2, Calendar, Calculator, Settings, ClipboardList } from 'lucide-react';
+import { Package2, CheckCircle2, Calendar, Calculator, Settings, ClipboardList, FileText } from 'lucide-react';
 import OrderList from '../components/management/OrderList';
 import ProductManagement from '../components/management/ProductManagement';
 import CategoryManagement from '../components/management/CategoryManagement';
@@ -11,6 +11,7 @@ import RecipeManagement from '../components/management/pricing/RecipeManagement'
 import IngredientStock from '../components/management/pricing/IngredientStock';
 import SettingsPage from '../components/management/settings/Settings';
 import Logbook from '../components/management/logbook/Logbook';
+import DocumentationManagement from '../components/management/documentation/DocumentationManagement';
 import { useAuth } from '../hooks/useAuth';
 
 interface MenuItem {
@@ -65,6 +66,13 @@ export default function Management() {
       icon: <Calculator className="w-4 h-4" />,
       requiredPermissions: ['manage_products'],
       element: <PricingDashboard />
+    },
+    {
+      path: "/management/documentation",
+      label: "Documentation",
+      icon: <FileText className="w-4 h-4" />,
+      requiredPermissions: ['manage_products'],
+      element: <DocumentationManagement />
     },
     {
       path: "/management/logbook",
@@ -127,7 +135,7 @@ export default function Management() {
           ))}
           {/* Special route for production with ID */}
           {hasPermission('manage_orders') && (
-            <Route path="production/:orderId" element={<ProductionSchedule />} />
+            <Route path="production/:orderId\" element={<ProductionSchedule />} />
           )}
           {/* Special routes for pricing sub-pages */}
           {hasPermission('manage_products') && (

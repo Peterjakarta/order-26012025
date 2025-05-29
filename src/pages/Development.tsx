@@ -1,12 +1,11 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { GraduationCap, Tag, Settings, FileText, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
+import { GraduationCap, Tag, RefreshCw, AlertCircle } from 'lucide-react';
 import RDProductManagement from '../components/development/RDProductManagement';
 import RDCategoryManagement from '../components/development/RDCategoryManagement';
 import { useAuth } from '../hooks/useAuth';
 import { initializeRDCollections } from '../services/rdDataService';
 import Beaker from '../components/common/BeakerIcon';
-import DocumentationManager from '../components/development/documentation/DocumentationManager';
 
 interface MenuItem {
   path: string;
@@ -80,23 +79,7 @@ export default function Development() {
       description: "Manage test categories",
       requiredPermissions: ['manage_products'],
       element: <RDCategoryManagement />
-    },
-    {
-      path: "/development/documentation",
-      label: "Documentation",
-      icon: <FileText className="w-4 h-4" />,
-      description: "Manage product documentation",
-      requiredPermissions: ['manage_products'],
-      element: <DocumentationManager />
-    },
-    {
-      path: "/development/settings",
-      label: "R&D Settings",
-      icon: <Settings className="w-4 h-4" />,
-      description: "Configure development environment",
-      requiredPermissions: ['manage_products'],
-      element: <RDSettings />
-    },
+    }
   ];
 
   // Filter menu items based on permissions
@@ -188,26 +171,6 @@ export default function Development() {
             element={<Navigate to="/development/products\" replace />} 
           />
         </Routes>
-      </div>
-    </div>
-  );
-}
-
-function RDSettings() {
-  return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-semibold flex items-center gap-2">
-        <Settings className="w-6 h-6 text-cyan-600" />
-        R&D Settings
-      </h2>
-      <div className="bg-gray-50 p-8 rounded-lg text-center">
-        <div className="flex flex-col items-center justify-center gap-4">
-          <Sparkles className="w-16 h-16 text-cyan-500" />
-          <h3 className="text-lg font-medium">Settings Coming Soon</h3>
-          <p className="text-gray-600 max-w-md mx-auto">
-            This section will allow you to configure development workflows, testing parameters, and approval processes.
-          </p>
-        </div>
       </div>
     </div>
   );
