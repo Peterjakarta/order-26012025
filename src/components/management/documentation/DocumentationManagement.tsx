@@ -1,23 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, FileText, Upload, Folder, FolderPlus, X, FilePlus2, Search, List, Grid, Edit2, Trash2, File, FileSpreadsheet } from 'lucide-react';
-import { collection, query, orderBy, getDocs, doc, setDoc, updateDoc, deleteDoc, where, serverTimestamp } from 'firebase/firestore';
+import { PlusCircle, FileText, Upload, Folder, FolderPlus, X, FilePlus2, Search, List, Grid, Edit2, Trash2, File, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { collection, query, orderBy, getDocs, doc, setDoc, updateDoc, deleteDoc, where, serverTimestamp, limit } from 'firebase/firestore';
 import { db, COLLECTIONS, createLogEntry } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import DocumentCategoryForm from './DocumentCategoryForm';
 import DocumentUploadForm from './DocumentUploadForm';
 import DocumentViewer from './DocumentViewer';
 import Beaker from '../../common/BeakerIcon';
-import { v4 as uuidv4 } from 'uuid';
-import { 
-  getDocumentCategories, 
-  createDocumentCategory, 
-  updateDocumentCategory, 
-  deleteDocumentCategory, 
-  getDocuments, 
-  deleteDocument, 
-  initializeStorage,
-  getDocumentUrl
-} from '../../../lib/supabase-client';
+
+// Add a new collection name for documentation
+const DOCS_COLLECTION = 'management_documents';
+const DOCS_CATEGORIES_COLLECTION = 'management_document_categories';
 
 // Type definitions for documentation
 export interface DocumentCategory {
@@ -59,56 +52,39 @@ export default function DocumentationManagement() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [pageSize] = useState(12);
-  const [isSupabaseInitialized, setIsSupabaseInitialized] = useState(false);
 
-  // Initialize Supabase storage and load data
-  useEffect(() => {
-    const initializeSupabase = async () => {
-      try {
-        await initializeStorage();
-        setIsSupabaseInitialized(true);
-      } catch (err) {
-        console.error('Error initializing Supabase storage:', err);
-        setError('Failed to initialize document storage. Please try again later.');
-      }
-    };
-
-    initializeSupabase();
-  }, []);
-
-  // Load categories and documents
+  // Load categories and documents on component mount
   useEffect(() => {
     const loadData = async () => {
-      if (!isSupabaseInitialized) return;
-      
       try {
         setLoading(true);
         setError(null);
+
+        // Create collections if they don't exist
+        await ensureCollectionsExist();
         
-        // Load categories from Supabase
-        try {
-          const categoriesData = await getDocumentCategories();
-          
-          // Convert to our internal format
-          const formattedCategories: DocumentCategory[] = categoriesData.map(cat => ({
-            id: cat.id,
-            name: cat.name,
-            description: cat.description || undefined,
-            createdBy: cat.created_by || 'system',
-            createdAt: cat.created_at,
-            updatedAt: cat.updated_at
-          }));
-          
-          setCategories(formattedCategories);
-        } catch (err) {
-          console.error('Error loading document categories from Supabase:', err);
-          if (err instanceof Error) {
-            setError(`Failed to load categories: ${err.message}`);
-          } else {
-            setError('Failed to load document categories');
-          }
-          return;
-        }
+        // Load categories
+        const categoriesQuery = query(
+          collection(db, DOCS_CATEGORIES_COLLECTION),
+          orderBy('name')
+        );
+        
+        const categoriesSnapshot = await getDocs(categoriesQuery);
+        const categoriesData: DocumentCategory[] = [];
+        
+        categoriesSnapshot.forEach(doc => {
+          const data = doc.data();
+          categoriesData.push({
+            id: doc.id,
+            name: data.name,
+            description: data.description,
+            createdBy: data.createdBy,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
+          });
+        });
+        
+        setCategories(categoriesData);
         
         // Load documents with pagination
         await loadDocuments(1);
@@ -120,46 +96,56 @@ export default function DocumentationManagement() {
       }
     };
     
-    if (isSupabaseInitialized) {
-      loadData();
-    }
-  }, [isSupabaseInitialized]);
+    loadData();
+  }, []);
 
   // Load documents with pagination
   const loadDocuments = async (pageNum: number) => {
     try {
-      const { data: docsData, count } = await getDocuments(
-        pageNum,
-        pageSize,
-        selectedCategory !== 'all' ? selectedCategory : undefined,
-        searchTerm || undefined
-      );
+      let docsQuery;
       
-      // Convert to our internal format
-      const formattedDocs: DocumentFile[] = docsData.map(doc => ({
-        id: doc.id,
-        title: doc.title,
-        description: doc.description || undefined,
-        fileName: doc.file_name,
-        fileUrl: doc.file_path, // We'll get the actual URL when viewing
-        fileType: doc.file_type as 'pdf' | 'excel' | 'other',
-        categoryId: doc.category_id || '',
-        createdBy: doc.created_by || 'unknown',
-        createdAt: doc.created_at,
-        updatedAt: doc.updated_at,
-        tags: doc.tags || undefined
-      }));
+      // Apply category filter if selected
+      if (selectedCategory !== 'all') {
+        docsQuery = query(
+          collection(db, DOCS_COLLECTION),
+          where('categoryId', '==', selectedCategory),
+          orderBy('createdAt', 'desc'),
+          limit(pageSize * pageNum)
+        );
+      } else {
+        docsQuery = query(
+          collection(db, DOCS_COLLECTION),
+          orderBy('createdAt', 'desc'),
+          limit(pageSize * pageNum)
+        );
+      }
       
-      setDocuments(formattedDocs);
-      setHasMore(formattedDocs.length === pageSize);
+      const docsSnapshot = await getDocs(docsQuery);
+      const docsData: DocumentFile[] = [];
+      
+      docsSnapshot.forEach(doc => {
+        const data = doc.data();
+        docsData.push({
+          id: doc.id,
+          title: data.title,
+          description: data.description,
+          fileName: data.fileName,
+          fileUrl: data.fileUrl,
+          fileType: data.fileType,
+          categoryId: data.categoryId,
+          createdBy: data.createdBy,
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          tags: data.tags
+        });
+      });
+      
+      // Check if we have more documents to load
+      setHasMore(docsData.length === pageSize * pageNum);
+      setDocuments(docsData);
       setPage(pageNum);
     } catch (err) {
       console.error('Error loading documents:', err);
-      if (err instanceof Error) {
-        setError(`Failed to load documents: ${err.message}`);
-      } else {
-        setError('Failed to load documents');
-      }
       throw err;
     }
   };
@@ -177,74 +163,105 @@ export default function DocumentationManagement() {
     }
   };
 
+  // Ensure collections exist
+  const ensureCollectionsExist = async () => {
+    try {
+      // Check if categories collection exists
+      const categoriesQuery = query(collection(db, DOCS_CATEGORIES_COLLECTION), limit(1));
+      const categoriesSnapshot = await getDocs(categoriesQuery);
+      
+      // If no categories, create a default one
+      if (categoriesSnapshot.empty) {
+        const defaultCategoryId = 'general';
+        await setDoc(doc(db, DOCS_CATEGORIES_COLLECTION, defaultCategoryId), {
+          id: defaultCategoryId,
+          name: 'General',
+          description: 'General documentation',
+          createdBy: user?.email || 'system',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      // Check if documents collection exists
+      const docsQuery = query(collection(db, DOCS_COLLECTION), limit(1));
+      await getDocs(docsQuery);
+      
+      return true;
+    } catch (err) {
+      console.error('Error ensuring collections exist:', err);
+      return false;
+    }
+  };
+
   // Add a new category
   const handleAddCategory = async (data: Omit<DocumentCategory, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>) => {
     try {
-      // Create category in Supabase
-      const newCategory = await createDocumentCategory(
-        data.name,
-        data.description
-      );
-      
-      // Convert to our internal format
-      const formattedCategory: DocumentCategory = {
-        id: newCategory.id,
-        name: newCategory.name,
-        description: newCategory.description || undefined,
-        createdBy: newCategory.created_by || user?.email || 'unknown',
-        createdAt: newCategory.created_at,
-        updatedAt: newCategory.updated_at
+      const categoryId = `doc-category-${Date.now()}`;
+      const newCategory: DocumentCategory = {
+        id: categoryId,
+        ...data,
+        createdBy: user?.email || 'unknown',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
       
+      // Save to Firestore
+      await setDoc(doc(db, DOCS_CATEGORIES_COLLECTION, categoryId), {
+        ...newCategory,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      
       // Update local state
-      setCategories(prev => [...prev, formattedCategory]);
+      setCategories(prev => [...prev, newCategory]);
       setShowAddCategory(false);
+      
+      // Create log entry
+      await createLogEntry({
+        userId: user?.id || 'unknown',
+        username: user?.email || 'unknown',
+        action: 'Created Documentation Category',
+        category: 'feature',
+        details: `Created category: ${data.name}`
+      });
     } catch (err) {
       console.error('Error adding category:', err);
-      if (err instanceof Error) {
-        setError(`Failed to add category: ${err.message}`);
-      } else {
-        setError('Failed to add category');
-      }
-      throw err;
+      setError('Failed to add category');
     }
   };
 
   // Update a category
   const handleUpdateCategory = async (categoryId: string, data: Partial<DocumentCategory>) => {
     try {
-      const updatedCategory = await updateDocumentCategory(
-        categoryId,
-        data.name || '',
-        data.description
-      );
+      const categoryRef = doc(db, DOCS_CATEGORIES_COLLECTION, categoryId);
       
-      // Convert to our internal format
-      const formattedCategory: DocumentCategory = {
-        id: updatedCategory.id,
-        name: updatedCategory.name,
-        description: updatedCategory.description || undefined,
-        createdBy: updatedCategory.created_by || user?.email || 'unknown',
-        createdAt: updatedCategory.created_at,
-        updatedAt: updatedCategory.updated_at
-      };
+      // Update in Firestore
+      await updateDoc(categoryRef, {
+        ...data,
+        updatedAt: serverTimestamp()
+      });
       
       // Update local state
       setCategories(prev => 
         prev.map(cat => 
-          cat.id === categoryId ? formattedCategory : cat
+          cat.id === categoryId ? { ...cat, ...data, updatedAt: new Date().toISOString() } : cat
         )
       );
       
       setEditingCategory(null);
+      
+      // Create log entry
+      await createLogEntry({
+        userId: user?.id || 'unknown',
+        username: user?.email || 'unknown',
+        action: 'Updated Documentation Category',
+        category: 'feature',
+        details: `Updated category: ${data.name || categoryId}`
+      });
     } catch (err) {
       console.error('Error updating category:', err);
-      if (err instanceof Error) {
-        setError(`Failed to update category: ${err.message}`);
-      } else {
-        setError('Failed to update category');
-      }
-      throw err;
+      setError('Failed to update category');
     }
   };
 
@@ -255,51 +272,64 @@ export default function DocumentationManagement() {
         return;
       }
       
-      await deleteDocumentCategory(categoryId);
+      // Get category name for logging
+      const category = categories.find(c => c.id === categoryId);
+      
+      // Move all documents in this category to the General category
+      const docsToUpdate = documents.filter(doc => doc.categoryId === categoryId);
+      for (const doc of docsToUpdate) {
+        const docRef = doc(db, DOCS_COLLECTION, doc.id);
+        await updateDoc(docRef, {
+          categoryId: 'general',
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      // Delete the category
+      await deleteDoc(doc(db, DOCS_CATEGORIES_COLLECTION, categoryId));
       
       // Update local state
       setCategories(prev => prev.filter(cat => cat.id !== categoryId));
+      setDocuments(prev => 
+        prev.map(doc => 
+          doc.categoryId === categoryId ? { ...doc, categoryId: 'general', updatedAt: new Date().toISOString() } : doc
+        )
+      );
       
-      // Update documents to use General category
-      const generalCategory = categories.find(c => c.name === 'General');
-      if (generalCategory) {
-        setDocuments(prev => 
-          prev.map(doc => 
-            doc.categoryId === categoryId ? { ...doc, categoryId: generalCategory.id } : doc
-          )
-        );
-      }
+      // Create log entry
+      await createLogEntry({
+        userId: user?.id || 'unknown',
+        username: user?.email || 'unknown',
+        action: 'Deleted Documentation Category',
+        category: 'feature',
+        details: `Deleted category: ${category?.name || categoryId}`
+      });
     } catch (err) {
       console.error('Error deleting category:', err);
-      if (err instanceof Error) {
-        setError(`Failed to delete category: ${err.message}`);
-      } else {
-        setError('Failed to delete category');
-      }
+      setError('Failed to delete category');
     }
   };
 
   // Add a new document
-  const handleAddDocument = async (data: {
-    title: string;
-    description?: string;
-    fileName: string;
-    fileUrl: string;
-    fileType: 'pdf' | 'excel' | 'other';
-    categoryId: string;
-    tags?: string[];
-  }) => {
+  const handleAddDocument = async (data: Omit<DocumentFile, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>) => {
     try {
-      // Create new document with provided data
+      const documentId = `doc-${Date.now()}`;
       const newDocument: DocumentFile = {
-        id: uuidv4(),
+        id: documentId,
         ...data,
         createdBy: user?.email || 'unknown',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
       
-      // Update the documents list
+      // Save to Firestore
+      await setDoc(doc(db, DOCS_COLLECTION, documentId), {
+        ...newDocument,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      
+      // Update local state
       setDocuments(prev => [newDocument, ...prev]);
       setShowUploadForm(false);
       
@@ -313,18 +343,7 @@ export default function DocumentationManagement() {
       });
     } catch (err) {
       console.error('Error adding document:', err);
-      if (err instanceof Error) {
-        // Check for specific Supabase errors
-        if (err.message.includes('row-level security policy')) {
-          setError('Permission denied: You do not have sufficient permissions to upload documents.');
-        } else if (err.message.includes('authenticated')) {
-          setError('Authentication required: You must be signed in to upload documents.');
-        } else {
-          setError(err.message);
-        }
-      } else {
-        setError('An error occurred while uploading');
-      }
+      setError('Failed to add document');
       throw err;
     }
   };
@@ -336,35 +355,38 @@ export default function DocumentationManagement() {
         return;
       }
       
-      // Find the document to get the file path
+      // Get document for logging
       const document = documents.find(d => d.id === documentId);
-      if (!document) {
-        setError('Document not found');
-        return;
-      }
       
-      await deleteDocument(documentId, document.fileUrl);
+      // Delete from Firestore
+      await deleteDoc(doc(db, DOCS_COLLECTION, documentId));
       
       // Update local state
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+      
+      // Create log entry
+      await createLogEntry({
+        userId: user?.id || 'unknown',
+        username: user?.email || 'unknown',
+        action: 'Deleted Documentation',
+        category: 'feature',
+        details: `Deleted document: ${document?.title || documentId}`
+      });
     } catch (err) {
       console.error('Error deleting document:', err);
-      if (err instanceof Error) {
-        setError(`Failed to delete document: ${err.message}`);
-      } else {
-        setError('Failed to delete document');
-      }
+      setError('Failed to delete document');
     }
   };
 
-  // Filter documents based on category and search term
+  // Filter documents based on search term and selected category
   const filteredDocuments = documents.filter(doc => {
-    const matchesCategory = selectedCategory === 'all' || doc.categoryId === selectedCategory;
     const matchesSearch = searchTerm === '' || 
       doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (doc.description && doc.description.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    return matchesCategory && matchesSearch;
+    const matchesCategory = selectedCategory === 'all' || doc.categoryId === selectedCategory;
+    
+    return matchesSearch && matchesCategory;
   });
 
   // Get file icon based on file type
@@ -529,7 +551,7 @@ export default function DocumentationManagement() {
                 <Edit2 className="w-4 h-4" />
               </button>
               
-              {category.name !== 'General' && (
+              {category.id !== 'general' && (
                 <button
                   onClick={() => handleDeleteCategory(category.id)}
                   className="p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded"
@@ -673,7 +695,7 @@ export default function DocumentationManagement() {
       {/* Document Viewer */}
       {viewingDocument && (
         <DocumentViewer 
-          documentFile={viewingDocument}
+          document={viewingDocument}
           onClose={() => setViewingDocument(null)}
         />
       )}

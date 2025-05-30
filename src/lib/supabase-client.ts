@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '../types/supabase';
-import { v4 as uuidv4 } from 'uuid';
 
 // Make sure we have the required environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -29,23 +28,21 @@ export const DOCUMENTS_BUCKET = 'documents';
 export const initializeStorage = async (): Promise<void> => {
   try {
     // Check if bucket exists
-    const { data: buckets, error } = await supabase.storage.listBuckets();
-    if (error) {
-      throw error;
-    }
+    const { data: buckets } = await supabase.storage.listBuckets();
     
     const bucketExists = buckets?.some(bucket => bucket.name === DOCUMENTS_BUCKET);
     
     if (!bucketExists) {
       // Create the bucket
-      const { error: createError } = await supabase.storage.createBucket(DOCUMENTS_BUCKET, {
+      const { error } = await supabase.storage.createBucket(DOCUMENTS_BUCKET, {
         public: false,
-        fileSizeLimit: 10485760 // 10MB
+        fileSizeLimit: 10485760, // 10MB
+        allowedMimeTypes: ['application/pdf', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
       });
       
-      if (createError) {
-        console.error('Error creating storage bucket:', createError);
-        throw createError;
+      if (error) {
+        console.error('Error creating storage bucket:', error);
+        throw error;
       }
       
       console.log('Created documents storage bucket');
@@ -74,22 +71,15 @@ export interface DocumentMetadata {
   file_type: string;
   file_path: string;
   file_size: number;
-  category_id: string | null;
+  category_id: string;
   tags?: string[] | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
-  user_id?: string | null;
 }
 
 // Function to fetch document categories
 export const getDocumentCategories = async (): Promise<DocumentCategory[]> => {
-  // Check if user is authenticated
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    throw new Error('You must be authenticated to view document categories. Please sign in and try again.');
-  }
-  
   const { data, error } = await supabase
     .from('document_categories')
     .select('*')
@@ -108,11 +98,7 @@ export const createDocumentCategory = async (
   name: string, 
   description?: string
 ): Promise<DocumentCategory> => {
-  // Check if user is authenticated
   const userId = await getCurrentUserId();
-  if (!userId) {
-    throw new Error('You must be authenticated to create document categories. Please sign in and try again.');
-  }
   
   const { data, error } = await supabase
     .from('document_categories')
@@ -126,9 +112,6 @@ export const createDocumentCategory = async (
   
   if (error) {
     console.error('Error creating document category:', error);
-    if (error.message.includes('row-level security policy')) {
-      throw new Error('Row-level security policy prevented creating a document category. Please ensure RLS policies are configured correctly for the document_categories table.');
-    }
     throw error;
   }
   
@@ -141,12 +124,6 @@ export const updateDocumentCategory = async (
   name: string,
   description?: string
 ): Promise<DocumentCategory> => {
-  // Check if user is authenticated
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    throw new Error('You must be authenticated to update document categories. Please sign in and try again.');
-  }
-  
   const { data, error } = await supabase
     .from('document_categories')
     .update({
@@ -168,12 +145,6 @@ export const updateDocumentCategory = async (
 
 // Function to delete a document category
 export const deleteDocumentCategory = async (id: string): Promise<void> => {
-  // Check if user is authenticated
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    throw new Error('You must be authenticated to delete document categories. Please sign in and try again.');
-  }
-  
   // First, reassign all documents in this category to the General category
   const { data: generalCategory } = await supabase
     .from('document_categories')
@@ -209,56 +180,52 @@ export const deleteDocumentCategory = async (id: string): Promise<void> => {
 // Function to upload a document
 export const uploadDocument = async (
   file: File,
-  uniqueFilename: string,
-  metadata: {
-    title: string;
-    description?: string;
-    fileType: string;
-    categoryId: string;
-    tags?: string[];
-  }
-): Promise<{ data: DocumentMetadata, error: null } | { data: null, error: Error }> => {
+  title: string,
+  categoryId: string,
+  description?: string,
+  tags?: string[]
+): Promise<DocumentMetadata> => {
   try {
-    // Check if user is authenticated
     const userId = await getCurrentUserId();
-    if (!userId) {
-      throw new Error('You must be authenticated to upload documents. Please sign in and try again.');
-    }
     
-    // 1. Generate a unique file path
-    const fileExt = file.name.split('.').pop() || '';
-    const filePath = `${userId}/${uniqueFilename}`;
+    // 1. Upload file to Supabase Storage
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${userId}/${Date.now()}.${fileExt}`;
     
-    // 2. Upload file to Supabase Storage
     const { error: uploadError, data: uploadData } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
+      .upload(filePath, file);
       
     if (uploadError) {
       console.error('Error uploading file:', uploadError);
-      return { data: null, error: uploadError };
+      throw uploadError;
     }
     
-    // 3. Determine file type
-    let fileType = metadata.fileType || 'other';
+    // 2. Determine file type
+    let fileType = 'other';
+    if (file.type === 'application/pdf') {
+      fileType = 'pdf';
+    } else if (
+      file.type === 'application/vnd.ms-excel' ||
+      file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.type === 'text/csv'
+    ) {
+      fileType = 'excel';
+    }
     
-    // 4. Insert document metadata into database
+    // 3. Insert document metadata into database
     const { data, error } = await supabase
       .from('documents')
       .insert({
-        title: metadata.title,
-        description: metadata.description,
+        title,
+        description,
         file_name: file.name,
         file_type: fileType,
         file_path: filePath,
         file_size: file.size,
-        category_id: metadata.categoryId,
-        tags: metadata.tags,
-        created_by: userId,
-        user_id: userId
+        category_id: categoryId,
+        tags,
+        created_by: userId
       })
       .select()
       .single();
@@ -271,16 +238,13 @@ export const uploadDocument = async (
         .from(DOCUMENTS_BUCKET)
         .remove([filePath]);
         
-      return { data: null, error: new Error(error.message) };
+      throw error;
     }
     
-    return { data, error: null };
+    return data;
   } catch (error) {
     console.error('Error in uploadDocument:', error);
-    return { 
-      data: null, 
-      error: error instanceof Error ? error : new Error('Unknown error in uploadDocument') 
-    };
+    throw error;
   }
 };
 
@@ -292,12 +256,6 @@ export const getDocuments = async (
   searchQuery?: string
 ): Promise<{ data: DocumentMetadata[], count: number }> => {
   try {
-    // Check if user is authenticated
-    const userId = await getCurrentUserId();
-    if (!userId) {
-      throw new Error('You must be authenticated to view documents. Please sign in and try again.');
-    }
-    
     let query = supabase
       .from('documents')
       .select('*', { count: 'exact' });
@@ -338,12 +296,6 @@ export const getDocuments = async (
 // Function to delete a document
 export const deleteDocument = async (id: string, filePath: string): Promise<void> => {
   try {
-    // Check if user is authenticated
-    const userId = await getCurrentUserId();
-    if (!userId) {
-      throw new Error('You must be authenticated to delete documents. Please sign in and try again.');
-    }
-    
     // Delete the file from storage
     const { error: storageError } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
@@ -372,41 +324,14 @@ export const deleteDocument = async (id: string, filePath: string): Promise<void
 
 // Function to get a download URL for a document
 export const getDocumentUrl = async (filePath: string): Promise<string> => {
-  // Check if user is authenticated
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    throw new Error('You must be authenticated to access document URLs. Please sign in and try again.');
-  }
-  
-  // Return a sample URL for testing if the file path doesn't look like a real Supabase path
-  if (!filePath.includes('/')) {
-    console.log('Using mock URL for testing');
-    // For PDF, return a sample PDF
-    if (filePath.endsWith('.pdf')) {
-      return 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
-    }
-    // For Excel, return a sample image
-    if (filePath.includes('excel')) {
-      return 'https://images.pexels.com/photos/6120251/pexels-photo-6120251.jpeg?auto=compress&cs=tinysrgb&w=1600';
-    }
-    // For other files, return a sample image
-    return 'https://images.pexels.com/photos/5805086/pexels-photo-5805086.jpeg?auto=compress&cs=tinysrgb&w=1600';
-  }
-
-  try {
-    // Create a signed URL that works for 1 hour
-    const { data, error } = await supabase.storage
-      .from(DOCUMENTS_BUCKET)
-      .createSignedUrl(filePath, 60 * 60);
-      
-    if (error) {
-      console.error('Error creating signed URL:', error);
-      throw error;
-    }
+  const { data, error } = await supabase.storage
+    .from(DOCUMENTS_BUCKET)
+    .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
     
-    return data.signedUrl;
-  } catch (error) {
-    console.error('Error getting document URL:', error);
+  if (error) {
+    console.error('Error creating signed URL:', error);
     throw error;
   }
+  
+  return data.signedUrl;
 };

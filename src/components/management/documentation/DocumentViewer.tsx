@@ -1,45 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { X, Download, FileText, FileSpreadsheet, File, Calendar, User, Tag, Info } from 'lucide-react';
 import type { DocumentFile } from './DocumentationManagement';
-import { getDocumentUrl } from '../../../lib/supabase-client';
 
 interface DocumentViewerProps {
-  documentFile: DocumentFile;
+  document: DocumentFile;
   onClose: () => void;
 }
 
-export default function DocumentViewer({ documentFile, onClose }: DocumentViewerProps) {
+export default function DocumentViewer({ document, onClose }: DocumentViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch the document URL from Supabase
-    const fetchDocumentUrl = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Try to get the URL from Supabase
-        try {
-          const url = await getDocumentUrl(documentFile.fileUrl);
-          setDocumentUrl(url);
-        } catch (err) {
-          console.error('Error getting document URL from Supabase:', err);
-          
-          // Fallback to using the stored URL directly
-          setDocumentUrl(documentFile.fileUrl);
-        }
-      } catch (err) {
-        console.error('Error fetching document URL:', err);
-        setError('Failed to load document. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
+    // In a real application, we might need to fetch the document content here
+    // For this demo, we'll just simulate loading
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 500);
     
-    fetchDocumentUrl();
-  }, [documentFile]);
+    return () => clearTimeout(timer);
+  }, [document]);
   
   const getFileIcon = (fileType: string) => {
     switch (fileType) {
@@ -53,18 +33,19 @@ export default function DocumentViewer({ documentFile, onClose }: DocumentViewer
   };
 
   const handleDownload = () => {
-    if (!documentUrl) {
-      setError('Document URL not available. Please try again later.');
-      return;
-    }
+    // In a real application, we would download the file here
+    // For this demo, we'll just simulate a download
+    alert(`Downloading ${document.fileName}...`);
     
-    // Create a link to download the file
-    const link = window.document.createElement('a');
-    link.href = documentUrl;
-    link.download = documentFile.fileName;
-    window.document.body.appendChild(link);
-    link.click();
-    window.document.body.removeChild(link);
+    // Create a link to download the file if we have a URL
+    if (document.fileUrl) {
+      const link = document.createElement('a');
+      link.href = document.fileUrl;
+      link.download = document.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   return (
@@ -73,11 +54,11 @@ export default function DocumentViewer({ documentFile, onClose }: DocumentViewer
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b">
           <div className="flex items-center gap-3">
-            {getFileIcon(documentFile.fileType)}
+            {getFileIcon(document.fileType)}
             <div>
-              <h2 className="text-xl font-semibold">{documentFile.title}</h2>
+              <h2 className="text-xl font-semibold">{document.title}</h2>
               <p className="text-sm text-gray-600">
-                {documentFile.fileName}
+                {document.fileName}
               </p>
             </div>
           </div>
@@ -109,7 +90,7 @@ export default function DocumentViewer({ documentFile, onClose }: DocumentViewer
                     <Calendar className="w-5 h-5 text-gray-400" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">Date Added</p>
-                      <p className="text-sm text-gray-500">{new Date(documentFile.createdAt).toLocaleDateString()}</p>
+                      <p className="text-sm text-gray-500">{new Date(document.createdAt).toLocaleDateString()}</p>
                     </div>
                   </div>
                   
@@ -117,7 +98,7 @@ export default function DocumentViewer({ documentFile, onClose }: DocumentViewer
                     <User className="w-5 h-5 text-gray-400" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">Added By</p>
-                      <p className="text-sm text-gray-500">{documentFile.createdBy}</p>
+                      <p className="text-sm text-gray-500">{document.createdBy}</p>
                     </div>
                   </div>
                   
@@ -125,7 +106,7 @@ export default function DocumentViewer({ documentFile, onClose }: DocumentViewer
                     <Tag className="w-5 h-5 text-gray-400" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">File Type</p>
-                      <p className="text-sm text-gray-500 capitalize">{documentFile.fileType}</p>
+                      <p className="text-sm text-gray-500 capitalize">{document.fileType}</p>
                     </div>
                   </div>
                   
@@ -140,25 +121,25 @@ export default function DocumentViewer({ documentFile, onClose }: DocumentViewer
               </div>
               
               {/* Document Description */}
-              {documentFile.description && (
+              {document.description && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 mb-2">Description</h3>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">{documentFile.description}</p>
+                  <p className="text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">{document.description}</p>
                 </div>
               )}
               
               {/* PDF Preview */}
-              {documentFile.fileType === 'pdf' && documentUrl && (
+              {document.fileType === 'pdf' && document.fileUrl && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Preview</h3>
                   <div className="bg-gray-100 rounded-lg overflow-hidden border h-[500px]">
-                    <iframe src={documentUrl} className="w-full h-full"></iframe>
+                    <iframe src={document.fileUrl} className="w-full h-full"></iframe>
                   </div>
                 </div>
               )}
               
               {/* Excel preview would go here in a real application */}
-              {documentFile.fileType === 'excel' && (
+              {document.fileType === 'excel' && (
                 <div className="bg-gray-50 p-6 rounded-lg text-center">
                   <FileSpreadsheet className="w-16 h-16 text-green-600 mx-auto mb-3" />
                   <p className="text-gray-600 mb-3">Excel files cannot be previewed directly. Please download the file to view it.</p>
@@ -173,7 +154,7 @@ export default function DocumentViewer({ documentFile, onClose }: DocumentViewer
               )}
               
               {/* Generic file type placeholder */}
-              {documentFile.fileType === 'other' && (
+              {document.fileType === 'other' && (
                 <div className="bg-gray-50 p-6 rounded-lg text-center">
                   <File className="w-16 h-16 text-gray-400 mx-auto mb-3" />
                   <p className="text-gray-600 mb-3">This file type cannot be previewed. Please download the file to view it.</p>

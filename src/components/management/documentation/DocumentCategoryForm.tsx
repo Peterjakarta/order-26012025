@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { DocumentCategory } from '../../../lib/supabase-client';
+import type { DocumentCategory } from './DocumentationManagement';
 
 interface DocumentCategoryFormProps {
   category?: DocumentCategory;
-  onSubmit: (data: Omit<DocumentCategory, 'id' | 'created_by' | 'created_at' | 'updated_at'>) => Promise<void>;
+  onSubmit: (data: Omit<DocumentCategory, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -28,7 +28,7 @@ export default function DocumentCategoryForm({ category, onSubmit, onCancel }: D
       
       await onSubmit({
         name: name.trim(),
-        description: description.trim() || null
+        description: description.trim() || undefined
       });
     } catch (err) {
       console.error('Error submitting category:', err);

@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { AlertCircle, Upload, File, FileText, X, FileSpreadsheet } from 'lucide-react';
-import { v4 } from 'uuid';
-import type { DocumentCategory } from '../../../lib/supabase-client';
+import type { DocumentCategory } from './DocumentationManagement';
 
 interface DocumentUploadFormProps {
   categories: DocumentCategory[];
@@ -54,9 +53,7 @@ export default function DocumentUploadForm({ categories, onSubmit, onCancel }: D
       const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase();
       if (fileExtension === 'pdf') {
         setFileType('pdf');
-      } else if (
-        ['xls', 'xlsx', 'csv'].includes(fileExtension || '')
-      ) {
+      } else if (['xls', 'xlsx', 'csv'].includes(fileExtension || '')) {
         setFileType('excel');
       } else {
         setFileType('other');
@@ -126,32 +123,16 @@ export default function DocumentUploadForm({ categories, onSubmit, onCancel }: D
       
       setLoading(true);
       
-      // Generate a unique file path for Supabase storage
-      const fileExt = file.name.split('.').pop() || '';
-      const uniqueFilename = `${v4()}-${Date.now()}.${fileExt}`;
+      // In a real application, we would upload the file to storage here
+      // For this demo, we'll simulate file storage by using the file object URL
+      const fileName = file.name;
+      const fileUrl = previewUrl || '';
       
-      // Create a FormData object to send the file to the backend
-      const formData = new FormData();
-      formData.append('title', title);
-      formData.append('file', file);
-      formData.append('filename', file.name);
-      if (description) formData.append('description', description);
-      if (tags.length > 0) formData.append('tags', JSON.stringify(tags));
-      formData.append('categoryId', categoryId);
-      
-      // Simulate file upload - in a real app, this would be a fetch to your API
-      // For now, we'll just use a delay to simulate the upload process
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Prepare file URL - in a real implementation this would come from your API/Supabase response
-      const fileUrl = `documents/${uniqueFilename}`;
-      
-      // Submit the document metadata to the parent component
       await onSubmit({
         title: title.trim(),
         description: description.trim() || undefined,
-        fileName: file.name,
-        fileUrl: fileUrl,
+        fileName,
+        fileUrl,
         fileType,
         categoryId,
         tags: tags.length > 0 ? tags : undefined
@@ -162,23 +143,10 @@ export default function DocumentUploadForm({ categories, onSubmit, onCancel }: D
       setDescription('');
       setCategoryId('');
       clearFile();
-      setTags([]);
       
     } catch (err) {
       console.error('Error uploading document:', err);
-      if (err instanceof Error) {
-        // Check for specific errors
-        if (err.message.includes('row-level security policy')) {
-          setError('Permission denied: You do not have sufficient permissions to upload documents.');
-        } else if (err.message.includes('authenticated')) {
-          setError('Authentication required: You must be signed in to upload documents.');
-        } else {
-          setError(err.message);
-        }
-      } else {
-        setError('An error occurred while uploading');
-      }
-      throw err;
+      setError(err instanceof Error ? err.message : 'An error occurred while uploading');
     } finally {
       setLoading(false);
     }
