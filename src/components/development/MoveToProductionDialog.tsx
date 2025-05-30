@@ -107,8 +107,8 @@ export default function MoveToProductionDialog({
             ingredientId: item.ingredientId,
             amount: item.amount
           })),
-          laborCost: product.costEstimate ? product.costEstimate * 0.2 : undefined, // Estimate labor as 20% of cost
-          packagingCost: product.costEstimate ? product.costEstimate * 0.1 : undefined, // Estimate packaging as 10% of cost
+          laborCost: product.costEstimate ? product.costEstimate * 0.2 : null, // Changed undefined to null
+          packagingCost: product.costEstimate ? product.costEstimate * 0.1 : null, // Changed undefined to null
           notes: recipeNotes
         };
         
@@ -230,7 +230,7 @@ export default function MoveToProductionDialog({
                       <p className="font-medium">{product.category}</p>
                     </div>
                     
-                    {product.price !== undefined && (
+                    {product.price !== null && (
                       <div>
                         <p className="text-sm text-gray-500">Price</p>
                         <p className="font-medium">${product.price.toFixed(2)}</p>

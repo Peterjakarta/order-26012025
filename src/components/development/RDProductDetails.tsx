@@ -6,6 +6,7 @@ import type { Product, Recipe } from '../../types/types';
 import { formatIDR } from '../../utils/currencyFormatter';
 import { calculateRecipeWeight, applyWeightBasedCosts, loadGlobalCostRates } from '../../utils/recipeWeightCalculations';
 import { generateRDApprovalPDF } from '../../utils/rdApprovalForm';
+import ApprovalFormDialog from './ApprovalFormDialog';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -27,6 +28,7 @@ export default function RDProductDetails({
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'recipe'>('details');
   const [error, setError] = useState<string | null>(null);
+  const [showApprovalFormDialog, setShowApprovalFormDialog] = useState(false);
 
   // Load real recipe ingredients from product if available
   useEffect(() => {
@@ -550,16 +552,10 @@ export default function RDProductDetails({
     doc.save(`recipe-${product.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
   };
 
-  const handleDownloadApprovalForm = () => {
-    try {
-      const doc = generateRDApprovalPDF(product);
-      doc.save(`${product.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-approval-form.pdf`);
-    } catch (err) {
-      console.error('Error generating approval PDF:', err);
-      setError('Failed to generate approval PDF');
-    }
+  const handleOpenApprovalFormDialog = () => {
+    setShowApprovalFormDialog(true);
   };
-  
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -932,7 +928,7 @@ export default function RDProductDetails({
             {product.status !== 'approved' && product.status !== 'rejected' && (
               <>
                 <button
-                  onClick={handleDownloadApprovalForm}
+                  onClick={handleOpenApprovalFormDialog}
                   className="flex items-center gap-2 px-4 py-2 border border-green-300 text-green-700 bg-green-50 rounded-lg hover:bg-green-100"
                 >
                   <FileDown className="w-4 h-4" />
@@ -961,6 +957,13 @@ export default function RDProductDetails({
         }}
         onCancel={() => setShowApproveConfirm(false)}
       />
+
+      {showApprovalFormDialog && (
+        <ApprovalFormDialog
+          product={product}
+          onClose={() => setShowApprovalFormDialog(false)}
+        />
+      )}
     </div>
   );
 }

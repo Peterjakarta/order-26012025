@@ -72,7 +72,7 @@ function validateProduct(data: any): Omit<Product, 'id'> {
     unit: String(data.unit || ''),
     minOrder: Number(data.minOrder) || 0,
     price: Number(data.price) || 0,
-    quantityStep: data.quantityStep ? Number(data.quantityStep) : undefined,
+    quantityStep: data.quantityStep ? Number(data.quantityStep) : null,
     showPrice: Boolean(data.showPrice),
     showDescription: Boolean(data.showDescription),
     showUnit: Boolean(data.showUnit),

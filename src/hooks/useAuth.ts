@@ -13,7 +13,12 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db, auth, createLogEntry, COLLECTIONS } from '../lib/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, UserCredential } from 'firebase/auth';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  UserCredential, 
+  onAuthStateChanged 
+} from 'firebase/auth';
 import type { User } from '../types/types';
 
 export function useAuth() {
@@ -31,6 +36,74 @@ export function useAuth() {
     }
     return { user: null, isAuthenticated: false };
   });
+
+  // Firebase auth state listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          // Get user document from Firestore
+          const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, firebaseUser.uid));
+          
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const user = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              role: userData.role,
+              permissions: userData.permissions
+            };
+            
+            setAuthState({ user, isAuthenticated: true });
+            localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
+          } else {
+            // If no user document, check if it's the admin
+            if (firebaseUser.email === 'admin@cokelateh.com') {
+              const user = {
+                id: firebaseUser.uid,
+                email: firebaseUser.email,
+                role: 'admin',
+                permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders']
+              };
+              
+              setAuthState({ user, isAuthenticated: true });
+              localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
+            } else {
+              // Create default user document for staff
+              await setDoc(doc(db, COLLECTIONS.USERS, firebaseUser.uid), {
+                email: firebaseUser.email,
+                role: 'staff',
+                permissions: ['create_orders'],
+                created_at: serverTimestamp(),
+                updated_at: serverTimestamp()
+              });
+              
+              const user = {
+                id: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                role: 'staff',
+                permissions: ['create_orders']
+              };
+              
+              setAuthState({ user, isAuthenticated: true });
+              localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          setAuthState({ user: null, isAuthenticated: false });
+          localStorage.removeItem('auth');
+        }
+      } else {
+        // User is signed out
+        setAuthState({ user: null, isAuthenticated: false });
+        localStorage.removeItem('auth');
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     try {

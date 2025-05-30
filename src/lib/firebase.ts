@@ -171,7 +171,9 @@ export const COLLECTIONS = {
   LOGS: 'logs',
   // Add RD collections
   RD_CATEGORIES: 'rd_categories',
-  RD_PRODUCTS: 'rd_products'
+  RD_PRODUCTS: 'rd_products',
+  // Add approval forms collection
+  APPROVAL_FORMS: 'approvalForms'
 } as const;
 
 // Helper function to create log entries

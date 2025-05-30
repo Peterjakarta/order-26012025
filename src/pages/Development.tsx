@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { GraduationCap, Tag, Settings, FileText, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
+import { GraduationCap, Tag, Settings, FileText, Sparkles, RefreshCw, AlertCircle, Clipboard } from 'lucide-react';
 import RDProductManagement from '../components/development/RDProductManagement';
 import RDCategoryManagement from '../components/development/RDCategoryManagement';
+import ProductApprovalList from '../components/development/ProductApprovalList';
 import { useAuth } from '../hooks/useAuth';
 import { initializeRDCollections } from '../services/rdDataService';
 import Beaker from '../components/common/BeakerIcon';
@@ -35,8 +36,9 @@ export default function Development() {
       try {
         console.log('Development page: Initializing R&D collections...');
         
-        if (!isAuthenticated) {
-          console.log('User not authenticated, skipping initialization');
+        if (!isAuthenticated || !user) {
+          console.log('User not authenticated or not available, skipping initialization');
+          setInitializing(false);
           return;
         }
         
@@ -61,7 +63,7 @@ export default function Development() {
     return () => {
       mounted = false;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
   
   const menuItems: MenuItem[] = [
     {
@@ -79,6 +81,14 @@ export default function Development() {
       description: "Manage test categories",
       requiredPermissions: ['manage_products'],
       element: <RDCategoryManagement />
+    },
+    {
+      path: "/development/approvals",
+      label: "Approval Forms",
+      icon: <Clipboard className="w-4 h-4" />,
+      description: "Manage product approval forms",
+      requiredPermissions: ['manage_products'],
+      element: <ProductApprovalList />
     },
     {
       path: "/development/documentation",
@@ -173,7 +183,7 @@ export default function Development() {
         <Routes>
           <Route
             path="/"
-            element={<Navigate to="/development/products" replace />}
+            element={<Navigate to="/development/products\" replace />}
           />
           {authorizedMenuItems.map(item => (
             <Route 
@@ -184,7 +194,7 @@ export default function Development() {
           ))}
           <Route 
             path="*" 
-            element={<Navigate to="/development/products" replace />} 
+            element={<Navigate to="/development/products\" replace />} 
           />
         </Routes>
       </div>

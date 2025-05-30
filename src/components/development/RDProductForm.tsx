@@ -260,43 +260,11 @@ export default function RDProductForm({
     setTestResults(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Function to create or update order in production system
+  // Function to create or update order in production system - DISABLED as per requirements
   const syncWithProductionSystem = async (productData: Omit<RDProduct, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>, productId?: string): Promise<string | null> => {
-    try {
-      setSyncingWithProduction(true);
-      
-      // Only proceed if we have both development date and target production date
-      if (!productData.developmentDate || !productData.targetProductionDate) {
-        return null;
-      }
-      
-      // If the product already has an order reference, update the existing order
-      if (product?.orderReference) {
-        await syncRDProductWithOrder(
-          { ...productData, id: product.id } as RDProduct,
-          product.orderReference,
-          updateOrder
-        );
-        return product.orderReference;
-      } else {
-        // Create a new order for this R&D product
-        const tempProduct: RDProduct = {
-          ...productData,
-          id: productId || product?.id || `rd-product-${Date.now()}`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: user?.email || 'unknown'
-        };
-        
-        const orderId = await createOrderFromRDProduct(tempProduct, addOrder);
-        return orderId;
-      }
-    } catch (err) {
-      console.error('Error syncing with production system:', err);
-      throw err;
-    } finally {
-      setSyncingWithProduction(false);
-    }
+    // This function is now disabled to prevent automatic sync
+    // Will only be used when explicitly calling Move to Production
+    return null;
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -358,22 +326,9 @@ export default function RDProductForm({
         orderReference: product?.orderReference
       };
 
-      // If both development date and target production date are set,
-      // create or update an order in the production system
+      // Preserve existing order reference if available
       let orderReference = product?.orderReference;
-      
-      if (developmentDate && targetDate) {
-        try {
-          const orderId = await syncWithProductionSystem(productData);
-          if (orderId) {
-            orderReference = orderId;
-            productData.orderReference = orderId;
-          }
-        } catch (syncError) {
-          console.error('Failed to sync with production system:', syncError);
-          // Continue with the save even if sync fails
-        }
-      }
+      productData.orderReference = orderReference;
 
       await onSubmit(productData);
     } catch (err) {
@@ -381,6 +336,9 @@ export default function RDProductForm({
       setError(err instanceof Error ? err.message : 'An error occurred while saving the product');
     }
   };
+
+  // Check if product has any "Pass" test results
+  const hasPassTestResults = testResults.some(test => test.result === 'pass');
 
   // Combine standard categories with R&D categories for the dropdown
   const allCategories = {
@@ -392,7 +350,7 @@ export default function RDProductForm({
   };
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className="space-y-8 bg-white p-6 rounded-lg shadow-sm">
+    <form ref={formRef} onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm space-y-6">
       {error && (
         <div className="flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -602,7 +560,7 @@ export default function RDProductForm({
               placeholder="e.g. 5 (order by multiples of)"
             />
             <p className="mt-1 text-sm text-gray-500">
-              Leave empty to use category default
+              Leave empty for category default
             </p>
           </div>
         </div>
@@ -900,7 +858,7 @@ export default function RDProductForm({
               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
             />
             <p className="mt-1 text-sm text-gray-500">
-              This date will be used for development tracking and production planning when status is "Planning"
+              This date will be used for development tracking
             </p>
           </div>
 
@@ -917,7 +875,7 @@ export default function RDProductForm({
               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
             />
             <p className="mt-1 text-sm text-gray-500">
-              Setting this date will automatically create an entry in the production schedule
+              Optional target date for planning purposes
             </p>
           </div>
 
@@ -941,7 +899,7 @@ export default function RDProductForm({
           
           {/* Display current production status if this product is linked to an order */}
           {product?.orderReference && (
-            <div className="sm:col-span-2 bg-cyan-50 p-4 rounded-lg border border-cyan-200">
+            <div className="sm:col-span-2 bg-cyan-50 p-4 rounded-lg border border-cyan-100">
               <div className="flex items-center gap-2 text-cyan-800">
                 <ArrowUpRight className="w-5 h-5 text-cyan-600" />
                 <p className="font-medium">
@@ -949,7 +907,7 @@ export default function RDProductForm({
                 </p>
               </div>
               <p className="text-sm text-cyan-700 mt-1 ml-7">
-                Changes to dates and development information will automatically sync with the production system
+                This R&D product has already been moved to production
               </p>
             </div>
           )}
@@ -1100,8 +1058,8 @@ export default function RDProductForm({
         >
           {syncingWithProduction ? (
             <>
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white\" xmlns="http://www.w3.org/2000/svg\" fill="none\" viewBox="0 0 24 24">
+                <circle className="opacity-25\" cx="12\" cy="12\" r="10\" stroke="currentColor\" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
               Syncing...

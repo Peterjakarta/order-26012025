@@ -14,11 +14,16 @@ export interface RDProduct extends Omit<Product, 'id'> {
   createdAt: string;
   recipeIngredients?: RecipeIngredient[];
   orderReference?: string; // Reference to the order in the production system
+  approvedBy?: string; // Name of person who approved the product
+  approvedDate?: string; // Date when product was approved
+  approvalNotes?: string; // Additional notes from approval process
 }
 
 export interface RecipeIngredient {
   ingredientId: string;
   amount: number;
+  unit?: string; // Added for better display in approval forms
+  ingredientName?: string; // Added for better display in approval forms
 }
 
 export interface RDCategory extends CategoryData {

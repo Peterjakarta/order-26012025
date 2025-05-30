@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Eye, ArrowUpRight, Calendar, Star, FileText, Check, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, ClipboardList, FileDown, Tag, Search, Filter, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Edit2, Trash2, Eye, EyeOff, ArrowUpRight, Calendar, Star, FileText, Check, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, ClipboardList, FileDown, FileSpreadsheet, Info, RefreshCw, Tag, Filter, Search } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../hooks/useAuth';
 import { RDProduct, RDCategory } from '../../types/rd-types';
@@ -331,6 +331,14 @@ export default function RDProductManagement() {
   };
 
   const handleMoveToProduction = (product: RDProduct) => {
+    // Check if product has any "Pass" test results
+    const hasPassedTests = (product.testResults || []).some(test => test.result === 'pass');
+    
+    if (!hasPassedTests) {
+      alert("This product doesn't have any passed test results. Products can only be moved to production after they have passed testing.");
+      return;
+    }
+    
     setMovingToProduction(product);
   };
 
@@ -514,7 +522,7 @@ export default function RDProductManagement() {
 
                 <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t">
                   <button
-                    onClick={async () => {
+                    onClick={() => async function() {
                       try {
                         await updateRDCategory(category.id, { 
                           status: category.status === 'active' ? 'inactive' : 'active' 
@@ -531,7 +539,7 @@ export default function RDProductManagement() {
                         console.error('Error updating category status:', error);
                         setError(error instanceof Error ? error.message : 'Failed to update category status');
                       }
-                    }}
+                    }()}
                     className={`text-sm px-3 py-1.5 rounded-md ${
                       category.status === 'active'
                         ? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
@@ -557,16 +565,6 @@ export default function RDProductManagement() {
                 </div>
               </div>
             ))}
-            
-            {rdCategories.length === 0 && (
-              <div className="col-span-full bg-gray-50 p-12 rounded-lg border text-center">
-                <Beaker className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-xl font-medium text-gray-700 mb-2">No test categories found</h3>
-                <p className="text-gray-500 mb-6">
-                  Get started by adding your first test category.
-                </p>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -681,8 +679,8 @@ export default function RDProductManagement() {
             const isExpanded = expandedCategories.has(categoryId);
             
             return (
-              <div key={categoryId} className="bg-white rounded-lg shadow-sm border overflow-hidden">
-                {/* Category Header */}
+              <div key={categoryId} className="bg-white rounded-lg shadow-sm overflow-hidden border">
+                {/* Category Header - This should be clickable to expand/collapse */}
                 <div 
                   className="p-4 cursor-pointer hover:bg-gray-50"
                   onClick={() => toggleCategory(categoryId)}
@@ -808,9 +806,22 @@ export default function RDProductManagement() {
                                       Ready for production
                                     </span>
                                   )}
+
+                                  {/* Test Results Badges */}
+                                  {(product.testResults || []).length > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      {(product.testResults || []).some(test => test.result === 'pass') && (
+                                        <span className="text-xs font-medium px-2 py-1 bg-green-50 text-green-700 rounded-md flex items-center">
+                                          <Check className="w-3 h-3 mr-1" />
+                                          Passed Tests
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                                 
-                                {product.status === 'approved' && (
+                                {/* Show Move to Production button only if there's a passed test */}
+                                {(product.testResults || []).some(test => test.result === 'pass') && (
                                   migratedProductIds.has(product.id) ? (
                                     <span className="flex items-center gap-1 text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded-md">
                                       <Check className="w-3.5 h-3.5" />
@@ -828,18 +839,6 @@ export default function RDProductManagement() {
                                       To Production
                                     </button>
                                   )
-                                )}
-                                {product.status !== 'approved' && product.status !== 'rejected' && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleApproveForProduction(product);
-                                    }}
-                                    className="flex items-center gap-1 text-xs font-medium px-2 py-1 bg-cyan-100 text-cyan-800 rounded-md hover:bg-cyan-200"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                    Approve
-                                  </button>
                                 )}
                               </div>
                             </div>

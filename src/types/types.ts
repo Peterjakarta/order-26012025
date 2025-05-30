@@ -56,6 +56,7 @@ export interface StockCategoryItem {
 export interface ProductCategory {
   id: string;
   name: string;
+  description?: string;
 }
 
 export interface CategoryData {
@@ -145,4 +146,29 @@ export interface Recipe {
 export interface RecipeIngredient {
   ingredientId: string;
   amount: number;
+}
+
+// New type for the approval forms
+export interface ApprovalForm {
+  id: string;
+  productId: string;
+  productName: string;
+  createdBy: string;
+  creatorEmail: string;
+  formData: Record<string, any>;
+  menuSections: {
+    id: string;
+    name: string;
+    description: string;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+  status: 'pending' | 'approved' | 'rejected';
+  testResults: any[];
+  hasRecipe: boolean;
+  approverNotes?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  yield?: number;
+  yieldUnit?: string;
 }

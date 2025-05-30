@@ -14,9 +14,9 @@ export function useBranches() {
   // Initialize branches in Firestore if they don't exist
   const initializeBranches = useCallback(async () => {
     try {
-      // Only proceed if authenticated
-      if (!isAuthenticated) {
-        console.log('Waiting for authentication before initializing branches...');
+      // Only proceed if authenticated and user is available
+      if (!isAuthenticated || !user) {
+        console.log('Waiting for authentication and user before initializing branches...');
         return;
       }
 
@@ -77,20 +77,20 @@ export function useBranches() {
       setBranches(initialBranches);
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   // Subscribe to branches from Firebase
   const { useEffect } = React;
   useEffect(() => {
-    // Don't attempt to load branches until authenticated
-    if (!isAuthenticated) {
-      console.log('Not authenticated, using local branch data');
+    // Don't attempt to load branches until authenticated and user is available
+    if (!isAuthenticated || !user) {
+      console.log('Not authenticated or user not available, using local branch data');
       setBranches(initialBranches);
       setLoading(false);
       return () => {};
     }
 
-    // Initialize branches when component mounts and we're authenticated
+    // Initialize branches when component mounts and we're authenticated with a valid user
     initializeBranches();
     
     const q = query(collection(db, COLLECTIONS.BRANCHES), orderBy('name'));
@@ -114,11 +114,11 @@ export function useBranches() {
     );
 
     return () => unsubscribe();
-  }, [initializeBranches, isAuthenticated]);
+  }, [initializeBranches, isAuthenticated, user]);
 
   const addBranch = useCallback(async (data: Omit<Branch, 'id'>) => {
     try {
-      if (!isAuthenticated) {
+      if (!isAuthenticated || !user) {
         throw new Error('You must be logged in to add a branch');
       }
 
@@ -140,11 +140,11 @@ export function useBranches() {
       console.error('Error adding branch:', error);
       throw error;
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   const updateBranch = useCallback(async (id: string, data: Omit<Branch, 'id'>) => {
     try {
-      if (!isAuthenticated) {
+      if (!isAuthenticated || !user) {
         throw new Error('You must be logged in to update a branch');
       }
 
@@ -157,11 +157,11 @@ export function useBranches() {
       console.error('Error updating branch:', error);
       throw error;
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   const deleteBranch = useCallback(async (id: string) => {
     try {
-      if (!isAuthenticated) {
+      if (!isAuthenticated || !user) {
         throw new Error('You must be logged in to delete a branch');
       }
 
@@ -170,7 +170,7 @@ export function useBranches() {
       console.error('Error deleting branch:', error);
       throw error;
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   return {
     branches,

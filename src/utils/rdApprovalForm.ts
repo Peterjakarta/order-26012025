@@ -9,143 +9,290 @@ export function generateRDApprovalPDF(product: RDProduct, approver?: string): js
   
   // Set up variables
   const margin = 14;
-  const lineHeight = 8;
-  let y = 20;
+  const lineHeight = 7;
+  let y = 15;
   
-  // Add title
-  doc.setFontSize(16);
+  // Add modern header with background
+  doc.setFillColor(0, 150, 136); // Teal color for header
+  doc.rect(0, 0, 210, 25, 'F');
+  
+  // Add title in white text
+  doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
-  doc.text('RESEARCH AND DEVELOPMENT APPROVAL FORM', margin, y);
+  doc.setTextColor(255, 255, 255);
+  doc.text('R&D PRODUCT APPROVAL FORM', margin, y);
   
-  // Add underline
-  doc.setLineWidth(0.5);
-  doc.line(margin, y + 3, 196, y + 3);
+  // Reset text color for the rest of the document
+  doc.setTextColor(0, 0, 0);
   
-  // Reset font
+  // Add current date
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(255, 255, 255);
+  const dateText = `Date: ${formatDate(new Date().toISOString())}`;
+  const dateWidth = doc.getStringUnitWidth(dateText) * 10 / doc.internal.scaleFactor;
+  doc.text(dateText, doc.internal.pageSize.width - margin - dateWidth, y);
+  
+  // Reset text color after header
+  doc.setTextColor(0, 0, 0);
+  y = 35;
+  
+  // Add form fields with colored section headers
+  // Product Information Section
+  doc.setFillColor(230, 247, 255);
+  doc.rect(margin - 2, y - 5, doc.internal.pageSize.width - (margin * 2) + 4, 8, 'F');
+  
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  
-  y += 15;
-  
-  // Add form fields
-  doc.text('Tanggal/Date:', margin, y);
-  doc.text(formatDate(product.developmentDate), 60, y);
-  
-  y += lineHeight;
-  doc.text('Pembuat/Creator:', margin, y);
-  doc.text(product.createdBy || 'R&D Department', 60, y);
-  
-  y += lineHeight;
-  doc.text('Divisi/Division:', margin, y);
-  doc.text('Product Development', 60, y);
-  
-  y += lineHeight * 1.5;
-  
-  doc.text('Nama Menu/Menu Name:', margin, y);
-  doc.text(product.name, 60, y);
-  
-  y += lineHeight;
-  doc.text('Kode Menu/ Menu Code:', margin, y);
-  doc.text(product.id.slice(0, 12), 60, y);
-  
-  y += lineHeight * 1.5;
-  
-  doc.text('Penggunaan Menu/Menu Usage:', margin, y);
-  if (product.description) {
-    doc.text(product.description, 60, y);
-  }
-  
-  y += lineHeight;
-  doc.text('Periode Menu/Menu Period:', margin, y);
-  if (product.targetProductionDate) {
-    doc.text(`From ${formatDate(product.targetProductionDate)}`, 60, y);
-  }
-  
-  y += lineHeight * 1.5;
-  
-  doc.text('Deskripsi Menu/Menu Description:', margin, y);
-  
-  // Add multiline description as a table without borders
-  y += 5;
-  if (product.notes) {
-    autoTable(doc, {
-      startY: y,
-      theme: 'plain',
-      styles: { cellPadding: 0, fontSize: 11 },
-      margin: { left: 60 },
-      body: [[product.notes]],
-    });
-    
-    y = (doc as any).lastAutoTable.finalY + 10;
-  } else {
-    y += lineHeight * 2;
-  }
-  
-  // Image placeholder
-  doc.text('Tampilan Menu/ Menu Plating picture:', margin, y);
-  y += lineHeight;
-  
-  // Check if we have images to include
-  if (product.imageUrls && product.imageUrls.length > 0) {
-    // Can't directly embed external URLs, so add a note
-    doc.text('(Please see attached product images)', 60, y);
-  } else {
-    // Create an image placeholder box
-    doc.rect(60, y, 100, 60);
-    doc.text('No image available', 90, y + 30);
-  }
-  
-  y += 70;
-  
-  // Result Section
-  doc.text('Hasil/Result:', margin, y);
   doc.setFont('helvetica', 'bold');
-  doc.text('Approved', 60, y);
+  doc.text('PRODUCT INFORMATION', margin, y);
+  y += 10;
+  
   doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
   
-  y += lineHeight * 1.5;
+  // Product details in a 2-column layout
+  const leftColX = margin;
+  const rightColX = 105;
+  const labelWidth = 40;
   
-  // Approval notes
-  doc.text('Note Approval/Approval Note:', margin, y);
+  // Left column
+  doc.setFont('helvetica', 'bold');
+  doc.text('Product Name:', leftColX, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(product.name, leftColX + labelWidth, y);
   
-  // Add approval notes (if any)
+  // Right column
+  doc.setFont('helvetica', 'bold');
+  doc.text('Product Code:', rightColX, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(product.id.slice(0, 12), rightColX + labelWidth, y);
+  
   y += lineHeight;
-  autoTable(doc, {
-    startY: y,
-    theme: 'plain',
-    styles: { cellPadding: 1, fontSize: 11 },
-    margin: { left: 60 },
-    body: [['Product has been reviewed and approved for production']],
-  });
   
-  y = (doc as any).lastAutoTable.finalY + 20;
+  // Left column
+  doc.setFont('helvetica', 'bold');
+  doc.text('Category:', leftColX, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(product.category, leftColX + labelWidth, y);
   
-  // Signature section
-  doc.text('Tanggal Approval/Approval Date:', margin, y);
-  doc.text(formatDate(new Date().toISOString()), 80, y);
+  // Right column
+  doc.setFont('helvetica', 'bold');
+  doc.text('Status:', rightColX, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(product.status.charAt(0).toUpperCase() + product.status.slice(1), rightColX + labelWidth, y);
+  
+  y += lineHeight;
+  
+  // Left column
+  doc.setFont('helvetica', 'bold');
+  doc.text('Development Date:', leftColX, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(formatDate(product.developmentDate), leftColX + labelWidth, y);
+  
+  // Right column
+  if (product.targetProductionDate) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('Target Production:', rightColX, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formatDate(product.targetProductionDate), rightColX + labelWidth, y);
+  }
+  
+  y += lineHeight;
+  
+  // Creator information
+  doc.setFont('helvetica', 'bold');
+  doc.text('Created By:', leftColX, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(product.createdBy || 'R&D Department', leftColX + labelWidth, y);
+  
+  if (product.price) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('Price:', rightColX, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`IDR ${product.price.toLocaleString()}`, rightColX + labelWidth, y);
+  }
   
   y += lineHeight * 2;
   
+  // Recipe Information Section
+  if (product.recipeIngredients && product.recipeIngredients.length > 0) {
+    doc.setFillColor(230, 255, 240);
+    doc.rect(margin - 2, y - 5, doc.internal.pageSize.width - (margin * 2) + 4, 8, 'F');
+    
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RECIPE INFORMATION', margin, y);
+    y += 10;
+    
+    doc.setFontSize(10);
+    
+    // Use auto-table for ingredients with modern styling
+    const tableData = product.recipeIngredients.map(ing => [
+      ing.ingredientName || "Ingredient", // Use name instead of ID
+      ing.amount.toString(),
+      ing.unit || ""
+    ]);
+    
+    autoTable(doc, {
+      startY: y,
+      head: [['Ingredient', 'Amount', 'Unit']],
+      body: tableData,
+      theme: 'striped',
+      styles: { 
+        fontSize: 9,
+        cellPadding: 3 
+      },
+      headStyles: { 
+        fillColor: [0, 150, 136],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold'
+      },
+      columnStyles: {
+        0: { cellWidth: 80 },
+        1: { cellWidth: 30, halign: 'right' },
+        2: { cellWidth: 30 }
+      }
+    });
+    
+    y = (doc as any).lastAutoTable.finalY + 10;
+  }
+  
+  // Image Section
+  const remainingSpace = doc.internal.pageSize.height - y - 60; // Reserve space for signature
+  const idealImageHeight = Math.min(80, remainingSpace);
+  
+  doc.setFillColor(245, 245, 245);
+  doc.rect(margin - 2, y - 5, doc.internal.pageSize.width - (margin * 2) + 4, 8, 'F');
+  
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PRODUCT IMAGE', margin, y);
+  y += 10;
+  
+  // Create image box with border
+  const imageBoxX = margin;
+  const imageBoxWidth = doc.internal.pageSize.width - (margin * 2);
+  const imageBoxHeight = idealImageHeight;
+  
+  // Draw the box for image placement
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.5);
+  doc.rect(imageBoxX, y, imageBoxWidth, imageBoxHeight);
+  
+  // Add the first image if available
+  if (product.imageUrls && product.imageUrls.length > 0) {
+    try {
+      // Try to add the image to the placeholder, preserving aspect ratio
+      const img = new window.Image();
+      img.src = product.imageUrls[0];
+      
+      // Calculate dimensions to maintain aspect ratio
+      let imgWidth = imageBoxWidth - 4;
+      let imgHeight = imageBoxHeight - 4;
+      
+      // Adjust dimensions to maintain aspect ratio
+      const aspectRatio = img.width / img.height;
+      if (img.width > img.height) {
+        // Landscape image
+        imgHeight = imgWidth / aspectRatio;
+        if (imgHeight > imageBoxHeight - 4) {
+          imgHeight = imageBoxHeight - 4;
+          imgWidth = imgHeight * aspectRatio;
+        }
+      } else {
+        // Portrait or square image
+        imgWidth = imgHeight * aspectRatio;
+        if (imgWidth > imageBoxWidth - 4) {
+          imgWidth = imageBoxWidth - 4;
+          imgHeight = imgWidth / aspectRatio;
+        }
+      }
+      
+      // Calculate position to center the image
+      const xPos = imageBoxX + (imageBoxWidth - imgWidth) / 2;
+      const yPos = y + (imageBoxHeight - imgHeight) / 2;
+      
+      doc.addImage(
+        product.imageUrls[0], 
+        'JPEG', 
+        xPos,
+        yPos,
+        imgWidth,
+        imgHeight,
+        undefined,
+        'FAST',
+        0
+      );
+    } catch (error) {
+      // If image loading fails, just show text
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Image placeholder - See attached files', imageBoxX + imageBoxWidth/2 - 40, y + imageBoxHeight/2);
+    }
+  } else {
+    // No image available text
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('No image available', imageBoxX + imageBoxWidth/2 - 20, y + imageBoxHeight/2);
+  }
+  
+  // Update y position after image
+  y += imageBoxHeight + 15;
+  
+  // Approval Section
+  doc.setFillColor(255, 245, 230);
+  doc.rect(margin - 2, y - 5, doc.internal.pageSize.width - (margin * 2) + 4, 8, 'F');
+  
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('APPROVAL', margin, y);
+  y += 10;
+  
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Result:', margin, y);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.text('Approved', margin + 30, y);
+  
+  // Approval date on right side
+  const today = new Date().toLocaleDateString();
+  doc.setFont('helvetica', 'bold');
+  doc.text('Approval Date:', rightColX, y);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.text(today, rightColX + labelWidth, y);
+  
+  y += lineHeight * 3;
+  
+  // Create signature section
+  doc.setFontSize(10);
+  
   // Create signature lines
-  doc.text('Tertandatangan/Signed,', margin, y);
-  doc.text('Approved By,', 140, y);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Submitted By:', leftColX, y);
+  doc.text('Approved By:', rightColX, y);
   
   y += lineHeight * 4; // Space for signature
   
   // Add signature lines
+  doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.2);
-  doc.line(margin, y, margin + 60, y);
-  doc.line(140, y, 140 + 60, y);
+  doc.line(leftColX, y, leftColX + 60, y);
+  doc.line(rightColX, y, rightColX + 60, y);
   
   y += lineHeight;
   
   // Add signature names
-  doc.text('Name:', margin, y);
-  doc.text('Eko B. Harsobo', 140, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Name: ____________________', leftColX, y);
+  doc.text('Name: Eko B. Handoko', rightColX, y);
   
   y += lineHeight;
-  doc.text('Title:', margin, y);
-  doc.text('Chief Executive Officer', 140, y);
-
+  
+  // Add titles
+  doc.text('Title: ____________________', leftColX, y);
+  doc.text('Title: Chief Executive Officer', rightColX, y);
+  
   return doc;
 }

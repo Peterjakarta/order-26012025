@@ -20,12 +20,19 @@ import { db, COLLECTIONS, getBatch, commitBatchIfNeeded, getNetworkStatus } from
 import { categories as initialCategories } from '../data/categories';
 import type { Product, ProductCategory, CategoryData, Ingredient, Recipe, StockLevel, StockHistory, StockCategory } from '../types/types';
 import { auth } from '../lib/firebase';
+import { useAuth } from './useAuth';
 
 // ... rest of the file remains unchanged ...
 
 // Initialize stock levels in Firestore if they don't exist
-const initializeStockLevels = async (ingredients: Ingredient[]) => {
+const initializeStockLevels = async (ingredients: Ingredient[], user: any) => {
   try {
+    // Only proceed if user is available
+    if (!user) {
+      console.log('User not available, skipping stock level initialization');
+      return;
+    }
+    
     const batch = writeBatch(db);
     let operationsCount = 0;
 
@@ -57,10 +64,12 @@ const initializeStockLevels = async (ingredients: Ingredient[]) => {
 
 // Add this to your useEffect hooks section
 useEffect(() => {
-  // Initialize stock levels when ingredients are loaded
-  if (ingredients.length > 0) {
-    initializeStockLevels(ingredients);
+  const { isAuthenticated, user } = useAuth();
+  
+  // Initialize stock levels when ingredients are loaded AND user is authenticated
+  if (ingredients.length > 0 && isAuthenticated && user) {
+    initializeStockLevels(ingredients, user);
   }
-}, [ingredients]);
+}, [ingredients, isAuthenticated, user]);
 
 // ... rest of the file remains unchanged ...
