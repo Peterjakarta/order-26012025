@@ -118,27 +118,5 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && hasPermission('manage_products');
     }
-    
-    // Documentation collections for Management page
-    match /management_document_categories/{categoryId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && hasPermission('manage_products');
-    }
-    
-    match /management_documents/{documentId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && hasPermission('manage_products');
-    }
-    
-    // R&D Document collections
-    match /rd_documents/{documentId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && hasPermission('manage_products');
-    }
-    
-    match /rd_document_categories/{categoryId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && hasPermission('manage_products');
-    }
   }
 }

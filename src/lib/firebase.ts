@@ -13,8 +13,7 @@ import {
   enableNetwork,
   setLogLevel,
   getDocs,
-  query,
-  limit
+  query
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
@@ -172,10 +171,7 @@ export const COLLECTIONS = {
   LOGS: 'logs',
   // Add RD collections
   RD_CATEGORIES: 'rd_categories',
-  RD_PRODUCTS: 'rd_products',
-  // Add documentation collections
-  RD_DOCUMENTS: 'rd_documents',
-  RD_DOCUMENT_CATEGORIES: 'rd_document_categories'
+  RD_PRODUCTS: 'rd_products'
 } as const;
 
 // Helper function to create log entries
@@ -200,7 +196,7 @@ export async function createLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>) 
 export async function ensureCollectionExists(collectionName: string, demoData?: any[]) {
   try {
     const collectionRef = collection(db, collectionName);
-    const snapshot = await getDocs(query(collectionRef, limit(1)));
+    const snapshot = await getDocs(query(collectionRef));
     
     // If collection is empty and we have demo data, insert it
     if (snapshot.empty && demoData && demoData.length > 0) {

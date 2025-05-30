@@ -8,6 +8,20 @@ import { formatIDR } from './currencyFormatter';
 import { calculateRecipeCost } from './recipeCalculations';
 import { ExportOptions } from '../components/management/pricing/ExportOptionsDialog';
 
+// Helper function to sanitize sheet names for Excel compatibility
+function sanitizeSheetName(name: string): string {
+  // Excel sheet name cannot contain: : \ / ? * [ ]
+  // Replace invalid characters with dashes
+  let sanitized = name.replace(/[:\/\\?*\[\]]/g, '-');
+  
+  // Truncate to max 31 characters (Excel limit)
+  if (sanitized.length > 31) {
+    sanitized = sanitized.substring(0, 28) + '...';
+  }
+  
+  return sanitized;
+}
+
 // Function to generate Excel for orders
 export function generateOrderExcel(order: Order, products: Product[], poNumber?: string) {
   // Get branch name using helper function
@@ -75,7 +89,7 @@ export function generateOrderExcel(order: Order, products: Product[], poNumber?:
   ws['!cols'] = colWidths;
 
   // Add worksheet to workbook
-  utils.book_append_sheet(wb, ws, 'Order Details');
+  utils.book_append_sheet(wb, ws, sanitizeSheetName('Order Details'));
 
   return wb;
 }
@@ -144,7 +158,7 @@ export function generateRecipesExcel(
   wsSummary['!cols'] = summaryColWidths;
 
   // Add summary worksheet
-  utils.book_append_sheet(wb, wsSummary, 'All Recipes');
+  utils.book_append_sheet(wb, wsSummary, sanitizeSheetName('All Recipes'));
   
   // Create individual worksheets for each recipe with detailed information
   recipes.forEach(recipe => {
@@ -231,15 +245,9 @@ export function generateRecipesExcel(
     wsRecipe['!cols'] = recipeColWidths;
     
     // Add worksheet - use safe sheet name (max 31 chars)
-    // Sanitize the recipe name to remove invalid characters
-    const safeRecipeName = recipe.name.length > 25 
-      ? recipe.name.substring(0, 25) + "..."
-      : recipe.name;
-    
-    // Remove invalid sheet name characters: : \ / ? * [ ]
-    const sanitizedName = safeRecipeName.replace(/[:\\\/\?\*\[\]]/g, '_');
+    const safeRecipeName = sanitizeSheetName(recipe.name);
       
-    utils.book_append_sheet(wb, wsRecipe, sanitizedName);
+    utils.book_append_sheet(wb, wsRecipe, safeRecipeName);
   });
   
   // Create category-based worksheets
@@ -299,17 +307,11 @@ export function generateRecipesExcel(
     ];
     wsCategory['!cols'] = categoryColWidths;
     
-    // Ensure category name is valid as worksheet name (max 31 chars)
-    // Sanitize the category name to remove invalid characters
-    const safeCategoryName = categoryName.length > 25 
-      ? categoryName.substring(0, 25) + "..." 
-      : categoryName;
-    
-    // Remove invalid sheet name characters: : \ / ? * [ ]
-    const sanitizedName = safeCategoryName.replace(/[:\\\/\?\*\[\]]/g, '_');
+    // Ensure category name is valid as worksheet name
+    const safeCategoryName = sanitizeSheetName(categoryName);
     
     // Add worksheet
-    utils.book_append_sheet(wb, wsCategory, sanitizedName);
+    utils.book_append_sheet(wb, wsCategory, safeCategoryName);
   });
 
   return wb;
@@ -356,7 +358,7 @@ export function generateProductsExcel(products: Product[], categories: Record<st
   ws['!cols'] = colWidths;
 
   // Add worksheet to workbook
-  utils.book_append_sheet(wb, ws, 'Products');
+  utils.book_append_sheet(wb, ws, sanitizeSheetName('Products'));
 
   return wb;
 }
@@ -396,7 +398,7 @@ export function generateCategoriesExcel(categories: Record<string, { name: strin
   wsCategories['!cols'] = categoryColWidths;
 
   // Add categories worksheet to workbook
-  utils.book_append_sheet(wb, wsCategories, 'Categories');
+  utils.book_append_sheet(wb, wsCategories, sanitizeSheetName('Categories'));
   
   // Create product worksheet for each category with products
   categoryOrder.forEach((categoryId) => {
@@ -437,16 +439,10 @@ export function generateCategoriesExcel(categories: Record<string, { name: strin
       ];
       wsProducts['!cols'] = productColWidths;
       
-      // Sanitize the category name for Excel sheet name
-      const safeCategoryName = categoryName.length > 25 
-        ? categoryName.substring(0, 25) + "..." 
-        : categoryName;
+      // Add worksheet to workbook - use safe sheet name
+      const safeCategoryName = sanitizeSheetName(categoryName);
       
-      // Remove invalid sheet name characters: : \ / ? * [ ]
-      const sanitizedName = safeCategoryName.replace(/[:\\\/\?\*\[\]]/g, '_');
-      
-      // Add worksheet with the sanitized name
-      utils.book_append_sheet(wb, wsProducts, sanitizedName);
+      utils.book_append_sheet(wb, wsProducts, safeCategoryName);
     }
   });
   
@@ -486,7 +482,7 @@ export function generateCategoriesExcel(categories: Record<string, { name: strin
   wsAllProducts['!cols'] = productColWidths;
   
   // Add worksheet to workbook
-  utils.book_append_sheet(wb, wsAllProducts, 'All Products');
+  utils.book_append_sheet(wb, wsAllProducts, sanitizeSheetName('All Products'));
 
   return wb;
 }
@@ -552,7 +548,7 @@ export function generateIngredientsExcel(
   ws['!cols'] = colWidths;
 
   // Add worksheet to workbook
-  utils.book_append_sheet(wb, ws, 'Ingredients');
+  utils.book_append_sheet(wb, ws, sanitizeSheetName('Ingredients'));
   
   // Create category worksheets
   stockCategories.forEach(category => {
@@ -592,16 +588,11 @@ export function generateIngredientsExcel(
       // Set column widths
       wsCategory['!cols'] = colWidths.slice(0, 8);
       
-      // Sanitize the category name for Excel sheet name
-      const safeCategoryName = category.name.length > 25 
-        ? category.name.substring(0, 25) + "..." 
-        : category.name;
-      
-      // Remove invalid sheet name characters: : \ / ? * [ ]
-      const sanitizedName = safeCategoryName.replace(/[:\\\/\?\*\[\]]/g, '_');
+      // Add worksheet with sanitized name
+      const safeCategoryName = sanitizeSheetName(category.name);
       
       // Add worksheet
-      utils.book_append_sheet(wb, wsCategory, sanitizedName);
+      utils.book_append_sheet(wb, wsCategory, safeCategoryName);
     }
   });
   
@@ -615,35 +606,15 @@ export function generateSelectedRecipesExcel(
   products: Product[],
   ingredients: Ingredient[],
   categories: Record<string, { name: string }>,
-  options?: ExportOptions & { sanitizeSheetName?: (name: string) => string }
+  options?: ExportOptions
 ): WorkBook {
   // Default options if not provided
   const exportOptions = options || {
-    content: {
-      products: true,
-      ingredients: true,
-      materialCosts: true,
-      productionCosts: true,
-      overheadCosts: true,
-      qualityControl: true,
-      notes: true
-    },
-    includeIngredients: true,
-    includeOverheadCosts: true,
     includeCosts: true,
+    includeOverheadCosts: true,
+    includeIngredients: true,
     includeNotes: true,
-    organization: 'consolidated',
-    format: 'detailed',
     exportFormat: 'excel'
-  };
-
-  // Function to sanitize sheet names
-  const sanitizeSheetName = (name: string): string => {
-    if (options?.sanitizeSheetName) {
-      return options.sanitizeSheetName(name);
-    }
-    // Default sanitization - remove characters that are not allowed in Excel sheet names
-    return name.replace(/[:\\\/\?\*\[\]]/g, '_');
   };
 
   // Create workbook
@@ -724,15 +695,12 @@ export function generateSelectedRecipesExcel(
   wsSummary['!cols'] = summaryColWidths;
 
   // Add summary worksheet
-  utils.book_append_sheet(wb, wsSummary, 'All Recipes');
+  utils.book_append_sheet(wb, wsSummary, sanitizeSheetName('All Recipes'));
   
   // Only add detailed recipe sheets if ingredients are included
   if (exportOptions.includeIngredients) {
-    // Keep track of used sheet names to prevent duplicates
-    const usedSheetNames = new Set<string>(['All Recipes']);
-    
     // Create individual worksheets for each recipe with detailed information
-    selectedRecipes.forEach((recipe, recipeIndex) => {
+    selectedRecipes.forEach(recipe => {
       // Get recipe data
       const product = products.find(p => p.id === recipe.productId);
       const categoryName = categories[recipe.category]?.name || recipe.category;
@@ -819,112 +787,13 @@ export function generateSelectedRecipesExcel(
       // Create worksheet
       const wsRecipe = utils.aoa_to_sheet(recipeHeaderRows);
       
-      // Sanitize recipe name for sheet name
-      const baseSheetName = recipe.name.length > 25 
-        ? recipe.name.substring(0, 25) + "..."
-        : recipe.name;
-      
-      // Apply sanitization to remove invalid characters
-      let sheetName = sanitizeSheetName(baseSheetName);
-      
-      // Ensure uniqueness
-      if (usedSheetNames.has(sheetName)) {
-        let counter = 1;
-        let newName = `${sheetName} (${counter})`;
-        while (usedSheetNames.has(newName)) {
-          counter++;
-          newName = `${sheetName} (${counter})`;
-          
-          // If name gets too long because of counter, truncate it further
-          if (newName.length > 31) {
-            const truncateLength = 25 - counter.toString().length - 3;
-            sheetName = recipe.name.substring(0, truncateLength) + "...";
-            sheetName = sanitizeSheetName(sheetName);
-            newName = `${sheetName} (${counter})`;
-          }
-        }
-        sheetName = newName;
-      }
-      
-      // Ensure length is within Excel's 31 character limit
-      if (sheetName.length > 31) {
-        sheetName = sheetName.substring(0, 31);
-      }
-      
-      // Add to used names
-      usedSheetNames.add(sheetName);
-      
-      // Add worksheet
-      utils.book_append_sheet(wb, wsRecipe, sheetName);
+      // Add worksheet - use safe sheet name
+      const safeRecipeName = sanitizeSheetName(recipe.name);
+        
+      utils.book_append_sheet(wb, wsRecipe, safeRecipeName);
     });
   }
   
-  // Create category-based worksheets
-  const recipesByCategory = selectedRecipes.reduce((acc, recipe) => {
-    const categoryId = recipe.category;
-    if (!acc[categoryId]) {
-      acc[categoryId] = [];
-    }
-    acc[categoryId].push(recipe);
-    return acc;
-  }, {} as Record<string, Recipe[]>);
-  
-  // Create a worksheet for each category
-  Object.entries(recipesByCategory).forEach(([categoryId, categoryRecipes]) => {
-    const categoryName = categories[categoryId]?.name || categoryId;
-    
-    // Category header
-    const categoryHeader = [
-      [`${categoryName} Recipes`],
-      ['Generated on:', new Date().toLocaleString()],
-      [''],
-      ['Recipe Name', 'Product', 'Yield', 'Total Cost', 'Unit Cost', 'Ingredients Count']
-    ];
-    
-    // Create recipe rows for this category
-    const categoryRows = categoryRecipes.map(recipe => {
-      const product = products.find(p => p.id === recipe.productId);
-      
-      // Calculate costs
-      const baseCost = calculateRecipeCost(recipe, ingredients);
-      const laborCost = recipe.laborCost || 0;
-      const packagingCost = recipe.packagingCost || 0;
-      const totalCost = baseCost + laborCost + packagingCost;
-      const unitCost = recipe.yield > 0 ? totalCost / recipe.yield : 0;
-      
-      return [
-        recipe.name,
-        product?.name || 'Unknown Product',
-        `${recipe.yield} ${recipe.yieldUnit}`,
-        formatIDR(totalCost),
-        formatIDR(unitCost),
-        recipe.ingredients.length
-      ];
-    });
-    
-    // Create worksheet
-    const wsCategory = utils.aoa_to_sheet([...categoryHeader, ...categoryRows]);
-    
-    // Set column widths
-    const categoryColWidths = [
-      { wch: 40 }, // Recipe Name
-      { wch: 40 }, // Product
-      { wch: 15 }, // Yield
-      { wch: 15 }, // Total Cost
-      { wch: 15 }, // Unit Cost
-      { wch: 15 }  // Ingredients Count
-    ];
-    wsCategory['!cols'] = categoryColWidths;
-    
-    // Sanitize the category name
-    const safeCategoryName = sanitizeSheetName(
-      categoryName.length > 25 ? categoryName.substring(0, 25) + "..." : categoryName
-    );
-    
-    // Add worksheet
-    utils.book_append_sheet(wb, wsCategory, safeCategoryName);
-  });
-
   return wb;
 }
 
@@ -934,11 +803,8 @@ export function generateExcelData(data: any[][], sheetName: string = 'Sheet1'): 
   const wb = utils.book_new();
   const ws = utils.aoa_to_sheet(data);
 
-  // Sanitize sheet name to remove invalid characters
-  const sanitizedSheetName = sheetName.replace(/[:\\\/\?\*\[\]]/g, '_');
-  
   // Add worksheet to workbook
-  utils.book_append_sheet(wb, ws, sanitizedSheetName);
+  utils.book_append_sheet(wb, ws, sanitizeSheetName(sheetName));
 
   return wb;
 }

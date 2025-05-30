@@ -15,12 +15,6 @@ import { calculateRecipeCost, calculateTotalProductionCost } from '../../../util
 import BatchCostUpdate from './BatchCostUpdate';
 import ExportOptionsDialog, { ExportOptions } from './ExportOptionsDialog';
 
-// Helper function to sanitize sheet names
-const sanitizeSheetName = (name: string): string => {
-  // Remove characters that are not allowed in Excel sheet names
-  return name.replace(/[:\\\/\?\*\[\]]/g, '_');
-};
-
 export default function RecipeManagement() {
   const { recipes, categories, addRecipe, updateRecipe, deleteRecipe, products, ingredients, addIngredient } = useStore();
   const [isAddingRecipe, setIsAddingRecipe] = useState(false);
@@ -335,28 +329,21 @@ export default function RecipeManagement() {
         : recipes;
       
       if (options.exportFormat === 'excel') {
-        // Create a sanitized version of the options
-        const sanitizedOptions = {
-          ...options,
-          sanitizeSheetName: sanitizeSheetName
-        };
-        
-        // Export to Excel with sanitized options
+        // Export to Excel
         const wb = generateSelectedRecipesExcel(
           recipesToExport, 
           recipes, 
           products, 
           ingredients, 
           categories,
-          sanitizedOptions
+          options
         );
         saveWorkbook(wb, `recipes-export-${recipesToExport.length}.xlsx`);
       } else {
         // Export to PDF - handle each recipe individually
         recipesToExport.forEach(recipe => {
           const doc = generateRecipePDF(recipe, ingredients, recipe.yield, options);
-          const safeFileName = recipe.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          doc.save(`recipe-${safeFileName}.pdf`);
+          doc.save(`recipe-${recipe.name.toLowerCase().replace(/\s+/g, '-')}.pdf`);
         });
       }
       
