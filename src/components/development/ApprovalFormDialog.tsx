@@ -824,8 +824,8 @@ export default function ApprovalFormDialog({ product, onClose }: ApprovalFormDia
                       {testResults.map((test, idx) => (
                         <tr key={idx} className={`hover:bg-gray-50 ${
                           test.result === 'pass' ? 'bg-green-50' : 
-                          test.result === 'fail' ? 'bg-red-50' : ''
-                        }`}>
+                          test.result === 'fail' ? 'bg-red-50' : ''}
+                        `}>
                           <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{formatDate(test.date)}</td>
                           <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{test.tester}</td>
                           <td className="px-3 py-2 whitespace-nowrap text-sm text-center">

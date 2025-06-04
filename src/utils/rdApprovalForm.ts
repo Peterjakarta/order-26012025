@@ -286,7 +286,7 @@ export function generateRDApprovalPDF(product: RDProduct, approver?: string): js
   // Add signature names
   doc.setFont('helvetica', 'normal');
   doc.text('Name: ____________________', leftColX, y);
-  doc.text('Name: Eko B. Handoko', rightColX, y);
+  doc.text(`Name: ${approver || 'Eko B. Handoko'}`, rightColX, y);
   
   y += lineHeight;
   
