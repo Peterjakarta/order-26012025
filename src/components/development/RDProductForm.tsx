@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, Upload, Star, Trash2, Plus, X, Check, AlertCircle, FileText, ClipboardList, PlusCircle, Image, ArrowUpRight } from 'lucide-react';
+import { Calendar, Upload, Star, Trash2, Plus, X, Check, AlertCircle, FileText, ClipboardList, PlusCircle, Image, ArrowUpRight, Edit2 } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../hooks/useAuth';
 import { useOrders } from '../../hooks/useOrders';
@@ -27,7 +27,7 @@ export default function RDProductForm({
   initialCategory, 
   rdCategories = []
 }: RDProductFormProps) {
-  const { categories, ingredients } = useStore();
+  const { categories, ingredients, recipes } = useStore();
   const { user } = useAuth();
   const { addOrder, updateOrder } = useOrders();
   const [selectedCategory, setSelectedCategory] = useState<string>(product?.category || initialCategory || '');
@@ -53,6 +53,27 @@ export default function RDProductForm({
   const [selectedIngredient, setSelectedIngredient] = useState('');
   const [ingredientAmount, setIngredientAmount] = useState('');
   const [activeTab, setActiveTab] = useState<'url' | 'upload'>('upload'); // Default to upload tab
+  const [recipeName, setRecipeName] = useState<string>(product?.name || '');
+  const [recipeYield, setRecipeYield] = useState<number>(product?.minOrder || 1);
+  const [recipeYieldUnit, setRecipeYieldUnit] = useState<string>(product?.unit || 'pcs');
+  const [recipeInstructions, setRecipeInstructions] = useState<string>('');
+  const [editingIngredientIndex, setEditingIngredientIndex] = useState<number | null>(null);
+
+  // Check if we have an existing recipe
+  useEffect(() => {
+    if (product?.id) {
+      const existingRecipe = recipes.find(r => r.productId === product.id);
+      if (existingRecipe) {
+        setRecipeName(existingRecipe.name);
+        setRecipeYield(existingRecipe.yield);
+        setRecipeYieldUnit(existingRecipe.yieldUnit);
+        setRecipeInstructions(existingRecipe.notes || '');
+        setRecipeIngredients(existingRecipe.ingredients);
+      } else if (product.recipeIngredients) {
+        setRecipeIngredients(product.recipeIngredients);
+      }
+    }
+  }, [product, recipes]);
 
   // Test results state
   const [testResults, setTestResults] = useState<TestResult[]>(
@@ -198,21 +219,30 @@ export default function RDProductForm({
       return;
     }
 
-    const existingIndex = recipeIngredients.findIndex(
-      item => item.ingredientId === selectedIngredient
-    );
-
-    if (existingIndex >= 0) {
-      // Update existing ingredient
+    // If we're editing an existing ingredient
+    if (editingIngredientIndex !== null) {
       setRecipeIngredients(prev => prev.map((item, i) => 
-        i === existingIndex ? { ...item, amount } : item
+        i === editingIngredientIndex ? { ingredientId: selectedIngredient, amount } : item
       ));
+      setEditingIngredientIndex(null);
     } else {
-      // Add new ingredient
-      setRecipeIngredients(prev => [
-        ...prev, 
-        { ingredientId: selectedIngredient, amount }
-      ]);
+      // Check if ingredient already exists
+      const existingIndex = recipeIngredients.findIndex(
+        item => item.ingredientId === selectedIngredient
+      );
+
+      if (existingIndex >= 0) {
+        // Update existing ingredient
+        setRecipeIngredients(prev => prev.map((item, i) => 
+          i === existingIndex ? { ...item, amount } : item
+        ));
+      } else {
+        // Add new ingredient
+        setRecipeIngredients(prev => [
+          ...prev, 
+          { ingredientId: selectedIngredient, amount }
+        ]);
+      }
     }
 
     // Reset fields
@@ -221,8 +251,29 @@ export default function RDProductForm({
     setError(null);
   };
 
+  // Edit a recipe ingredient
+  const editRecipeIngredient = (index: number) => {
+    const ingredient = recipeIngredients[index];
+    setSelectedIngredient(ingredient.ingredientId);
+    setIngredientAmount(ingredient.amount.toString());
+    setEditingIngredientIndex(index);
+    
+    // Focus on the ingredient dropdown
+    const ingredientSelect = document.getElementById('ingredient');
+    if (ingredientSelect) {
+      ingredientSelect.focus();
+    }
+  };
+
   // Remove recipe ingredient
   const removeRecipeIngredient = (index: number) => {
+    // If we're currently editing this ingredient, cancel the edit
+    if (editingIngredientIndex === index) {
+      setEditingIngredientIndex(null);
+      setSelectedIngredient('');
+      setIngredientAmount('');
+    }
+    
     setRecipeIngredients(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -384,6 +435,7 @@ export default function RDProductForm({
               required
               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               placeholder="e.g. Single Origin Dark Chocolate Truffles"
+              onChange={(e) => setRecipeName(e.target.value)} // Update recipe name when product name changes
             />
           </div>
 
@@ -465,6 +517,7 @@ export default function RDProductForm({
               defaultValue={product?.unit || ''}
               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
               placeholder="e.g. boxes, pieces, etc."
+              onChange={(e) => setRecipeYieldUnit(e.target.value)} // Update recipe yield unit when product unit changes
             />
           </div>
         </div>
@@ -543,6 +596,7 @@ export default function RDProductForm({
               min="1"
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500"
               placeholder="Minimum order quantity"
+              onChange={(e) => setRecipeYield(parseInt(e.target.value) || 1)} // Update recipe yield when min order changes
             />
           </div>
 
@@ -566,117 +620,219 @@ export default function RDProductForm({
         </div>
       </div>
 
-      {/* Recipe Ingredients Section */}
+      {/* Recipe Section - Enhanced with more details */}
       <div className="border-b pb-6">
         <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
           <ClipboardList className="w-5 h-5 text-cyan-600" />
-          Recipe Ingredients
+          Recipe Information
         </h3>
         
         <div className="space-y-4">
-          {/* Add Ingredient Form */}
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <label htmlFor="ingredient" className="block text-sm font-medium text-gray-700 mb-1">
-                Ingredient
-              </label>
-              <select
-                id="ingredient"
-                value={selectedIngredient}
-                onChange={(e) => setSelectedIngredient(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-              >
-                <option value="">Select an ingredient</option>
-                {ingredients.map(ing => (
-                  <option key={ing.id} value={ing.id}>
-                    {ing.name} ({ing.unit})
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="w-32">
-              <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">
-                Amount
+          {/* Recipe details */}
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label htmlFor="recipeName" className="block text-sm font-medium text-gray-700 mb-1">
+                Recipe Name
               </label>
               <input
-                type="number"
-                id="amount"
-                value={ingredientAmount}
-                onChange={(e) => setIngredientAmount(e.target.value)}
-                min="0.01"
-                step="0.01"
+                type="text"
+                id="recipeName"
+                value={recipeName}
+                onChange={(e) => setRecipeName(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                placeholder="e.g. 100"
+                placeholder="Recipe name (defaults to product name)"
               />
             </div>
             
-            <button
-              type="button"
-              onClick={addRecipeIngredient}
-              className="mb-0.5 px-3 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 flex items-center gap-2"
-            >
-              <PlusCircle className="w-4 h-4" />
-              Add
-            </button>
+            <div>
+              <label htmlFor="recipeYield" className="block text-sm font-medium text-gray-700 mb-1">
+                Recipe Yield
+              </label>
+              <input
+                type="number"
+                id="recipeYield"
+                value={recipeYield}
+                onChange={(e) => setRecipeYield(parseInt(e.target.value) || 1)}
+                min="1"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                placeholder="Recipe yield amount"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                How many items this recipe produces
+              </p>
+            </div>
+            
+            <div>
+              <label htmlFor="recipeYieldUnit" className="block text-sm font-medium text-gray-700 mb-1">
+                Yield Unit
+              </label>
+              <input
+                type="text"
+                id="recipeYieldUnit"
+                value={recipeYieldUnit}
+                onChange={(e) => setRecipeYieldUnit(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                placeholder="e.g., pcs, boxes"
+              />
+            </div>
+            
+            <div className="sm:col-span-2">
+              <label htmlFor="recipeInstructions" className="block text-sm font-medium text-gray-700 mb-1">
+                Preparation Instructions
+              </label>
+              <textarea
+                id="recipeInstructions"
+                value={recipeInstructions}
+                onChange={(e) => setRecipeInstructions(e.target.value)}
+                rows={4}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                placeholder="Enter detailed preparation instructions and notes"
+              />
+            </div>
           </div>
           
-          {/* Ingredients List */}
-          {recipeIngredients.length > 0 ? (
-            <div className="border rounded-lg overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ingredient
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Unit
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {recipeIngredients.map((item, index) => {
-                    const ingredient = ingredients.find(i => i.id === item.ingredientId);
-                    return (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {ingredient?.name || 'Unknown ingredient'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <div className="text-sm text-gray-900">{item.amount}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">{ingredient?.unit || 'N/A'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button 
-                            type="button" 
-                            onClick={() => removeRecipeIngredient(index)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {/* Recipe Ingredients Form */}
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">Recipe Ingredients</h4>
+            
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <label htmlFor="ingredient" className="block text-sm font-medium text-gray-700 mb-1">
+                  Ingredient
+                </label>
+                <select
+                  id="ingredient"
+                  value={selectedIngredient}
+                  onChange={(e) => setSelectedIngredient(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                >
+                  <option value="">Select an ingredient</option>
+                  {ingredients.map(ing => (
+                    <option key={ing.id} value={ing.id}>
+                      {ing.name} ({ing.unit})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="w-32">
+                <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">
+                  Amount
+                </label>
+                <input
+                  type="number"
+                  id="amount"
+                  value={ingredientAmount}
+                  onChange={(e) => setIngredientAmount(e.target.value)}
+                  min="0.01"
+                  step="0.01"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                  placeholder="e.g. 100"
+                />
+              </div>
+              
+              <button
+                type="button"
+                onClick={addRecipeIngredient}
+                className="mb-0.5 px-3 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 flex items-center gap-2"
+              >
+                {editingIngredientIndex !== null ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Update
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="w-4 h-4" />
+                    Add
+                  </>
+                )}
+              </button>
+              
+              {editingIngredientIndex !== null && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingIngredientIndex(null);
+                    setSelectedIngredient('');
+                    setIngredientAmount('');
+                  }}
+                  className="mb-0.5 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Cancel
+                </button>
+              )}
             </div>
-          ) : (
-            <div className="text-center py-6 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">No ingredients added yet</p>
-            </div>
-          )}
+            
+            {/* Ingredients List */}
+            {recipeIngredients.length > 0 ? (
+              <div className="border rounded-lg overflow-hidden mt-4">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Ingredient
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Unit
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {recipeIngredients.map((item, index) => {
+                      const ingredient = ingredients.find(i => i.id === item.ingredientId);
+                      return (
+                        <tr key={index} className={`hover:bg-gray-50 ${editingIngredientIndex === index ? 'bg-cyan-50' : ''}`}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {ingredient?.name || 'Unknown ingredient'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <div className="text-sm text-gray-900">{item.amount}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-500">{ingredient?.unit || 'N/A'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex justify-end gap-2">
+                              <button 
+                                type="button" 
+                                onClick={() => editRecipeIngredient(index)}
+                                className="text-cyan-600 hover:text-cyan-800 p-1 hover:bg-cyan-50 rounded-full"
+                                title="Edit ingredient"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button 
+                                type="button" 
+                                onClick={() => removeRecipeIngredient(index)}
+                                className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded-full"
+                                title="Remove ingredient"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-6 bg-gray-50 rounded-lg mt-4">
+                <p className="text-sm text-gray-500">No ingredients added yet</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

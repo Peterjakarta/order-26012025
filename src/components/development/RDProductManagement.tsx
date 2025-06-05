@@ -26,7 +26,7 @@ import {
 } from '../../services/rdDataService';
 
 export default function RDProductManagement() {
-  const { categories, ingredients, products, recipes } = useStore();
+  const { categories, ingredients, products, recipes, addRecipe, updateRecipe } = useStore();
   const { user, isAuthenticated } = useAuth();
   const [rdProducts, setRdProducts] = useState<RDProduct[]>([]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
@@ -265,6 +265,39 @@ export default function RDProductManagement() {
       if (editingProduct) {
         // Update existing product
         const updatedProduct = await updateRDProduct(editingProduct.id, data);
+
+        // Create or update the recipe if needed
+        if (data.recipeIngredients && data.recipeIngredients.length > 0) {
+          // Find if there's an existing recipe
+          const existingRecipe = recipes.find(r => r.productId === editingProduct.id);
+          
+          if (existingRecipe) {
+            // Update existing recipe
+            await updateRecipe(existingRecipe.id, {
+              name: data.name,
+              description: data.description || '',
+              category: data.category,
+              productId: editingProduct.id,
+              yield: data.minOrder || 1,
+              yieldUnit: data.unit || 'pcs',
+              ingredients: data.recipeIngredients,
+              notes: data.notes || ''
+            });
+          } else {
+            // Create new recipe
+            await addRecipe({
+              name: data.name,
+              description: data.description || '',
+              category: data.category,
+              productId: editingProduct.id,
+              yield: data.minOrder || 1,
+              yieldUnit: data.unit || 'pcs',
+              ingredients: data.recipeIngredients,
+              notes: data.notes || ''
+            });
+          }
+        }
+        
         if (updatedProduct) {
           setRdProducts(prev => prev.map(p => 
             p.id === editingProduct.id ? updatedProduct : p
@@ -276,6 +309,20 @@ export default function RDProductManagement() {
         const newProduct = await addRDProduct(data);
         setRdProducts(prev => [...prev, newProduct]);
         setIsAddingProduct(false);
+
+        // Create a recipe if ingredients are specified
+        if (data.recipeIngredients && data.recipeIngredients.length > 0) {
+          await addRecipe({
+            name: data.name,
+            description: data.description || '',
+            category: data.category,
+            productId: newProduct.id,
+            yield: data.minOrder || 1,
+            yieldUnit: data.unit || 'pcs',
+            ingredients: data.recipeIngredients,
+            notes: data.notes || ''
+          });
+        }
       }
       
       // Notify other components that data has changed
@@ -522,7 +569,7 @@ export default function RDProductManagement() {
 
                 <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t">
                   <button
-                    onClick={() => async function() {
+                    onClick={async () => {
                       try {
                         await updateRDCategory(category.id, { 
                           status: category.status === 'active' ? 'inactive' : 'active' 
@@ -539,7 +586,7 @@ export default function RDProductManagement() {
                         console.error('Error updating category status:', error);
                         setError(error instanceof Error ? error.message : 'Failed to update category status');
                       }
-                    }()}
+                    }}
                     className={`text-sm px-3 py-1.5 rounded-md ${
                       category.status === 'active'
                         ? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
@@ -817,6 +864,14 @@ export default function RDProductManagement() {
                                         </span>
                                       )}
                                     </div>
+                                  )}
+
+                                  {/* Recipe Badge */}
+                                  {(product.recipeIngredients && product.recipeIngredients.length > 0) && (
+                                    <span className="text-xs font-medium px-2 py-1 bg-pink-50 text-pink-700 rounded-md flex items-center">
+                                      <ClipboardList className="w-3 h-3 mr-1" />
+                                      Has Recipe
+                                    </span>
                                   )}
                                 </div>
                                 

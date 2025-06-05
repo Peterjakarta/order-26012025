@@ -60,6 +60,7 @@ interface StoreContextType extends StoreState {
   updateStockCategory: (id: string, data: { name: string; description?: string }) => Promise<void>;
   deleteStockCategory: (id: string) => Promise<void>;
   refreshStockHistory: () => Promise<void>;
+  findOrCreateRecipeForRDProduct: (rdProductId: string, recipeData: Partial<Omit<Recipe, 'id'>>) => Promise<string | null>;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -89,8 +90,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     recipes: [],
     stockLevels: {} as Record<string, StockLevel>,
     stockCategories: [],
-    stockHistory: [],
-    stockReductionHistory: {} as Record<string, boolean>
+    stockHistory: []
   }));
 
   const refreshStockHistory = useCallback(async () => {
@@ -489,6 +489,66 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // New function to find or create a recipe for an RD product
+  const findOrCreateRecipeForRDProduct = useCallback(async (
+    rdProductId: string, 
+    recipeData: Partial<Omit<Recipe, 'id'>>
+  ): Promise<string | null> => {
+    try {
+      // First try to find an existing recipe for this product
+      const recipesQuery = query(
+        collection(db, COLLECTIONS.RECIPES),
+        where('notes', 'array-contains', `Development ID: ${rdProductId}`)
+      );
+      
+      const snapshot = await getDocs(recipesQuery);
+      
+      // If found, update the existing recipe
+      if (!snapshot.empty) {
+        const existingRecipe = snapshot.docs[0];
+        await updateDoc(doc(db, COLLECTIONS.RECIPES, existingRecipe.id), {
+          ...recipeData,
+          updatedAt: serverTimestamp()
+        });
+        return existingRecipe.id;
+      }
+      
+      // Otherwise create a new recipe
+      if (!recipeData.name || !recipeData.category || !recipeData.ingredients || recipeData.ingredients.length === 0) {
+        console.error('Missing required recipe data');
+        return null;
+      }
+      
+      // Create a complete recipe object
+      const completeRecipeData: Omit<Recipe, 'id'> = {
+        name: recipeData.name,
+        description: recipeData.description || '',
+        category: recipeData.category,
+        productId: recipeData.productId || rdProductId,
+        yield: recipeData.yield || 1,
+        yieldUnit: recipeData.yieldUnit || 'pcs',
+        ingredients: recipeData.ingredients,
+        notes: [
+          recipeData.notes || '',
+          '--- Created from R&D Product ---',
+          `Development ID: ${rdProductId}`
+        ].filter(Boolean).join('\n')
+      };
+      
+      // Add the recipe
+      const docRef = await addDoc(collection(db, COLLECTIONS.RECIPES), {
+        ...completeRecipeData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error finding or creating recipe:', error);
+      return null;
+    }
+  }, []);
+
   const getProductsByCategory = useCallback((category: string) => {
     return state.products.filter(p => p.category === category);
   }, [state.products]);
@@ -679,7 +739,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addStockCategory,
     updateStockCategory,
     deleteStockCategory,
-    refreshStockHistory
+    refreshStockHistory,
+    findOrCreateRecipeForRDProduct
   };
 
   return (

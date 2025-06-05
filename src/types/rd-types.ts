@@ -69,3 +69,18 @@ export interface DevelopmentDocument {
   createdAt: string;
   updatedAt: string;
 }
+
+// New interface for Recipe in R&D context
+export interface RDRecipe {
+  id: string;
+  name: string;
+  description?: string;
+  productId: string;
+  yield: number;
+  yieldUnit: string;
+  ingredients: RecipeIngredient[];
+  instructions?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}

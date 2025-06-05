@@ -68,6 +68,9 @@ export default function MoveToProductionDialog({
       // Generate a unique product ID
       const existingProductId = `rd-to-prod-${product.id}`;
       
+      // Determine if we have recipe information to migrate
+      const hasRecipeData = product.recipeIngredients && product.recipeIngredients.length > 0;
+      
       // Add recipe note to mention that this was migrated from R&D
       const recipeNotes = [
         product.notes || '',
@@ -95,7 +98,7 @@ export default function MoveToProductionDialog({
       await addProduct(productData);
       
       // 2. Create a recipe based on the R&D product's recipe information
-      if (product.recipeIngredients && product.recipeIngredients.length > 0) {
+      if (hasRecipeData) {
         const recipeData: Omit<Recipe, 'id'> = {
           name: productName.trim(),
           description: product.description,
@@ -270,6 +273,46 @@ export default function MoveToProductionDialog({
                   ))}
                 </select>
               </div>
+              
+              {/* Recipe Information Section */}
+              {product.recipeIngredients && product.recipeIngredients.length > 0 && (
+                <div className="bg-pink-50 border border-pink-200 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-pink-800">
+                    <ClipboardList className="w-5 h-5 text-pink-600" />
+                    <h3 className="font-medium">Recipe Information</h3>
+                  </div>
+                  
+                  <p className="text-sm text-pink-700">
+                    This product has a recipe with {product.recipeIngredients.length} ingredients that will be migrated to the production system.
+                  </p>
+                  
+                  <div className="bg-white rounded-lg p-3 max-h-48 overflow-y-auto">
+                    <table className="min-w-full divide-y divide-pink-200">
+                      <thead>
+                        <tr>
+                          <th className="text-left text-xs font-medium text-pink-500 uppercase">Ingredient</th>
+                          <th className="text-right text-xs font-medium text-pink-500 uppercase">Amount</th>
+                          <th className="text-left text-xs font-medium text-pink-500 uppercase">Unit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-pink-100">
+                        {product.recipeIngredients.map((ingredient, index) => {
+                          const ingredientDetails = ingredients.find(i => i.id === ingredient.ingredientId);
+                          if (!ingredientDetails) return null;
+                          
+                          return (
+                            <tr key={index} className="hover:bg-pink-50">
+                              <td className="py-2 text-sm">{ingredientDetails.name}</td>
+                              <td className="py-2 text-sm text-right">{ingredient.amount}</td>
+                              <td className="py-2 text-sm">{ingredientDetails.unit}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <div className="flex items-start gap-2">
