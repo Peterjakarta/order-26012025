@@ -234,6 +234,35 @@ export const DEMO_RD_PRODUCTS: RDProduct[] = [
 let categoriesListener: (() => void) | null = null;
 let productsListener: (() => void) | null = null;
 
+// Utility function to sanitize data for Firestore
+// This will replace undefined values with null and remove functions
+export function sanitizeForFirestore(data: any): any {
+  if (data === undefined) {
+    return null;
+  }
+  
+  if (data === null || typeof data !== 'object' || data instanceof Date) {
+    return data;
+  }
+  
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeForFirestore(item));
+  }
+  
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    // Skip functions and undefined values
+    if (typeof value !== 'function' && value !== undefined) {
+      result[key] = sanitizeForFirestore(value);
+    } else if (value === undefined) {
+      // Convert undefined to null for Firestore
+      result[key] = null;
+    }
+  }
+  
+  return result;
+}
+
 // Initialize Firestore collections with demo data if needed
 export async function initializeRDCollections() {
   try {
@@ -300,8 +329,10 @@ async function migrateLocalStorageData() {
           const docSnap = await getDoc(docRef);
           
           if (!docSnap.exists()) {
+            // Sanitize product data before saving
+            const sanitizedProduct = sanitizeForFirestore(product);
             batch.set(docRef, {
-              ...product,
+              ...sanitizedProduct,
               createdAt: new Date(product.createdAt),
               updatedAt: new Date(product.updatedAt)
             });
@@ -458,8 +489,10 @@ export async function saveRDCategories(categories: RDCategory[]): Promise<void> 
     // Update all categories in the batch
     for (const category of categories) {
       const docRef = doc(db, COLLECTIONS.RD_CATEGORIES, category.id);
+      // Sanitize category data before saving
+      const sanitizedCategory = sanitizeForFirestore(category);
       batch.set(docRef, {
-        ...category,
+        ...sanitizedCategory,
         createdAt: new Date(category.createdAt),
         updatedAt: new Date()
       });
@@ -552,8 +585,10 @@ export async function saveRDProducts(products: RDProduct[]): Promise<void> {
     // Update all products in the batch
     for (const product of products) {
       const docRef = doc(db, COLLECTIONS.RD_PRODUCTS, product.id);
+      // Sanitize product data before saving to remove undefined values
+      const sanitizedProduct = sanitizeForFirestore(product);
       batch.set(docRef, {
-        ...product,
+        ...sanitizedProduct,
         createdAt: new Date(product.createdAt),
         updatedAt: new Date(),
         // Handle dates correctly
@@ -601,10 +636,13 @@ export async function addRDCategory(category: Omit<RDCategory, 'id' | 'createdAt
       updatedAt: now.toISOString()
     };
     
+    // Sanitize category data
+    const sanitizedCategory = sanitizeForFirestore(newCategory);
+    
     // Save to Firestore
     const docRef = doc(db, COLLECTIONS.RD_CATEGORIES, newCategory.id);
     await setDoc(docRef, {
-      ...newCategory,
+      ...sanitizedCategory,
       createdAt: now,
       updatedAt: now
     });
@@ -656,9 +694,12 @@ export async function updateRDCategory(id: string, categoryData: Partial<Omit<RD
     const existingData = docSnap.data();
     const now = new Date();
     
+    // Sanitize category data
+    const sanitizedData = sanitizeForFirestore(categoryData);
+    
     // Update in Firestore
     await updateDoc(docRef, {
-      ...categoryData,
+      ...sanitizedData,
       updatedAt: now
     });
     
@@ -761,10 +802,13 @@ export async function addRDProduct(product: Omit<RDProduct, 'id' | 'createdAt' |
       createdBy: auth.currentUser?.email || 'unknown'
     };
     
+    // Sanitize product data to replace undefined values with null for Firestore
+    const sanitizedProduct = sanitizeForFirestore(newProduct);
+    
     // Save to Firestore
     const docRef = doc(db, COLLECTIONS.RD_PRODUCTS, newProduct.id);
     await setDoc(docRef, {
-      ...newProduct,
+      ...sanitizedProduct,
       createdAt: now,
       updatedAt: now,
       developmentDate: product.developmentDate,
@@ -818,19 +862,14 @@ export async function updateRDProduct(id: string, productData: Partial<Omit<RDPr
     const existingData = docSnap.data();
     const now = new Date();
     
+    // Sanitize product data to replace undefined values with null
+    const sanitizedData = sanitizeForFirestore(productData);
+    
     // Prepare data for update
-    const updates: any = {
-      ...productData,
+    const updates = {
+      ...sanitizedData,
       updatedAt: now
     };
-    
-    // Handle dates explicitly
-    if (productData.developmentDate !== undefined) {
-      updates.developmentDate = productData.developmentDate;
-    }
-    if (productData.targetProductionDate !== undefined) {
-      updates.targetProductionDate = productData.targetProductionDate;
-    }
     
     // Update in Firestore
     await updateDoc(docRef, updates);
