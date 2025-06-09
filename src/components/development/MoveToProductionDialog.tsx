@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckSquare, FileCode, ArrowUpRight, AlertCircle, Beaker, Edit2, FileDown } from 'lucide-react';
+import { X, CheckSquare, FileCode, ArrowUpRight, AlertCircle, Beaker, Edit2, FileDown, ClipboardList } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { RDProduct } from '../../types/rd-types';
 import type { Product, Recipe } from '../../types/types';
@@ -21,7 +21,8 @@ export default function MoveToProductionDialog({
     products,
     addProduct, 
     addRecipe,
-    recipes
+    recipes,
+    ingredients
   } = useStore();
   const [selectedCategory, setSelectedCategory] = useState<string>(product.category);
   const [productName, setProductName] = useState<string>(product.name);

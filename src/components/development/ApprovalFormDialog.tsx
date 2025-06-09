@@ -283,7 +283,7 @@ export default function ApprovalFormDialog({ product, onClose }: ApprovalFormDia
           }
         } else if (product.recipeIngredients && product.recipeIngredients.length > 0) {
           // Use product recipe ingredients if no formal recipe exists
-          doc.text(`Recipe for: ${product.name}`, 14, 35);
+          doc.text(`Recipe for: ${formData.productName}`, 14, 35);
           
           if (product.costEstimate) {
             doc.text(`Estimated Cost: ${formatIDR(product.costEstimate)}`, 14, 45);

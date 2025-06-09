@@ -112,7 +112,18 @@ export function generateRDApprovalPDF(product: RDProduct, approver?: string): js
     doc.text(`IDR ${product.price.toLocaleString()}`, rightColX + labelWidth, y);
   }
   
-  y += lineHeight * 2;
+  y += lineHeight;
+  
+  // Add yield information
+  if (product.minOrder || product.unit) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('Yield:', leftColX, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${product.minOrder || 1} ${product.unit || 'pcs'}`, leftColX + labelWidth, y);
+    y += lineHeight;
+  }
+  
+  y += lineHeight;
   
   // Recipe Information Section
   if (product.recipeIngredients && product.recipeIngredients.length > 0) {
@@ -178,56 +189,50 @@ export function generateRDApprovalPDF(product: RDProduct, approver?: string): js
   doc.setDrawColor(200, 200, 200);
   doc.setLineWidth(0.5);
   doc.rect(imageBoxX, y, imageBoxWidth, imageBoxHeight);
-  
+
   // Add the first image if available
   if (product.imageUrls && product.imageUrls.length > 0) {
     try {
-      // Try to add the image to the placeholder, preserving aspect ratio
-      const img = new window.Image();
-      img.src = product.imageUrls[0];
+      const imageUrl = product.imageUrls[0];
       
-      // Calculate dimensions to maintain aspect ratio
-      let imgWidth = imageBoxWidth - 4;
-      let imgHeight = imageBoxHeight - 4;
+      // Use a 4:3 aspect ratio (common for many images)
+      const aspectRatio = 4 / 3;
       
-      // Adjust dimensions to maintain aspect ratio
-      const aspectRatio = img.width / img.height;
-      if (img.width > img.height) {
-        // Landscape image
-        imgHeight = imgWidth / aspectRatio;
-        if (imgHeight > imageBoxHeight - 4) {
-          imgHeight = imageBoxHeight - 4;
-          imgWidth = imgHeight * aspectRatio;
-        }
+      // Calculate dimensions to fit inside the box while maintaining aspect ratio
+      let width, height;
+      
+      if (imageBoxWidth / imageBoxHeight > aspectRatio) {
+        // Box is wider than 4:3, so fit height
+        height = imageBoxHeight - 10;
+        width = height * aspectRatio;
       } else {
-        // Portrait or square image
-        imgWidth = imgHeight * aspectRatio;
-        if (imgWidth > imageBoxWidth - 4) {
-          imgWidth = imageBoxWidth - 4;
-          imgHeight = imgWidth / aspectRatio;
-        }
+        // Box is taller than 4:3, so fit width
+        width = imageBoxWidth - 10;
+        height = width / aspectRatio;
       }
       
       // Calculate position to center the image
-      const xPos = imageBoxX + (imageBoxWidth - imgWidth) / 2;
-      const yPos = y + (imageBoxHeight - imgHeight) / 2;
+      const xPos = imageBoxX + (imageBoxWidth - width) / 2;
+      const yPos = y + (imageBoxHeight - height) / 2;
       
+      // Add the image to the PDF
       doc.addImage(
-        product.imageUrls[0], 
-        'JPEG', 
+        imageUrl,
+        'JPEG',
         xPos,
         yPos,
-        imgWidth,
-        imgHeight,
+        width,
+        height,
         undefined,
-        'FAST',
-        0
+        'MEDIUM'
       );
     } catch (error) {
+      console.error('Error adding image to PDF:', error);
+      
       // If image loading fails, just show text
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text('Image placeholder - See attached files', imageBoxX + imageBoxWidth/2 - 40, y + imageBoxHeight/2);
+      doc.text('Image could not be displayed', imageBoxX + imageBoxWidth/2 - 40, y + imageBoxHeight/2);
     }
   } else {
     // No image available text
