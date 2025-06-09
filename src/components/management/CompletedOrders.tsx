@@ -63,6 +63,10 @@ export default function CompletedOrders() {
     poNumber: string;
   } | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+  const [editingOrderDate, setEditingOrderDate] = useState<{
+    orderId: string;
+    date: string;
+  } | null>(null);
   
   const ordersByMonth = React.useMemo(() => {
     const completedOrders = orders
@@ -151,9 +155,12 @@ export default function CompletedOrders() {
   const handleUpdateStatus = async (
     orderId: string, 
     status: Order['status'], 
-    producedQuantities?: Record<string, number>
+    producedQuantities?: Record<string, number>,
+    stockQuantities?: Record<string, number>,
+    rejectQuantities?: Record<string, number>,
+    rejectNotes?: Record<string, string>
   ) => {
-    await updateOrderStatus(orderId, status, producedQuantities);
+    await updateOrderStatus(orderId, status, producedQuantities, stockQuantities, rejectQuantities, rejectNotes);
   };
 
   const handleDownloadExcel = (order: Order) => {
@@ -204,6 +211,23 @@ export default function CompletedOrders() {
       }
       return next;
     });
+  };
+
+  // Update order date
+  const handleUpdateOrderDate = async (orderId: string, newDate: string) => {
+    try {
+      setError(null);
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      await updateOrder(orderId, { orderDate: newDate });
+      setEditingOrderDate(null);
+      setSuccess('Order date updated successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error updating order date:', err);
+      setError('Failed to update order date');
+    }
   };
 
   const handleUpdateProductionDate = async (orderId: string, newDate: string) => {
@@ -341,6 +365,50 @@ export default function CompletedOrders() {
   const extraActions = (order: Order) => (
     <div className="flex flex-wrap gap-2 items-center">
       <div className="flex items-center gap-2 mr-4">
+        <span className="text-sm text-gray-600">Order Date:</span>
+        {editingOrderDate?.orderId === order.id ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={editingOrderDate.date}
+              onChange={(e) => setEditingOrderDate({
+                orderId: order.id,
+                date: e.target.value
+              })}
+              className="px-2 py-1 border rounded-md text-sm"
+            />
+            <button
+              onClick={() => handleUpdateOrderDate(order.id, editingOrderDate.date)}
+              className="px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center gap-1"
+            >
+              <Save className="w-3 h-3" />
+              Save
+            </button>
+            <button
+              onClick={() => setEditingOrderDate(null)}
+              className="px-2 py-1 text-sm border rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-sm">{new Date(order.orderDate).toLocaleDateString()}</span>
+            <button
+              onClick={() => setEditingOrderDate({
+                orderId: order.id,
+                date: order.orderDate.split('T')[0]
+              })}
+              className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+              title="Edit order date"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 mr-4">
         <span className="text-sm text-gray-600">Production Date:</span>
         {editingProductionDate?.orderId === order.id ? (
           <div className="flex items-center gap-2">
@@ -355,8 +423,9 @@ export default function CompletedOrders() {
             />
             <button
               onClick={() => handleUpdateProductionDate(order.id, editingProductionDate.date)}
-              className="px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600"
+              className="px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center gap-1"
             >
+              <Save className="w-3 h-3" />
               Save
             </button>
             <button
@@ -401,9 +470,9 @@ export default function CompletedOrders() {
             />
             <button
               onClick={() => handleUpdatePoNumber(order.id)}
-              className="px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600"
+              className="px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center gap-1"
             >
-              <Save className="w-3 h-3 mr-1 inline-block" />
+              <Save className="w-3 h-3" />
               Save
             </button>
             <button
@@ -605,6 +674,8 @@ export default function CompletedOrders() {
           isOpen={!!viewingOrder}
           onClose={() => setViewingOrder(null)}
           onSavePO={handleSavePONumber}
+          onUpdateOrderDate={handleUpdateOrderDate}
+          onUpdateProductionDate={handleUpdateProductionDate}
         />
       )}
 

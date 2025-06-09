@@ -246,6 +246,7 @@ export function useOrders() {
     stockQuantities?: Record<string, number>,
     rejectQuantities?: Record<string, number>,
     rejectNotes?: Record<string, string>,
+    deliveryDate?: string,
     productionDate?: string
   ) => {
     try {
@@ -262,10 +263,10 @@ export function useOrders() {
         const updatedProducts = orderDoc.products.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
-          producedQuantity: producedQuantities?.[item.productId] || 0,
-          stockQuantity: stockQuantities?.[item.productId] || 0,
-          rejectQuantity: rejectQuantities?.[item.productId] || 0,
-          rejectNotes: rejectNotes?.[item.productId] || ''
+          producedQuantity: producedQuantities?.[item.productId] || item.producedQuantity || 0,
+          stockQuantity: stockQuantities?.[item.productId] || item.stockQuantity || 0,
+          rejectQuantity: rejectQuantities?.[item.productId] || item.rejectQuantity || 0,
+          rejectNotes: rejectNotes?.[item.productId] || item.rejectNotes || ''
         }));
 
         updateData.products = updatedProducts;
@@ -274,13 +275,22 @@ export function useOrders() {
       // Update status and completedAt/productionDate
       if (status === 'completed') {
         updateData.status = status;
-        updateData.completedAt = productionDate ? new Date(productionDate) : serverTimestamp();
+        if (productionDate) {
+          updateData.completedAt = new Date(productionDate);
+        } else {
+          updateData.completedAt = serverTimestamp();
+        }
       } else {
         updateData.status = status;
         // Clear completedAt if moving back from completed
         if (orderDoc.status === 'completed') {
           updateData.completedAt = null;
         }
+      }
+      
+      // Update delivery date if provided
+      if (deliveryDate) {
+        updateData.deliveryDate = deliveryDate;
       }
 
       await updateDoc(orderRef, updateData);
