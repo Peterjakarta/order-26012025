@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ClipboardList, User, FileText, CalendarDays, Loader2, Send } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { OrderItem } from '../types/types';
 import ProductCategoryList from './ProductCategoryList';
 import OrderPreviewDialog from './order/OrderPreviewDialog';
@@ -11,17 +12,40 @@ import { Button } from './ui/button';
 
 export default function OrderForm() {
   const { categories, products } = useStore();
-  const { addOrder } = useOrders();
+  const { orders, addOrder, updateOrder } = useOrders();
   const { branches } = useBranches();
-  const [selectedBranch, setSelectedBranch] = useState('');
-  const [orderedBy, setOrderedBy] = useState('');
-  const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
-  const [poNumber, setPoNumber] = useState('');
-  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [notes, setNotes] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Parse orderId from URL query parameter
+  const searchParams = new URLSearchParams(location.search);
+  const orderId = searchParams.get('orderId');
+  const existingOrder = orderId ? orders.find(o => o.id === orderId) : null;
+  
+  const [selectedBranch, setSelectedBranch] = useState(existingOrder?.branchId || '');
+  const [orderedBy, setOrderedBy] = useState(existingOrder?.orderedBy || '');
+  const [orderDate, setOrderDate] = useState(existingOrder?.orderDate.split('T')[0] || new Date().toISOString().split('T')[0]);
+  const [poNumber, setPoNumber] = useState(existingOrder?.poNumber || '');
+  const [orderItems, setOrderItems] = useState<OrderItem[]>(existingOrder?.products || []);
+  const [notes, setNotes] = useState(existingOrder?.notes || '');
   const [showPreview, setShowPreview] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  
+  // Use this to determine if we're editing an existing order
+  const isEditing = !!existingOrder;
+
+  // Initialize form with existing order data
+  useEffect(() => {
+    if (existingOrder) {
+      setSelectedBranch(existingOrder.branchId);
+      setOrderedBy(existingOrder.orderedBy);
+      setOrderDate(existingOrder.orderDate.split('T')[0]);
+      setPoNumber(existingOrder.poNumber || '');
+      setOrderItems(existingOrder.products);
+      setNotes(existingOrder.notes || '');
+    }
+  }, [existingOrder]);
 
   // Clean up orderItems when products change
   useEffect(() => {
@@ -71,7 +95,7 @@ export default function OrderForm() {
     try {
       setSubmitStatus('loading');
       
-      await addOrder({
+      const orderData = {
         branchId: selectedBranch,
         orderedBy: orderedBy.trim(),
         orderDate,
@@ -79,21 +103,43 @@ export default function OrderForm() {
         products: orderItems.filter(item => item.quantity > 0),
         notes: notes.trim(),
         deliveryDate: orderDate // Set delivery date same as order date for now
-      });
-
-      setSubmitStatus('success');
-      setShowPreview(false);
+      };
       
-      // Reset form
-      setSelectedBranch('');
-      setOrderedBy('');
-      setOrderDate(new Date().toISOString().split('T')[0]);
-      setPoNumber('');
-      setOrderItems([]);
-      setNotes('');
+      if (isEditing && orderId) {
+        // Update existing order
+        await updateOrder(orderId, orderData);
+        setSubmitStatus('success');
+        
+        // Navigate back to order list or to the updated order view
+        setTimeout(() => {
+          navigate('/management/orders');
+        }, 2000);
+      } else {
+        // Create new order
+        await addOrder(orderData);
+        setSubmitStatus('success');
+        
+        // Reset form for new order
+        setSelectedBranch('');
+        setOrderedBy('');
+        setOrderDate(new Date().toISOString().split('T')[0]);
+        setPoNumber('');
+        setOrderItems([]);
+        setNotes('');
+      }
+      
+      setShowPreview(false);
       setErrorMessage('');
       
-      setTimeout(() => setSubmitStatus('idle'), 3000);
+      // Reset form state after success
+      setTimeout(() => {
+        setSubmitStatus('idle');
+        
+        // If we were editing, navigate back to orders list
+        if (isEditing) {
+          navigate('/management/orders');
+        }
+      }, 3000);
     } catch (error) {
       console.error('Error submitting order:', error);
       setErrorMessage(error instanceof Error ? error.message : 'Failed to submit order');
@@ -112,7 +158,7 @@ export default function OrderForm() {
           <div className="bg-green-50 text-green-800 p-4 rounded-lg shadow-sm border border-green-200 animate-fadeIn">
             <div className="flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-500" />
-              <p className="font-medium">Order submitted successfully!</p>
+              <p className="font-medium">{isEditing ? 'Order updated successfully!' : 'Order submitted successfully!'}</p>
             </div>
           </div>
         )}
@@ -129,7 +175,7 @@ export default function OrderForm() {
         <div className="space-y-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <ClipboardList className="w-5 h-5 text-pink-600" />
-            Order Information
+            {isEditing ? 'Edit Order' : 'Order Information'}
           </h2>
           <div className="p-6 bg-white rounded-lg shadow-sm border border-gray-200 space-y-4">
             <div>
@@ -255,7 +301,7 @@ export default function OrderForm() {
           icon={<Send className="w-5 h-5" />}
           loading={submitStatus === 'loading'}
         >
-          Preview Order
+          {isEditing ? 'Update Order' : 'Preview Order'}
         </Button>
       </form>
 

@@ -273,19 +273,19 @@ export function useOrders() {
       }
 
       // Update status and completedAt/productionDate
+      updateData.status = status;
+      
       if (status === 'completed') {
-        updateData.status = status;
         if (productionDate) {
           updateData.completedAt = new Date(productionDate);
         } else {
           updateData.completedAt = serverTimestamp();
         }
-      } else {
-        updateData.status = status;
-        // Clear completedAt if moving back from completed
-        if (orderDoc.status === 'completed') {
-          updateData.completedAt = null;
-        }
+      } else if (status === 'pending') {
+        // Clear completion fields when reopening the order
+        updateData.completedAt = null;
+        updateData.productionStartDate = null;
+        updateData.productionEndDate = null;
       }
       
       // Update delivery date if provided

@@ -130,7 +130,7 @@ export default function OrderItem({
                 className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-md"
               >
                 <ChevronLeft className="w-4 h-4" />
-                Reopen
+                Edit
               </button>
 
               <button

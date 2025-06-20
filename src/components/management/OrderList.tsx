@@ -112,6 +112,18 @@ export default function OrderList() {
   const handleViewRDProduct = (order: Order) => {
     setViewingRDProduct(order.rdProductData);
   };
+  
+  const handleReopenOrder = async (orderId: string) => {
+    try {
+      // Update order status to pending
+      await updateOrderStatus(orderId, 'pending');
+      
+      // Navigate to the order form page with the order ID
+      navigate(`/?orderId=${orderId}`);
+    } catch (err) {
+      console.error('Error reopening order:', err);
+    }
+  };
 
   if (loading && !isRefreshing) {
     return (
@@ -208,6 +220,7 @@ export default function OrderList() {
                     onUpdateStatus={handleUpdateStatus}
                     onDownloadExcel={handleDownloadExcel}
                     onDownloadPDF={handleDownloadPDF}
+                    onReopen={() => handleReopenOrder(order.id)}
                     selected={selectedOrders.has(order.id)}
                     extraActions={(order) => (
                       <div className="flex items-center gap-2">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, CheckSquare, FileCode, ArrowUpRight, AlertCircle, Beaker, Edit2, FileDown, ClipboardList } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { RDProduct } from '../../types/rd-types';
@@ -30,6 +30,7 @@ export default function MoveToProductionDialog({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isAlreadyMigrated, setIsAlreadyMigrated] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   
   // Check if product has already been migrated to production
   useEffect(() => {
@@ -195,7 +196,7 @@ export default function MoveToProductionDialog({
               </div>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" ref={formRef}>
               {error && (
                 <div className="p-4 bg-red-50 text-red-700 rounded-lg flex items-center gap-2">
                   <AlertCircle className="w-5 h-5 flex-shrink-0" />

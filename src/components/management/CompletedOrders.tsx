@@ -41,6 +41,7 @@ export default function CompletedOrders() {
   const { products, recipes, ingredients } = useStore();
   const { branches } = useBranches();
   const location = useLocation();
+  const navigate = useNavigate();
   const [poNumber, setPoNumber] = useState<string>('');
   const [reopeningOrder, setReopeningOrder] = useState<string | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -191,10 +192,16 @@ export default function CompletedOrders() {
         setError('Order not found');
         return;
       }
-      await updateOrderStatus(order.id, 'pending');
+      
+      // Update order status and clear completion fields
+      await updateOrderStatus(order.id, 'pending', undefined, undefined, undefined, undefined, undefined, null);
+      
       setReopeningOrder(null);
       setSuccess('Order reopened successfully');
-      setTimeout(() => setSuccess(null), 3000);
+      
+      // Navigate to the order form page with the order ID
+      navigate(`/?orderId=${orderId}`);
+      
     } catch (err) {
       console.error('Error reopening order:', err);
       setError('Failed to reopen order');
@@ -656,7 +663,7 @@ export default function CompletedOrders() {
       <ConfirmDialog
         isOpen={!!reopeningOrder}
         title="Reopen Order"
-        message="Are you sure you want to reopen this order for production? This will reset the order status and clear any production dates."
+        message="Are you sure you want to reopen this order for editing? This will reset the order status and clear any production dates."
         onConfirm={() => reopeningOrder && handleReopenOrder(reopeningOrder)}
         onCancel={() => setReopeningOrder(null)}
       />
