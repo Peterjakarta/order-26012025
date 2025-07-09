@@ -340,7 +340,9 @@ export default function RDProductForm({
 
       // Get and parse numeric values
       const price = formData.get('price') ? parseFloat(formData.get('price') as string) : null;
-      const minOrder = formData.get('minOrder') ? parseInt(formData.get('minOrder') as string, 10) : null;
+      // Important: Use the recipeYield state value instead of the minOrder form field
+      // This ensures the yield changes are properly captured
+      const minOrder = recipeYield;
       const quantityStep = formData.get('quantityStep') ? parseInt(formData.get('quantityStep') as string, 10) : null;
       const costEstimate = formData.get('costEstimate') ? parseFloat(formData.get('costEstimate') as string) : null;
 
@@ -360,7 +362,7 @@ export default function RDProductForm({
         description,
         price,
         unit,
-        minOrder,
+        minOrder,  // This now uses the recipeYield state value
         quantityStep,
         showPrice,
         showDescription,
@@ -652,7 +654,16 @@ export default function RDProductForm({
                 type="number"
                 id="recipeYield"
                 value={recipeYield}
-                onChange={(e) => setRecipeYield(parseInt(e.target.value) || 1)}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value) || 1;
+                  setRecipeYield(value);
+                  
+                  // Also update minOrder input field for visual consistency
+                  const minOrderInput = document.querySelector('input[name="minOrder"]') as HTMLInputElement;
+                  if (minOrderInput) {
+                    minOrderInput.value = value.toString();
+                  }
+                }}
                 min="1"
                 className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
                 placeholder="Recipe yield amount"
@@ -1148,7 +1159,6 @@ export default function RDProductForm({
                       Upload your product images directly from your computer. Supported formats: JPEG, PNG, GIF, WebP (max 5MB)
                     </p>
                     <button
-                      type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="px-4 py-2 bg-cyan-50 text-cyan-700 border border-cyan-200 rounded-lg font-medium hover:bg-cyan-100 transition-colors"
                     >
