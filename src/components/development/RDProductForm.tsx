@@ -3,7 +3,7 @@ import { Calendar, Upload, Star, Trash2, Plus, X, Check, AlertCircle, FileText, 
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../hooks/useAuth';
 import { useOrders } from '../../hooks/useOrders';
-import { RDProduct, RDCategory, TestResult } from '../../types/rd-types';
+import { RDProduct, RDCategory, TestResult, RecipeIngredient } from '../../types/rd-types';
 import Beaker from '../common/BeakerIcon';
 import { createOrderFromRDProduct, syncRDProductWithOrder } from '../../utils/rdOrderIntegration';
 
@@ -58,6 +58,8 @@ export default function RDProductForm({
   const [recipeYieldUnit, setRecipeYieldUnit] = useState<string>(product?.unit || 'pcs');
   const [recipeInstructions, setRecipeInstructions] = useState<string>('');
   const [editingIngredientIndex, setEditingIngredientIndex] = useState<number | null>(null);
+  const [pastedIngredientsData, setPastedIngredientsData] = useState<string>('');
+  const [showPasteModal, setShowPasteModal] = useState(false);
 
   // Check if we have an existing recipe
   useEffect(() => {
@@ -403,6 +405,7 @@ export default function RDProductForm({
   };
 
   return (
+    <>
     <form ref={formRef} onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm space-y-6">
       {error && (
         <div className="flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg">
@@ -623,13 +626,25 @@ export default function RDProductForm({
       </div>
 
       {/* Recipe Section - Enhanced with more details */}
-      <div className="border-b pb-6">
-        <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-          <ClipboardList className="w-5 h-5 text-cyan-600" />
-          Recipe Information
-        </h3>
+      <div className="border-b pb-6 space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-medium flex items-center gap-2">
+            <ClipboardList className="w-5 h-5 text-cyan-600" />
+            Recipe Information
+          </h3>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPasteModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm border border-cyan-300 rounded-md hover:bg-cyan-50"
+            >
+              <Clipboard className="w-4 h-4 text-cyan-600" />
+              Paste Ingredients
+            </button>
+          </div>
+        </div>
         
-        <div className="space-y-4">
+        <div>
           {/* Recipe details */}
           <div className="grid gap-6 sm:grid-cols-2">
             <div className="sm:col-span-2">
@@ -1239,5 +1254,75 @@ export default function RDProductForm({
         </button>
       </div>
     </form>
+
+    {/* Paste Ingredients Modal */}
+    {showPasteModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4">
+          <h3 className="text-lg font-medium">Paste Ingredients</h3>
+          <p className="text-sm text-gray-600">
+            Paste the copied ingredients here. Each line should be in the format: ingredientId|amount
+          </p>
+          <textarea
+            value={pastedIngredientsData}
+            onChange={(e) => setPastedIngredientsData(e.target.value)}
+            className="w-full h-40 p-2 border rounded-md font-mono text-sm"
+            placeholder="ingredientId|amount"
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPasteModal(false)}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-md"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  // Parse pasted ingredients
+                  const lines = pastedIngredientsData.trim().split('\n');
+                  const newIngredients: RecipeIngredient[] = [];
+
+                  lines.forEach(line => {
+                    const [ingredientId, amount] = line.split('|');
+                    if (ingredientId && amount) {
+                      newIngredients.push({
+                        ingredientId,
+                        amount: parseFloat(amount)
+                      });
+                    }
+                  });
+
+                  // Update ingredients
+                  setRecipeIngredients(prev => [...prev, ...newIngredients]);
+                  setPastedIngredientsData('');
+                  setShowPasteModal(false);
+                } catch (err) {
+                  console.error('Error parsing ingredients:', err);
+                  alert('Invalid ingredient format. Please try again.');
+                }
+              }}
+              className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700"
+            >
+              Add Ingredients
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
+
+const MessageSquare = ({ className }: { className?: string }) => (
+  <MessageSquare_Icon className={className} />
+);
+
+const Clipboard = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+  </svg>
+);
