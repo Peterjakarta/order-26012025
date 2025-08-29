@@ -15,5 +15,8 @@ export const categories: Record<ProductCategory, CategoryData> = {
   },
   gifts: {
     name: 'Gift Collections'
+  },
+  trail: {
+    name: 'Trail Products'
   }
 };

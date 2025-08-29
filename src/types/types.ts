@@ -67,7 +67,7 @@ export interface CategoryData {
 export interface Product {
   id: string;
   name: string;
-  category: ProductCategory['id'];
+  category: 'truffles' | 'bars' | 'pralines' | 'seasonal' | 'gifts' | 'trail';
   description?: string;
   unit?: string;
   price?: number;

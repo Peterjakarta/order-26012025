@@ -9,6 +9,7 @@ import RDCategoryForm from './RDCategoryForm';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Beaker from '../common/BeakerIcon';
 import MoveToProductionDialog from './MoveToProductionDialog';
+import AddTrailProductDialog from './AddTrailProductDialog';
 import { 
   loadRDProducts, 
   loadRDCategories, 
@@ -26,7 +27,7 @@ import {
 } from '../../services/rdDataService';
 
 export default function RDProductManagement() {
-  const { categories, ingredients, products, recipes, addRecipe, updateRecipe } = useStore();
+  const { categories, ingredients, products, recipes, addProduct, addRecipe, updateRecipe } = useStore();
   const { user, isAuthenticated } = useAuth();
   const [rdProducts, setRdProducts] = useState<RDProduct[]>([]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
@@ -37,6 +38,7 @@ export default function RDProductManagement() {
   const [statusFilter, setStatusFilter] = useState<RDProduct['status'] | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [movingToProduction, setMovingToProduction] = useState<RDProduct | null>(null);
+  const [addingAsTrail, setAddingAsTrail] = useState<RDProduct | null>(null);
   
   // Category management state
   const [rdCategories, setRdCategories] = useState<RDCategory[]>([]);
@@ -389,6 +391,24 @@ export default function RDProductManagement() {
     setMovingToProduction(product);
   };
 
+  const handleAddAsTrailProduct = async (product: RDProduct) => {
+    // Open the trail product dialog
+    setAddingAsTrail(product);
+  };
+  
+  const handleTrailProductSuccess = async () => {
+    try {
+      // Notify other components that data has changed
+      dispatchRDDataChangedEvent();
+      
+      // Refresh data to reflect changes
+      refreshData();
+    } catch (error) {
+      console.error('Error updating R&D product status:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update R&D product status');
+    }
+  };
+  
   const handleProductionSuccess = () => {
     // Reload data after successful migration
     refreshData();
@@ -875,25 +895,44 @@ export default function RDProductManagement() {
                                   )}
                                 </div>
                                 
-                                {/* Show Move to Production button only if there's a passed test */}
-                                {(product.testResults || []).some(test => test.result === 'pass') && (
-                                  migratedProductIds.has(product.id) ? (
-                                    <span className="flex items-center gap-1 text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded-md">
-                                      <Check className="w-3.5 h-3.5" />
-                                      ALREADY MIGRATED
-                                    </span>
-                                  ) : (
+                                {/* Action buttons - always show */}
+                                {migratedProductIds.has(product.id) ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAddAsTrailProduct(product);
+                                    }}
+                                    className="flex items-center gap-1 text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                    Update Trail
+                                  </button>
+                                ) : (
+                                  <div className="flex gap-1">
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleMoveToProduction(product);
+                                        setAddingAsTrail(product);
                                       }}
-                                      className="flex items-center gap-1 text-xs font-medium px-2 py-1 bg-green-100 text-green-800 rounded-md hover:bg-green-200"
+                                      className="flex items-center gap-1 text-xs font-medium px-2 py-1 bg-amber-100 text-amber-800 rounded-md hover:bg-amber-200"
                                     >
-                                      <ArrowUpRight className="w-3.5 h-3.5" />
-                                      To Production
+                                      <Star className="w-3.5 h-3.5" />
+                                      Add as Trail
                                     </button>
-                                  )
+                                    {/* Only show Move to Production if there are passed tests */}
+                                    {(product.testResults || []).some(test => test.result === 'pass') && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleMoveToProduction(product);
+                                        }}
+                                        className="flex items-center gap-1 text-xs font-medium px-2 py-1 bg-green-100 text-green-800 rounded-md hover:bg-green-200"
+                                      >
+                                        <ArrowUpRight className="w-3.5 h-3.5" />
+                                        To Production
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -954,6 +993,19 @@ export default function RDProductManagement() {
           product={movingToProduction}
           onClose={() => setMovingToProduction(null)}
           onSuccess={handleProductionSuccess}
+        />
+      )}
+
+      {/* Add as Trail Product dialog */}
+      {addingAsTrail && (
+        <AddTrailProductDialog 
+          product={addingAsTrail}
+          isUpdate={migratedProductIds.has(addingAsTrail.id)}
+          onClose={() => setAddingAsTrail(null)}
+          onSuccess={() => {
+            // Refresh the data to show changes
+            refreshData();
+          }}
         />
       )}
     </div>

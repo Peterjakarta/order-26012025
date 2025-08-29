@@ -21,6 +21,41 @@ import { categories as initialCategories } from '../data/categories';
 import type { Product, ProductCategory, CategoryData, Ingredient, Recipe, StockLevel, StockHistory, StockCategory } from '../types/types';
 import { auth } from '../lib/firebase';
 
+async function ensureAllCategoriesExist() {
+  try {
+    // Get existing categories from Firestore
+    const categoriesSnapshot = await getDocs(collection(db, COLLECTIONS.CATEGORIES));
+    const existingCategories = new Set(categoriesSnapshot.docs.map(doc => doc.id));
+    
+    // Find missing categories
+    const missingCategories = Object.entries(initialCategories).filter(
+      ([categoryId]) => !existingCategories.has(categoryId)
+    );
+    
+    if (missingCategories.length > 0) {
+      console.log('Missing categories found, adding to Firestore:', missingCategories.map(([id]) => id));
+      
+      const batch = writeBatch(db);
+      const currentMaxOrder = categoriesSnapshot.size;
+      
+      missingCategories.forEach(([categoryId, categoryData], index) => {
+        const categoryRef = doc(db, COLLECTIONS.CATEGORIES, categoryId);
+        batch.set(categoryRef, {
+          name: categoryData.name,
+          order: currentMaxOrder + index,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      });
+      
+      await batch.commit();
+      console.log('Successfully added missing categories to Firestore');
+    }
+  } catch (error) {
+    console.error('Error ensuring categories exist:', error);
+  }
+}
+
 interface StoreState {
   products: Product[];
   categories: Record<ProductCategory, CategoryData>;
@@ -192,12 +227,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const addProduct = useCallback(async (productData: Omit<Product, 'id'>) => {
     try {
+      console.log('Adding product to Firestore:', productData);
       const validatedData = validateProduct(productData);
-      await addDoc(collection(db, COLLECTIONS.PRODUCTS), {
+      const docRef = await addDoc(collection(db, COLLECTIONS.PRODUCTS), {
         ...validatedData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      console.log('Product added with ID:', docRef.id);
+      
+      // Return the document ID for immediate use
+      return docRef.id;
     } catch (error) {
       console.error('Error adding product:', error);
       throw error;
@@ -495,17 +535,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     recipeData: Partial<Omit<Recipe, 'id'>>
   ): Promise<string | null> => {
     try {
-      // First try to find an existing recipe for this product
-      const recipesQuery = query(
-        collection(db, COLLECTIONS.RECIPES),
-        where('notes', 'array-contains', `Development ID: ${rdProductId}`)
-      );
+      // First try to find an existing recipe by looking for the Development ID in notes
+      const recipesRef = collection(db, COLLECTIONS.RECIPES);
+      const snapshot = await getDocs(recipesRef);
       
-      const snapshot = await getDocs(recipesQuery);
+      let existingRecipe = null;
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.notes && typeof data.notes === 'string' && data.notes.includes(`Development ID: ${rdProductId}`)) {
+          existingRecipe = { id: doc.id, ...data };
+        }
+      });
       
       // If found, update the existing recipe
-      if (!snapshot.empty) {
-        const existingRecipe = snapshot.docs[0];
+      if (existingRecipe) {
         await updateDoc(doc(db, COLLECTIONS.RECIPES, existingRecipe.id), {
           ...recipeData,
           updatedAt: serverTimestamp()
@@ -524,7 +567,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         name: recipeData.name,
         description: recipeData.description || '',
         category: recipeData.category,
-        productId: recipeData.productId || rdProductId,
+        productId: recipeData.productId || '',
         yield: recipeData.yield || 1,
         yieldUnit: recipeData.yieldUnit || 'pcs',
         ingredients: recipeData.ingredients,
@@ -650,6 +693,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Ensure all categories from local data exist in Firestore before setting up listener
+    ensureAllCategoriesExist().then(() => {
+      console.log('Category synchronization complete, setting up real-time listener');
+    });
+    
     const q = query(collection(db, COLLECTIONS.CATEGORIES), orderBy('order', 'asc'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
