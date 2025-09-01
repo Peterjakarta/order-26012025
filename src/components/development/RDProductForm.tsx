@@ -6,6 +6,7 @@ import { useOrders } from '../../hooks/useOrders';
 import { RDProduct, RDCategory, TestResult, RecipeIngredient } from '../../types/rd-types';
 import Beaker from '../common/BeakerIcon';
 import { createOrderFromRDProduct, syncRDProductWithOrder } from '../../utils/rdOrderIntegration';
+import IngredientSelectionDialog from '../management/pricing/IngredientSelectionDialog';
 
 interface RecipeIngredient {
   ingredientId: string;
@@ -45,11 +46,14 @@ export default function RDProductForm({
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropzoneRef = useRef<HTMLDivElement>(null);
+  const [showIngredientDialog, setShowIngredientDialog] = useState(false);
+  const [selectedIngredientIndex, setSelectedIngredientIndex] = useState<number>(-1);
   
   // Recipe ingredients state
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(
     product?.recipeIngredients || []
   );
+  const [searchingIngredientIndex, setSearchingIngredientIndex] = useState<number | null>(null);
   const [selectedIngredient, setSelectedIngredient] = useState('');
   const [ingredientAmount, setIngredientAmount] = useState('');
   const [activeTab, setActiveTab] = useState<'url' | 'upload'>('upload'); // Default to upload tab
@@ -318,6 +322,14 @@ export default function RDProductForm({
     // This function is now disabled to prevent automatic sync
     // Will only be used when explicitly calling Move to Production
     return null;
+  };
+
+  const handleIngredientSelect = (ingredient: any) => {
+    if (selectedIngredientIndex >= 0) {
+      updateIngredient(selectedIngredientIndex, 'ingredientId', ingredient.id);
+      setShowIngredientDialog(false);
+      setSelectedIngredientIndex(-1);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1171,18 +1183,11 @@ export default function RDProductForm({
                     <Image className="w-16 h-16 mb-4 text-cyan-600" />
                     <h4 className="text-lg font-medium text-gray-700 mb-2">Click or drag image here</h4>
                     <p className="text-gray-500 text-sm mb-4 max-w-md">
-                      Upload your product images directly from your computer. Supported formats: JPEG, PNG, GIF, WebP (max 5MB)
+                      Supports JPEG, PNG, GIF, and WebP files up to 5MB
                     </p>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-4 py-2 bg-cyan-50 text-cyan-700 border border-cyan-200 rounded-lg font-medium hover:bg-cyan-100 transition-colors"
-                    >
-                      Choose File
-                    </button>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      id="imageUpload"
                       accept="image/*"
                       onChange={handleImageUpload}
                       className="hidden"
@@ -1239,8 +1244,8 @@ export default function RDProductForm({
         >
           {syncingWithProduction ? (
             <>
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white\" xmlns="http://www.w3.org/2000/svg\" fill="none\" viewBox="0 0 24 24">
-                <circle className="opacity-25\" cx="12\" cy="12\" r="10\" stroke="currentColor\" strokeWidth="4"></circle>
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
               Syncing...
@@ -1311,6 +1316,18 @@ export default function RDProductForm({
           </div>
         </div>
       </div>
+    )}
+
+    {showIngredientDialog && (
+      <IngredientSelectionDialog
+        isOpen={showIngredientDialog}
+        onClose={() => {
+          setShowIngredientDialog(false);
+          setSelectedIngredientIndex(-1);
+        }}
+        onSelect={handleIngredientSelect}
+        selectedAmount={1}
+      />
     )}
     </>
   );
