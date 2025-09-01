@@ -68,7 +68,7 @@ interface StoreState {
 }
 
 interface StoreContextType extends StoreState {
-  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<string>;
   updateProduct: (id: string, product: Omit<Product, 'id'>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   updateCategory: (category: ProductCategory, data: CategoryData) => Promise<void>;

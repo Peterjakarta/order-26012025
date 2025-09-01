@@ -124,25 +124,8 @@ export default function AddTrailProductDialog({
       } else {
         console.log('Creating new product with data:', productData);
         
-        // Use the exact same addProduct call as manual creation
-        await addProduct(productData);
-        
-        // Find the newly created product by name and category
-        console.log('Looking for newly created product...');
-        
-        // Wait a moment for the database to update
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Force a manual search for the product
-        const foundProduct = products.find(p => 
-          p.name === productName.trim() && p.category === selectedCategory
-        );
-        
-        if (!foundProduct) {
-          throw new Error(`Product was created but could not be found. Name: "${productName.trim()}", Category: "${selectedCategory}"`);
-        }
-        
-        createdProductId = foundProduct.id;
+        // Capture the returned product ID directly
+        createdProductId = await addProduct(productData);
         console.log('Found newly created product with ID:', createdProductId);
       }
       
