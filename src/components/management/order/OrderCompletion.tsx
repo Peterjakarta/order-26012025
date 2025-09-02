@@ -10,10 +10,12 @@ import { isBonBonCategory, isPralinesCategory } from '../../../utils/quantityUti
 interface OrderCompletionProps {
   order: Order;
   onComplete: (
+    orderId: string,
     producedQuantities: Record<string, number>,
     stockQuantities: Record<string, number>,
     rejectQuantities: Record<string, number>,
-    rejectNotes: Record<string, string>
+    rejectNotes: Record<string, string>,
+    completionDate?: string
   ) => Promise<void>;
   onClose?: () => void;
 }
@@ -46,6 +48,12 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
       acc[item.productId] = item.rejectNotes || '';
       return acc;
     }, {} as Record<string, string>);
+  });
+  const [completionDate, setCompletionDate] = useState(() => {
+    if (order.completedAt) {
+      return order.completedAt.split('T')[0];
+    }
+    return new Date().toISOString().split('T')[0];
   });
   const [error, setError] = useState<string>('');
 
@@ -94,7 +102,7 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
     try {
       setError('');
 
-      await onComplete(producedQuantities, stockQuantities, rejectQuantities, rejectNotes);
+      await onComplete(order.id, producedQuantities, stockQuantities, rejectQuantities, rejectNotes, completionDate);
       if (onClose) {
         onClose();
       }
@@ -160,6 +168,23 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
           placeholder="Enter PO number (optional)"
           className="w-full p-2 border rounded-md"
         />
+      </div>
+
+      {/* Completion Date Input */}
+      <div>
+        <label htmlFor="completionDate" className="block text-sm font-medium text-gray-700 mb-1">
+          {isEditing ? 'Production Date' : 'Completion Date'}
+        </label>
+        <input
+          type="date"
+          id="completionDate"
+          value={completionDate}
+          onChange={(e) => setCompletionDate(e.target.value)}
+          className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          {isEditing ? 'Update the production date' : 'Set when this order was actually completed'}
+        </p>
       </div>
 
       <div className="overflow-x-auto">

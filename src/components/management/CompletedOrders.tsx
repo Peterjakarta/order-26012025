@@ -73,13 +73,14 @@ export default function CompletedOrders() {
     const completedOrders = orders
       .filter(order => order.status === 'completed')
       .sort((a, b) => {
-        // Sort by updatedAt timestamp for most recent changes
+        // Sort by completedAt timestamp (actual completion date) for most recent completions
         const timeA = new Date(b.completedAt || b.updatedAt).getTime();
         const timeB = new Date(a.completedAt || a.updatedAt).getTime();
         return timeA - timeB;
       });
     
     const grouped = completedOrders.reduce((acc, order) => {
+      // Use the actual completion date (user-set) instead of order date
       const completedDate = new Date(order.completedAt || order.updatedAt);
       const monthKey = `${completedDate.getFullYear()}-${String(completedDate.getMonth() + 1).padStart(2, '0')}`;
       const monthName = completedDate.toLocaleDateString('en-US', { 
@@ -159,9 +160,10 @@ export default function CompletedOrders() {
     producedQuantities?: Record<string, number>,
     stockQuantities?: Record<string, number>,
     rejectQuantities?: Record<string, number>,
-    rejectNotes?: Record<string, string>
+    rejectNotes?: Record<string, string>,
+    completionDate?: string
   ) => {
-    await updateOrderStatus(orderId, status, producedQuantities, stockQuantities, rejectQuantities, rejectNotes);
+    await updateOrderStatus(orderId, status, producedQuantities, stockQuantities, rejectQuantities, rejectNotes, undefined, completionDate);
   };
 
   const handleDownloadExcel = (order: Order) => {

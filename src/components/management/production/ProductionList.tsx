@@ -23,7 +23,8 @@ interface ProductionListProps {
     producedQuantities: Record<string, number>,
     stockQuantities: Record<string, number>,
     rejectQuantities: Record<string, number>,
-    rejectNotes: Record<string, string>
+    rejectNotes: Record<string, string>,
+    completionDate?: string
   ) => Promise<void>;
   onRemove?: (orderId: string) => Promise<void>;
 }
@@ -137,20 +138,23 @@ export default function ProductionList({
   };
 
   const handleComplete = async (
+    orderId: string,
     producedQuantities: Record<string, number>,
     stockQuantities: Record<string, number>,
     rejectQuantities: Record<string, number>,
-    rejectNotes: Record<string, string>
+    rejectNotes: Record<string, string>,
+    completionDate?: string
   ) => {
     if (!completingOrder || !onComplete) return;
     
     try {
       await onComplete(
-        completingOrder.id,
+        orderId,
         producedQuantities,
         stockQuantities,
         rejectQuantities,
-        rejectNotes
+        rejectNotes,
+        completionDate
       );
       setCompletingOrder(null);
     } catch (err) {
@@ -378,7 +382,6 @@ export default function ProductionList({
                           value={dates?.start || ''}
                           onChange={(e) => handleStartDateChange(order.id, e.target.value)}
                           className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                          min={new Date().toISOString().split('T')[0]}
                           required
                         />
                       </div>
@@ -392,7 +395,7 @@ export default function ProductionList({
                           value={dates?.end || ''}
                           onChange={(e) => handleEndDateChange(order.id, e.target.value)}
                           className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                          min={dates?.start || new Date().toISOString().split('T')[0]}
+                          min={dates?.start || ''}
                           required
                         />
                       </div>
@@ -511,7 +514,6 @@ export default function ProductionList({
                                   value={dates?.start || ''}
                                   onChange={(e) => handleStartDateChange(order.id, e.target.value)}
                                   className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                                  min={new Date().toISOString().split('T')[0]}
                                 />
                               </div>
                               <div>
@@ -523,7 +525,7 @@ export default function ProductionList({
                                   value={dates?.end || ''}
                                   onChange={(e) => handleEndDateChange(order.id, e.target.value)}
                                   className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                                  min={dates?.start || new Date().toISOString().split('T')[0]}
+                                  min={dates?.start || ''}
                                 />
                               </div>
                             </div>

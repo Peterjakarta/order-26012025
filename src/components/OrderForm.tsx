@@ -244,7 +244,6 @@ export default function OrderForm() {
                 value={orderDate}
                 onChange={(e) => setOrderDate(e.target.value)}
                 required
-                max={new Date().toISOString().split('T')[0]}
                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
               />
             </div>

@@ -18,18 +18,8 @@ export function addWorkingDays(date: Date, days: number): Date {
 }
 
 export function getInitialStartDate(): string {
-  // Set to January 13, 2025 (Monday)
-  const today = new Date(2025, 0, 13); // Month is 0-based
-  
-  // If it's after 2 PM, move to next working day
-  if (today.getHours() >= 14) {
-    today.setDate(today.getDate() + 1);
-    while (isWeekend(today)) {
-      today.setDate(today.getDate() + 1);
-    }
-  }
-  
-  return today.toISOString().split('T')[0];
+  // Return current date as default (can be changed to past or future)
+  return new Date().toISOString().split('T')[0];
 }
 
 export function getDefaultEndDate(startDate: string): string {

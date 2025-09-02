@@ -60,10 +60,14 @@ export default function OrderList() {
   const handleUpdateStatus = async (
     orderId: string, 
     status: Order['status'], 
-    producedQuantities?: Record<string, number>
+    producedQuantities?: Record<string, number>,
+    stockQuantities?: Record<string, number>,
+    rejectQuantities?: Record<string, number>,
+    rejectNotes?: Record<string, string>,
+    completionDate?: string
   ) => {
     try {
-      await updateOrderStatus(orderId, status, producedQuantities);
+      await updateOrderStatus(orderId, status, producedQuantities, stockQuantities, rejectQuantities, rejectNotes, undefined, completionDate);
     } catch (err) {
       console.error('Error updating order status:', err);
       // Let the error be handled by the useOrders hook

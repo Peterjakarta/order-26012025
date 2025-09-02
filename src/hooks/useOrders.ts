@@ -247,7 +247,7 @@ export function useOrders() {
     rejectQuantities?: Record<string, number>,
     rejectNotes?: Record<string, string>,
     deliveryDate?: string,
-    productionDate?: string
+    completionDate?: string
   ) => {
     try {
       const orderRef = doc(db, COLLECTIONS.ORDERS, orderId);
@@ -276,11 +276,9 @@ export function useOrders() {
       updateData.status = status;
       
       if (status === 'completed') {
-        if (productionDate) {
-          updateData.completedAt = new Date(productionDate);
-        } else {
-          updateData.completedAt = serverTimestamp();
-        }
+        // Always use the provided completion date or current date if not provided
+        const dateToUse = completionDate ? new Date(completionDate) : new Date();
+        updateData.completedAt = dateToUse;
       } else if (status === 'pending') {
         // Clear completion fields when reopening the order
         updateData.completedAt = null;
