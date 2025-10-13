@@ -134,6 +134,7 @@ export interface Recipe {
   yield: number;
   yieldUnit: string;
   ingredients: RecipeIngredient[];
+  shellIngredients?: RecipeIngredient[];
   laborCost?: number;
   packagingCost?: number;
   equipmentCost?: number; // New field: equipment usage cost

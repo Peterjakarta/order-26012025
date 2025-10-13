@@ -1,14 +1,23 @@
 import type { Recipe, Ingredient } from '../types/types';
 
 export function calculateRecipeCost(recipe: Recipe, ingredients: Ingredient[]): number {
-  return recipe.ingredients.reduce((total, item) => {
+  const recipeIngredientsCost = recipe.ingredients.reduce((total, item) => {
     const ingredient = ingredients.find(i => i.id === item.ingredientId);
     if (!ingredient) return total;
 
-    // Calculate cost based on the amount used (unit price * amount), rounding up
     const unitPrice = Math.ceil(ingredient.price / ingredient.packageSize);
     return total + (unitPrice * Math.ceil(item.amount));
   }, 0);
+
+  const shellIngredientsCost = (recipe.shellIngredients || []).reduce((total, item) => {
+    const ingredient = ingredients.find(i => i.id === item.ingredientId);
+    if (!ingredient) return total;
+
+    const unitPrice = Math.ceil(ingredient.price / ingredient.packageSize);
+    return total + (unitPrice * Math.ceil(item.amount));
+  }, 0);
+
+  return recipeIngredientsCost + shellIngredientsCost;
 }
 
 export function calculateIngredientUsage(recipes: Recipe[], quantity: number): Record<string, number> {
@@ -16,8 +25,13 @@ export function calculateIngredientUsage(recipes: Recipe[], quantity: number): R
 
   recipes.forEach(recipe => {
     const scale = quantity / recipe.yield;
-    
+
     recipe.ingredients.forEach(item => {
+      const amount = Math.ceil(item.amount * scale);
+      usage[item.ingredientId] = (usage[item.ingredientId] || 0) + amount;
+    });
+
+    (recipe.shellIngredients || []).forEach(item => {
       const amount = Math.ceil(item.amount * scale);
       usage[item.ingredientId] = (usage[item.ingredientId] || 0) + amount;
     });

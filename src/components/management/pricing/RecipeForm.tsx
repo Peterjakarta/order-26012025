@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Copy, Beaker, Info } from 'lucide-react';
+import { Plus, Trash2, Copy, Beaker, Info, ArrowDown } from 'lucide-react';
 import type { Recipe, RecipeIngredient } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
 import { formatIDR } from '../../../utils/currencyFormatter';
@@ -17,11 +17,15 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(
     recipe?.ingredients || []
   );
+  const [shellIngredients, setShellIngredients] = useState<RecipeIngredient[]>(
+    recipe?.shellIngredients || []
+  );
   const [pastedIngredients, setPastedIngredients] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(recipe?.category || '');
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
+  const [showShellPasteModal, setShowShellPasteModal] = useState(false);
   const [useWeightBasedCalculation, setUseWeightBasedCalculation] = useState(true);
   const [recipeWeight, setRecipeWeight] = useState(0);
   
@@ -66,7 +70,6 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
 
   const handlePasteIngredients = () => {
     try {
-      // Parse pasted ingredients
       const lines = pastedIngredients.trim().split('\n');
       const newIngredients: RecipeIngredient[] = [];
 
@@ -80,12 +83,35 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
         }
       });
 
-      // Update ingredients
       setRecipeIngredients(prev => [...prev, ...newIngredients]);
       setPastedIngredients('');
       setShowPasteModal(false);
     } catch (err) {
       console.error('Error parsing ingredients:', err);
+      alert('Invalid ingredient format. Please try again.');
+    }
+  };
+
+  const handlePasteShellIngredients = () => {
+    try {
+      const lines = pastedIngredients.trim().split('\n');
+      const newIngredients: RecipeIngredient[] = [];
+
+      lines.forEach(line => {
+        const [ingredientId, amount] = line.split('|');
+        if (ingredientId && amount) {
+          newIngredients.push({
+            ingredientId,
+            amount: parseFloat(amount)
+          });
+        }
+      });
+
+      setShellIngredients(prev => [...prev, ...newIngredients]);
+      setPastedIngredients('');
+      setShowShellPasteModal(false);
+    } catch (err) {
+      console.error('Error parsing shell ingredients:', err);
       alert('Invalid ingredient format. Please try again.');
     }
   };
@@ -133,8 +159,12 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
       item => item.ingredientId && item.amount > 0
     );
 
-    if (validIngredients.length === 0) {
-      alert('Please add at least one ingredient');
+    const validShellIngredients = shellIngredients.filter(
+      item => item.ingredientId && item.amount > 0
+    );
+
+    if (validIngredients.length === 0 && validShellIngredients.length === 0) {
+      alert('Please add at least one ingredient (recipe or shell)');
       return;
     }
 
@@ -166,6 +196,7 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
       description,
       category,
       ingredients: validIngredients,
+      shellIngredients: validShellIngredients.length > 0 ? validShellIngredients : undefined,
       yield: yieldAmount,
       yieldUnit,
       notes,
@@ -217,6 +248,46 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
       }
       return item;
     }));
+  };
+
+  const addShellIngredient = () => {
+    setShellIngredients(prev => [
+      ...prev,
+      { ingredientId: '', amount: 0 }
+    ]);
+  };
+
+  const removeShellIngredient = (index: number) => {
+    setShellIngredients(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateShellIngredient = (index: number, field: keyof RecipeIngredient, value: string | number) => {
+    setShellIngredients(prev => prev.map((item, i) => {
+      if (i === index) {
+        if (field === 'amount') {
+          const numValue = typeof value === 'string' ? parseFloat(value) : value;
+          return { ...item, amount: isNaN(numValue) ? 0 : Math.max(0, numValue) };
+        }
+        return { ...item, [field]: value };
+      }
+      return item;
+    }));
+  };
+
+  const moveToShell = (index: number) => {
+    const ingredient = recipeIngredients[index];
+    if (!ingredient || !ingredient.ingredientId) return;
+
+    setShellIngredients(prev => [...prev, ingredient]);
+    removeIngredient(index);
+  };
+
+  const moveToRecipe = (index: number) => {
+    const ingredient = shellIngredients[index];
+    if (!ingredient || !ingredient.ingredientId) return;
+
+    setRecipeIngredients(prev => [...prev, ingredient]);
+    removeShellIngredient(index);
   };
 
   return (
@@ -372,6 +443,14 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
                 </div>
                 <button
                   type="button"
+                  onClick={() => moveToShell(index)}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-md"
+                  title="Move to Shell Ingredients"
+                >
+                  <ArrowDown className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => removeIngredient(index)}
                   className="p-2 text-red-600 hover:bg-red-50 rounded-md"
                 >
@@ -390,6 +469,86 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
             </div>
           </div>
         )}
+      </div>
+
+      <div>
+        <div className="flex justify-between items-center mb-4">
+          <label className="block text-sm font-medium text-gray-700">
+            Shell Ingredients
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowShellPasteModal(true)}
+              className="flex items-center gap-2 px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+            >
+              <Copy className="w-4 h-4" />
+              Paste Shell Ingredients
+            </button>
+            <button
+              type="button"
+              onClick={addShellIngredient}
+              className="flex items-center gap-2 px-3 py-1 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700"
+            >
+              <Plus className="w-4 h-4" />
+              Add Shell Ingredient
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {shellIngredients.map((item, index) => {
+            const selectedIngredient = ingredients.find(i => i.id === item.ingredientId);
+
+            return (
+              <div key={index} className="flex gap-3 items-start">
+                <div className="flex-grow">
+                  <select
+                    value={item.ingredientId}
+                    onChange={(e) => updateShellIngredient(index, 'ingredientId', e.target.value)}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
+                  >
+                    <option value="">Select Shell Ingredient</option>
+                    {ingredients.map(ingredient => (
+                      <option key={ingredient.id} value={ingredient.id}>
+                        {ingredient.name} ({formatIDR(ingredient.price)} per {ingredient.packageSize} {ingredient.packageUnit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-48 flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={item.amount || ''}
+                    onChange={(e) => updateShellIngredient(index, 'amount', e.target.value)}
+                    min="0"
+                    step="0.01"
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
+                    placeholder="Amount"
+                  />
+                  <span className="text-sm text-gray-500 whitespace-nowrap">
+                    {selectedIngredient?.unit}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => moveToRecipe(index)}
+                  className="p-2 text-gray-600 hover:bg-gray-50 rounded-md rotate-180"
+                  title="Move to Recipe Ingredients"
+                >
+                  <ArrowDown className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeShellIngredient(index)}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-md"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="border-t pt-6">
@@ -601,6 +760,40 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
                 className="px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
               >
                 Add Ingredients
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Paste Shell Ingredients Modal */}
+      {showShellPasteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4">
+            <h3 className="text-lg font-medium">Paste Shell Ingredients</h3>
+            <p className="text-sm text-gray-600">
+              Paste the copied shell ingredients here. Each line should be in the format: ingredientId|amount
+            </p>
+            <textarea
+              value={pastedIngredients}
+              onChange={(e) => setPastedIngredients(e.target.value)}
+              className="w-full h-40 p-2 border rounded-md font-mono text-sm"
+              placeholder="ingredientId|amount"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowShellPasteModal(false)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePasteShellIngredients}
+                className="px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
+              >
+                Add Shell Ingredients
               </button>
             </div>
           </div>

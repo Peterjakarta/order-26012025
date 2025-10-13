@@ -9,13 +9,21 @@ export const DEFAULT_COST_RATES = {
 
 // Calculate total recipe weight in grams
 export function calculateRecipeWeight(recipe: Recipe, ingredients: Ingredient[]): number {
-  return recipe.ingredients.reduce((totalWeight, item) => {
+  const recipeIngredientsWeight = recipe.ingredients.reduce((totalWeight, item) => {
     const ingredient = ingredients.find(i => i.id === item.ingredientId);
     if (!ingredient) return totalWeight;
-    
-    // Add ingredient amount to total weight
+
     return totalWeight + item.amount;
   }, 0);
+
+  const shellIngredientsWeight = (recipe.shellIngredients || []).reduce((totalWeight, item) => {
+    const ingredient = ingredients.find(i => i.id === item.ingredientId);
+    if (!ingredient) return totalWeight;
+
+    return totalWeight + item.amount;
+  }, 0);
+
+  return recipeIngredientsWeight + shellIngredientsWeight;
 }
 
 // Calculate overhead costs based on recipe weight

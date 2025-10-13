@@ -695,16 +695,16 @@ export default function RecipeManagement() {
                           {recipe.ingredients.length > 0 && expandedRecipes.has(recipe.id) && (
                             <div className="mt-4 p-3 bg-gray-50 rounded-md">
                               <div className="flex items-center justify-between">
-                                <h5 className="font-medium mb-2 text-sm">Ingredients:</h5>
+                                <h5 className="font-medium mb-2 text-sm">Recipe Ingredients:</h5>
                                 {!selectMode && (
                                   <div className="flex gap-2">
-                                    <button 
+                                    <button
                                       onClick={() => handleImportIngredients(recipe)}
                                       className="text-xs px-2 py-1 border rounded hover:bg-white"
                                     >
                                       Add More
                                     </button>
-                                    <button 
+                                    <button
                                       onClick={() => handleImportProducts(recipe)}
                                       className="text-xs px-2 py-1 border rounded hover:bg-white"
                                     >
@@ -718,6 +718,24 @@ export default function RecipeManagement() {
                                   const ingredient = ingredients.find(i => i.id === item.ingredientId);
                                   return (
                                     <div key={`${recipe.id}-ing-${idx}`} className="text-sm flex justify-between">
+                                      <span>{ingredient?.name || 'Unknown ingredient'}</span>
+                                      <span>{item.amount} {ingredient?.unit}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Display shell ingredients only when expanded */}
+                          {recipe.shellIngredients && recipe.shellIngredients.length > 0 && expandedRecipes.has(recipe.id) && (
+                            <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+                              <h5 className="font-medium mb-2 text-sm text-blue-800">Shell Ingredients:</h5>
+                              <div className="space-y-1">
+                                {recipe.shellIngredients.map((item, idx) => {
+                                  const ingredient = ingredients.find(i => i.id === item.ingredientId);
+                                  return (
+                                    <div key={`${recipe.id}-shell-${idx}`} className="text-sm flex justify-between text-blue-900">
                                       <span>{ingredient?.name || 'Unknown ingredient'}</span>
                                       <span>{item.amount} {ingredient?.unit}</span>
                                     </div>

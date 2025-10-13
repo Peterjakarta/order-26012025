@@ -85,28 +85,48 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
   // Calculate selling price with tax
   const sellingPriceWithTax = calculateSellPrice(costPerUnit, marginPercentage, true, taxPercentage);
   
-  // Calculate total weight and find the common unit
-  const { totalWeight, commonUnit } = recipe.ingredients.reduce((acc, item) => {
+  // Calculate total weight for recipe ingredients only
+  const { totalWeight: recipeIngredientsWeight, commonUnit: recipeCommonUnit } = recipe.ingredients.reduce((acc, item) => {
     const ingredient = ingredients.find(i => i.id === item.ingredientId);
     if (!ingredient) return acc;
-    
+
     const scaledAmount = (item.amount / recipe.yield) * quantity;
-    
+
     // If we haven't set a common unit yet, use this ingredient's unit
     if (!acc.commonUnit) {
       acc.commonUnit = ingredient.unit;
     }
-    
+
     // Only add to total if units match
     if (ingredient.unit === acc.commonUnit) {
       acc.totalWeight += scaledAmount;
     }
-    
+
     return acc;
   }, { totalWeight: 0, commonUnit: '' as string });
 
-  // Calculate ingredient usage with unit prices
-  const ingredientUsage = recipe.ingredients.map(item => {
+  // Calculate total weight for shell ingredients only
+  const { totalWeight: shellIngredientsWeight, commonUnit: shellCommonUnit } = (recipe.shellIngredients || []).reduce((acc, item) => {
+    const ingredient = ingredients.find(i => i.id === item.ingredientId);
+    if (!ingredient) return acc;
+
+    const scaledAmount = (item.amount / recipe.yield) * quantity;
+
+    // If we haven't set a common unit yet, use this ingredient's unit
+    if (!acc.commonUnit) {
+      acc.commonUnit = ingredient.unit;
+    }
+
+    // Only add to total if units match
+    if (ingredient.unit === acc.commonUnit) {
+      acc.totalWeight += scaledAmount;
+    }
+
+    return acc;
+  }, { totalWeight: 0, commonUnit: '' as string });
+
+  // Calculate ingredient usage with unit prices (including shell ingredients)
+  const recipeIngredientUsage = recipe.ingredients.map(item => {
     const ingredient = ingredients.find(i => i.id === item.ingredientId);
     if (!ingredient) return null;
 
@@ -118,27 +138,58 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
       ingredient,
       amount: scaledAmount,
       unitPrice,
-      cost
+      cost,
+      isShell: false
     };
   }).filter(Boolean);
+
+  const shellIngredientUsage = (recipe.shellIngredients || []).map(item => {
+    const ingredient = ingredients.find(i => i.id === item.ingredientId);
+    if (!ingredient) return null;
+
+    const scaledAmount = (item.amount / recipe.yield) * quantity;
+    const unitPrice = ingredient.price / ingredient.packageSize;
+    const cost = unitPrice * scaledAmount;
+
+    return {
+      ingredient,
+      amount: scaledAmount,
+      unitPrice,
+      cost,
+      isShell: true
+    };
+  }).filter(Boolean);
+
+  const ingredientUsage = [...recipeIngredientUsage, ...shellIngredientUsage];
 
   const handleDownloadExcel = () => {
     const data = [
       ['Recipe Cost Calculator'],
       [''],
       ['Recipe:', recipe.name],
-      ['Quantity:', `${quantity} ${recipe.yieldUnit}`], // Use current quantity
-      ['Total Weight:', `${totalWeight.toFixed(2)} ${commonUnit}`], 
+      ['Quantity:', `${quantity} ${recipe.yieldUnit}`],
       [''],
-      ['Ingredients'],
+      ['Recipe Ingredients'],
       ['Name', 'Amount', 'Unit', 'Unit Price', 'Cost'],
-      ...ingredientUsage.map(usage => usage && [
+      ...recipeIngredientUsage.map(usage => usage && [
         usage.ingredient.name,
-        usage.amount.toFixed(2), // This is already scaled based on the current quantity
+        usage.amount.toFixed(2),
         usage.ingredient.unit,
         formatIDR(usage.unitPrice),
         formatIDR(usage.cost)
       ]),
+      recipeCommonUnit && recipeIngredientUsage.length > 0 ? ['Total Recipe Weight:', `${Math.ceil(recipeIngredientsWeight)} ${recipeCommonUnit}`] : null,
+      [''],
+      shellIngredientUsage.length > 0 ? ['Shell Ingredients'] : null,
+      shellIngredientUsage.length > 0 ? ['Name', 'Amount', 'Unit', 'Unit Price', 'Cost'] : null,
+      ...shellIngredientUsage.map(usage => usage && [
+        usage.ingredient.name,
+        usage.amount.toFixed(2),
+        usage.ingredient.unit,
+        formatIDR(usage.unitPrice),
+        formatIDR(usage.cost)
+      ]),
+      shellCommonUnit && shellIngredientUsage.length > 0 ? ['Total Shell Weight:', `${Math.ceil(shellIngredientsWeight)} ${shellCommonUnit}`] : null,
       [''],
       ['Production Costs'],
       ['Base Ingredient Cost:', formatIDR(scaledBaseCost)],
@@ -155,7 +206,7 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
       [`Tax (${taxPercentage}%):`, formatIDR(sellingPriceWithTax - baseSellingPrice)],
       ['Selling Price (with tax):', formatIDR(sellingPriceWithTax)],
       ['Rounded Selling Price:', formatIDR(Math.ceil(sellingPriceWithTax / 1000) * 1000)]
-    ].filter(row => row.length > 0);
+    ].filter(row => row && row.length > 0);
 
     const wb = generateExcelData(data, 'Recipe Calculator');
     saveWorkbook(wb, `recipe-${recipe.name.toLowerCase().replace(/\s+/g, '-')}.xlsx`);
@@ -169,20 +220,34 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
 
   const handleCopyIngredients = () => {
     try {
-      // Format ingredients for copying with the scaled amounts based on current quantity
-      const ingredientText = recipe.ingredients.map(item => {
+      // Format recipe ingredients for copying with the scaled amounts based on current quantity
+      const recipeIngredientText = recipe.ingredients.map(item => {
         const ingredient = ingredients.find(i => i.id === item.ingredientId);
         if (!ingredient) return null;
-        
+
         // Scale the ingredient amount according to the current quantity
         const scaledAmount = (item.amount / recipe.yield) * quantity;
-        
+
         return `${ingredient.id}|${Math.ceil(scaledAmount)}`;
       }).filter(Boolean).join('\n');
 
+      // Format shell ingredients for copying with the scaled amounts based on current quantity
+      const shellIngredientText = (recipe.shellIngredients || []).map(item => {
+        const ingredient = ingredients.find(i => i.id === item.ingredientId);
+        if (!ingredient) return null;
+
+        // Scale the ingredient amount according to the current quantity
+        const scaledAmount = (item.amount / recipe.yield) * quantity;
+
+        return `${ingredient.id}|${Math.ceil(scaledAmount)}`;
+      }).filter(Boolean).join('\n');
+
+      // Combine both ingredient lists
+      const ingredientText = [recipeIngredientText, shellIngredientText].filter(Boolean).join('\n');
+
       // Copy to clipboard
       navigator.clipboard.writeText(ingredientText);
-      
+
       // Show success state
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -284,8 +349,15 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {ingredientUsage.map((usage, index) => usage && (
-                    <tr key={`${recipe.id}-ingredient-${usage.ingredient.id}-${index}`}>
+                  {recipeIngredientUsage.length > 0 && (
+                    <tr className="bg-gray-100">
+                      <td colSpan={5} className="py-2 px-4 font-semibold text-gray-700">
+                        Recipe Ingredients
+                      </td>
+                    </tr>
+                  )}
+                  {recipeIngredientUsage.map((usage, index) => usage && (
+                    <tr key={`${recipe.id}-recipe-ingredient-${usage.ingredient.id}-${index}`}>
                       <td className="py-3 px-4">
                         <span className="font-medium">{usage.ingredient.name}</span>
                       </td>
@@ -303,16 +375,56 @@ export default function RecipeCalculator({ recipe, onClose }: RecipeCalculatorPr
                       </td>
                     </tr>
                   ))}
-                  {commonUnit && (
-                    <tr key={`${recipe.id}-unit-total-${commonUnit}`} className="bg-gray-50 font-medium">
+                  {shellIngredientUsage.length > 0 && (
+                    <tr className="bg-blue-100">
+                      <td colSpan={5} className="py-2 px-4 font-semibold text-blue-800">
+                        Shell Ingredients
+                      </td>
+                    </tr>
+                  )}
+                  {shellIngredientUsage.map((usage, index) => usage && (
+                    <tr key={`${recipe.id}-shell-ingredient-${usage.ingredient.id}-${index}`} className="bg-blue-50">
+                      <td className="py-3 px-4">
+                        <span className="font-medium text-blue-900">{usage.ingredient.name}</span>
+                      </td>
+                      <td className="text-right py-3 px-4 whitespace-nowrap text-blue-900">
+                        {Math.ceil(usage.amount)}
+                      </td>
+                      <td className="text-left py-3 px-4 whitespace-nowrap text-blue-900">
+                        {usage.ingredient.unit}
+                      </td>
+                      <td className="text-right py-3 px-4 whitespace-nowrap text-blue-900">
+                        {formatIDR(usage.unitPrice)}/{usage.ingredient.unit}
+                      </td>
+                      <td className="text-right py-3 px-4 font-medium text-blue-900">
+                        {formatIDR(usage.cost)}
+                      </td>
+                    </tr>
+                  ))}
+                  {recipeCommonUnit && recipeIngredientUsage.length > 0 && (
+                    <tr key={`${recipe.id}-recipe-total-${recipeCommonUnit}`} className="bg-gray-100 font-medium">
                       <td className="py-3 px-4 text-right">
-                        Total {commonUnit}:
+                        Total Recipe {recipeCommonUnit}:
                       </td>
                       <td className="py-3 px-4 text-right">
-                        {Math.ceil(totalWeight)}
+                        {Math.ceil(recipeIngredientsWeight)}
                       </td>
                       <td className="py-3 px-4">
-                        {commonUnit}
+                        {recipeCommonUnit}
+                      </td>
+                      <td colSpan={2} />
+                    </tr>
+                  )}
+                  {shellCommonUnit && shellIngredientUsage.length > 0 && (
+                    <tr key={`${recipe.id}-shell-total-${shellCommonUnit}`} className="bg-blue-100 font-medium">
+                      <td className="py-3 px-4 text-right text-blue-800">
+                        Total Shell {shellCommonUnit}:
+                      </td>
+                      <td className="py-3 px-4 text-right text-blue-800">
+                        {Math.ceil(shellIngredientsWeight)}
+                      </td>
+                      <td className="py-3 px-4 text-blue-800">
+                        {shellCommonUnit}
                       </td>
                       <td colSpan={2} />
                     </tr>
