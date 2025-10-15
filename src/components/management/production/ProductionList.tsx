@@ -19,12 +19,13 @@ interface ProductionListProps {
   products: Product[];
   onSchedule: (orderId: string, startDate: string, endDate: string) => Promise<void>;
   onComplete?: (
-    orderId: string, 
+    orderId: string,
     producedQuantities: Record<string, number>,
     stockQuantities: Record<string, number>,
     rejectQuantities: Record<string, number>,
     rejectNotes: Record<string, string>,
-    completionDate?: string
+    completionDate?: string,
+    batchNumber?: string
   ) => Promise<void>;
   onRemove?: (orderId: string) => Promise<void>;
 }
@@ -143,10 +144,11 @@ export default function ProductionList({
     stockQuantities: Record<string, number>,
     rejectQuantities: Record<string, number>,
     rejectNotes: Record<string, string>,
-    completionDate?: string
+    completionDate?: string,
+    batchNumber?: string
   ) => {
     if (!completingOrder || !onComplete) return;
-    
+
     try {
       await onComplete(
         orderId,
@@ -154,7 +156,8 @@ export default function ProductionList({
         stockQuantities,
         rejectQuantities,
         rejectNotes,
-        completionDate
+        completionDate,
+        batchNumber
       );
       setCompletingOrder(null);
     } catch (err) {

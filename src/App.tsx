@@ -4,6 +4,7 @@ import Layout from './components/layout/Layout';
 import OrderForm from './components/OrderForm';
 import Management from './pages/Management';
 import Development from './pages/Development';
+import HACCP from './pages/HACCP';
 import LoginForm from './components/auth/LoginForm';
 import RequireAuth from './components/auth/RequireAuth';
 import { StoreProvider } from './store/StoreContext';
@@ -31,13 +32,21 @@ export default function App() {
                 </RequireAuth>
               } 
             />
-            <Route 
-              path="/development/*" 
+            <Route
+              path="/development/*"
               element={
                 <RequireAuth requiredPermissions={['manage_products']}>
                   <Development />
                 </RequireAuth>
-              } 
+              }
+            />
+            <Route
+              path="/haccp/*"
+              element={
+                <RequireAuth requiredPermissions={['manage_orders']}>
+                  <HACCP />
+                </RequireAuth>
+              }
             />
           </Route>
         </Routes>

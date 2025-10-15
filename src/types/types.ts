@@ -98,7 +98,8 @@ export interface Order {
   productionStartDate?: string;
   productionEndDate?: string;
   stockReduced?: boolean;
-  
+  batchNumber?: string;
+
   // Special fields for R&D products
   isRDProduct?: boolean;
   rdProductData?: any; // Type for the R&D product data

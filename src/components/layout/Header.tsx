@@ -39,6 +39,11 @@ export default function Header() {
                     Development
                   </NavLink>
                 )}
+                {hasPermission('manage_orders') && (
+                  <NavLink to="/haccp" current={location.pathname.includes("/haccp")}>
+                    HACCP
+                  </NavLink>
+                )}
               </nav>
               <button
                 onClick={logout}

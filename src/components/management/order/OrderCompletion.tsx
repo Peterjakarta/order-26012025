@@ -15,7 +15,8 @@ interface OrderCompletionProps {
     stockQuantities: Record<string, number>,
     rejectQuantities: Record<string, number>,
     rejectNotes: Record<string, string>,
-    completionDate?: string
+    completionDate?: string,
+    batchNumber?: string
   ) => Promise<void>;
   onClose?: () => void;
 }
@@ -55,6 +56,7 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
     }
     return new Date().toISOString().split('T')[0];
   });
+  const [batchNumber, setBatchNumber] = useState(order.batchNumber || '');
   const [error, setError] = useState<string>('');
 
   const branch = branches.find(b => b.id === order.branchId);
@@ -102,7 +104,7 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
     try {
       setError('');
 
-      await onComplete(order.id, producedQuantities, stockQuantities, rejectQuantities, rejectNotes, completionDate);
+      await onComplete(order.id, producedQuantities, stockQuantities, rejectQuantities, rejectNotes, completionDate, batchNumber);
       if (onClose) {
         onClose();
       }
@@ -184,6 +186,24 @@ export default function OrderCompletion({ order, onComplete, onClose }: OrderCom
         />
         <p className="text-xs text-gray-500 mt-1">
           {isEditing ? 'Update the production date' : 'Set when this order was actually completed'}
+        </p>
+      </div>
+
+      {/* Batch Number Input */}
+      <div>
+        <label htmlFor="batchNumber" className="block text-sm font-medium text-gray-700 mb-1">
+          Batch Number (HACCP)
+        </label>
+        <input
+          type="text"
+          id="batchNumber"
+          value={batchNumber}
+          onChange={(e) => setBatchNumber(e.target.value)}
+          placeholder="e.g., B20250130-001"
+          className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          Assign a batch number for HACCP traceability
         </p>
       </div>
 

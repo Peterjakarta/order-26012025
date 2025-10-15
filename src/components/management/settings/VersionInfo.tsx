@@ -258,20 +258,22 @@ export default function VersionInfo() {
         </div>
       </div>
 
-      <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-        <h3 className="font-medium mb-2 text-yellow-900 flex items-center gap-2">
-          <Info className="w-4 h-4" />
-          How to Update Version Information
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
+        <h3 className="font-medium mb-2 text-green-900 flex items-center gap-2">
+          <GitBranch className="w-4 h-4" />
+          Automatic Version Tracking
         </h3>
-        <div className="text-sm text-yellow-800 space-y-2">
-          <p>To add a new version, before pushing to GitHub:</p>
-          <ol className="list-decimal list-inside space-y-1 ml-2">
-            <li>Update version in <code className="bg-yellow-100 px-1 rounded">package.json</code></li>
-            <li>Edit <code className="bg-yellow-100 px-1 rounded">src/data/versions.ts</code></li>
-            <li>Add new version object with your commits to the array</li>
-            <li>Set previous version's <code className="bg-yellow-100 px-1 rounded">isCurrent: false</code></li>
-            <li>Commit and push to GitHub - version info will update automatically!</li>
-          </ol>
+        <div className="text-sm text-green-800 space-y-2">
+          <p className="font-medium">This version information updates automatically from your git commits!</p>
+          <div className="bg-white/50 p-3 rounded-md space-y-1">
+            <p>✅ Write good commit messages</p>
+            <p>✅ Push to GitHub (main/master branch)</p>
+            <p>✅ GitHub Actions reads your git history</p>
+            <p>✅ Version info updates automatically</p>
+          </div>
+          <p className="text-xs">
+            See <code className="bg-green-100 px-1 rounded">VERSIONING.md</code> for commit message best practices
+          </p>
         </div>
       </div>
     </div>

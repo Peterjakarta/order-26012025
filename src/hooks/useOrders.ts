@@ -76,8 +76,8 @@ export function useOrders() {
               const updatedAt = data.updatedAt?.toDate?.() || createdAt;
               const completedAt = data.completedAt?.toDate?.();
 
-              ordersData.push({ 
-                id: doc.id, 
+              ordersData.push({
+                id: doc.id,
                 branchId: data.branchId,
                 orderedBy: data.orderedBy,
                 orderDate: data.orderDate,
@@ -93,6 +93,7 @@ export function useOrders() {
                 productionStartDate: data.productionStartDate,
                 productionEndDate: data.productionEndDate,
                 stockReduced: data.stockReduced || false,
+                batchNumber: data.batchNumber,
                 isRDProduct: data.isRDProduct || false,
                 rdProductData: data.rdProductData
               } as Order);
@@ -243,14 +244,15 @@ export function useOrders() {
   }, []);
 
   const updateOrderStatus = useCallback(async (
-    orderId: string, 
+    orderId: string,
     status: Order['status'],
     producedQuantities?: Record<string, number>,
     stockQuantities?: Record<string, number>,
     rejectQuantities?: Record<string, number>,
     rejectNotes?: Record<string, string>,
     deliveryDate?: string,
-    completionDate?: string
+    completionDate?: string,
+    batchNumber?: string
   ) => {
     try {
       const orderRef = doc(db, COLLECTIONS.ORDERS, orderId);
@@ -292,6 +294,11 @@ export function useOrders() {
       // Update delivery date if provided
       if (deliveryDate) {
         updateData.deliveryDate = deliveryDate;
+      }
+
+      // Update batch number if provided
+      if (batchNumber !== undefined) {
+        updateData.batchNumber = batchNumber;
       }
 
       await updateDoc(orderRef, updateData);
