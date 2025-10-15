@@ -174,7 +174,9 @@ export const COLLECTIONS = {
   APPROVAL_FORMS: 'approvalForms',
   // Version tracking
   VERSIONS: 'versions',
-  VERSION_COMMITS: 'version_commits'
+  VERSION_COMMITS: 'version_commits',
+  // HACCP
+  BATCH_NUMBERS: 'batch_numbers'
 } as const;
 
 // Helper function to create log entries

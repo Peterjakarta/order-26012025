@@ -15,7 +15,19 @@ import {
   ShoppingCart,
   Copy
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { db, COLLECTIONS } from '../../lib/firebase';
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  Timestamp,
+  serverTimestamp
+} from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { useStore } from '../../store/StoreContext';
 import { useOrders } from '../../hooks/useOrders';
@@ -109,13 +121,31 @@ export default function BatchNumbers() {
   const fetchBatches = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('batch_numbers')
-        .select('*')
-        .order('batch_date', { ascending: false });
+      const batchesRef = collection(db, COLLECTIONS.BATCH_NUMBERS);
+      const q = query(batchesRef, orderBy('batch_date', 'desc'));
+      const snapshot = await getDocs(q);
 
-      if (error) throw error;
-      setBatches(data || []);
+      const batchData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          batch_number: data.batch_number,
+          batch_date: data.batch_date,
+          product_name: data.product_name,
+          product_id: data.product_id,
+          order_id: data.order_id,
+          quantity: data.quantity,
+          unit: data.unit,
+          expiry_date: data.expiry_date,
+          production_notes: data.production_notes,
+          status: data.status,
+          created_by: data.created_by,
+          created_at: data.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+          updated_at: data.updated_at?.toDate?.()?.toISOString() || new Date().toISOString()
+        } as BatchNumber;
+      });
+
+      setBatches(batchData);
     } catch (error) {
       console.error('Error fetching batches:', error);
       alert('Failed to load batch numbers');
@@ -163,33 +193,27 @@ export default function BatchNumbers() {
         expiry_date: formData.expiry_date || null,
         production_notes: formData.production_notes || null,
         status: formData.status,
-        created_by: user?.email || 'Unknown'
+        created_by: user?.email || 'Unknown',
+        updated_at: serverTimestamp()
       };
 
+      const batchesRef = collection(db, COLLECTIONS.BATCH_NUMBERS);
+
       if (editingBatch) {
-        const { error } = await supabase
-          .from('batch_numbers')
-          .update(batchData)
-          .eq('id', editingBatch.id);
-
-        if (error) throw error;
+        const batchDoc = doc(db, COLLECTIONS.BATCH_NUMBERS, editingBatch.id);
+        await updateDoc(batchDoc, batchData);
       } else {
-        const { error } = await supabase
-          .from('batch_numbers')
-          .insert([batchData]);
-
-        if (error) throw error;
+        await addDoc(batchesRef, {
+          ...batchData,
+          created_at: serverTimestamp()
+        });
       }
 
       resetForm();
       fetchBatches();
     } catch (error: any) {
       console.error('Error saving batch:', error);
-      if (error.code === '23505') {
-        alert('Batch number already exists. Please use a unique batch number.');
-      } else {
-        alert('Failed to save batch number');
-      }
+      alert('Failed to save batch number');
     }
   };
 
@@ -234,12 +258,8 @@ export default function BatchNumbers() {
     if (!confirm('Are you sure you want to delete this batch number?')) return;
 
     try {
-      const { error } = await supabase
-        .from('batch_numbers')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const batchDoc = doc(db, COLLECTIONS.BATCH_NUMBERS, id);
+      await deleteDoc(batchDoc);
       fetchBatches();
     } catch (error) {
       console.error('Error deleting batch:', error);
