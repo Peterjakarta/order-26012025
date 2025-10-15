@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Info,
   GitBranch,
   Calendar,
-  GitCommit,
   ChevronDown,
   ChevronRight,
   Plus,
@@ -13,20 +12,60 @@ import {
   Shield,
   Gauge,
   FileText,
+  Clock,
   Loader,
-  AlertCircle
+  AlertCircle,
+  X,
+  CheckCircle
 } from 'lucide-react';
 import packageJson from '../../../../package.json';
-import { useVersions, type VersionCommit } from '../../../hooks/useVersions';
 import { useAuth } from '../../../hooks/useAuth';
+import {
+  collection,
+  query,
+  getDocs,
+  addDoc,
+  serverTimestamp,
+  writeBatch,
+  doc,
+  where,
+  orderBy as firestoreOrderBy
+} from 'firebase/firestore';
+import { db, COLLECTIONS } from '../../../lib/firebase';
+
+interface VersionCommit {
+  id: string;
+  versionId: string;
+  title: string;
+  description?: string;
+  author: string;
+  commitDate: Date;
+  category: 'feature' | 'bugfix' | 'enhancement' | 'security' | 'performance' | 'documentation';
+  createdAt: Date;
+}
+
+interface Version {
+  id: string;
+  version: string;
+  releaseDate: Date;
+  isCurrent: boolean;
+  notes?: string;
+  createdAt: Date;
+  createdBy: string;
+  commits?: VersionCommit[];
+}
 
 export default function VersionInfo() {
-  const { currentVersion, versions, loading, error, addVersion, addCommit } = useVersions();
-  const { hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
+  const [versions, setVersions] = useState<Version[]>([]);
+  const [currentVersion, setCurrentVersion] = useState<Version | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showAllVersions, setShowAllVersions] = useState(false);
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
   const [showAddVersion, setShowAddVersion] = useState(false);
   const [showAddCommit, setShowAddCommit] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const [newVersion, setNewVersion] = useState({ version: '', notes: '' });
   const [newCommit, setNewCommit] = useState({
@@ -49,29 +88,251 @@ export default function VersionInfo() {
     });
   };
 
-  const handleAddVersion = async () => {
+  const initializeVersions = async () => {
     try {
-      await addVersion({
-        version: newVersion.version,
-        notes: newVersion.notes,
-        isCurrent: true
+      console.log('Initializing version 1.0.0...');
+
+      // Create initial version
+      const versionRef = await addDoc(collection(db, COLLECTIONS.VERSIONS), {
+        version: '1.0.0',
+        releaseDate: serverTimestamp(),
+        isCurrent: true,
+        notes: 'Initial release with comprehensive order management, product catalog, recipe tracking, and stock management features',
+        createdAt: serverTimestamp(),
+        createdBy: user?.email || 'System'
       });
+
+      const now = new Date();
+      const commits = [
+        {
+          title: 'Order Management System',
+          description: 'Complete order management with create, update, and completion workflows',
+          category: 'feature',
+          days: 30
+        },
+        {
+          title: 'Product & Category Management',
+          description: 'Full product catalog with categories, pricing, and inventory tracking',
+          category: 'feature',
+          days: 25
+        },
+        {
+          title: 'Recipe Management',
+          description: 'Recipe creation and management with ingredient tracking and cost calculations',
+          category: 'feature',
+          days: 20
+        },
+        {
+          title: 'Stock Management',
+          description: 'Ingredient stock tracking with history, alerts, and automated deductions',
+          category: 'feature',
+          days: 15
+        },
+        {
+          title: 'Production Planning',
+          description: 'Production scheduling and planning features with calendar view',
+          category: 'feature',
+          days: 10
+        },
+        {
+          title: 'Enhanced Logbook',
+          description: 'Comprehensive activity logging across all system operations',
+          category: 'feature',
+          days: 5
+        },
+        {
+          title: 'User Authentication & Permissions',
+          description: 'Secure authentication with role-based access control',
+          category: 'security',
+          days: 3
+        },
+        {
+          title: 'Reporting & Export Features',
+          description: 'Generate detailed reports with PDF and Excel export capabilities',
+          category: 'feature',
+          days: 2
+        },
+        {
+          title: 'Performance Improvements',
+          description: 'Optimized database queries and improved UI responsiveness',
+          category: 'performance',
+          days: 1
+        },
+        {
+          title: 'R&D Product Management',
+          description: 'Research and development product tracking with approval workflows',
+          category: 'feature',
+          days: 1
+        }
+      ];
+
+      for (const commit of commits) {
+        const commitDate = new Date(now.getTime() - commit.days * 24 * 60 * 60 * 1000);
+        await addDoc(collection(db, COLLECTIONS.VERSION_COMMITS), {
+          versionId: versionRef.id,
+          title: commit.title,
+          description: commit.description,
+          author: user?.email || 'System',
+          commitDate: commitDate,
+          category: commit.category,
+          createdAt: serverTimestamp()
+        });
+      }
+
+      console.log('Version 1.0.0 initialized successfully');
+      await fetchVersions();
+    } catch (err) {
+      console.error('Error initializing versions:', err);
+      setError('Failed to initialize version information');
+    }
+  };
+
+  const fetchVersions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log('Fetching versions from Firebase...');
+
+      // Fetch all versions
+      const versionsSnapshot = await getDocs(collection(db, COLLECTIONS.VERSIONS));
+
+      console.log('Versions snapshot received:', versionsSnapshot.size, 'documents');
+
+      // If no versions exist, initialize
+      if (versionsSnapshot.empty) {
+        console.log('No versions found, initializing...');
+        await initializeVersions();
+        return;
+      }
+
+      const versionsData: Version[] = [];
+
+      for (const versionDoc of versionsSnapshot.docs) {
+        const data = versionDoc.data();
+
+        // Fetch commits for this version
+        const commitsQuery = query(
+          collection(db, COLLECTIONS.VERSION_COMMITS),
+          where('versionId', '==', versionDoc.id)
+        );
+        const commitsSnapshot = await getDocs(commitsQuery);
+
+        const commits: VersionCommit[] = commitsSnapshot.docs.map(commitDoc => {
+          const commitData = commitDoc.data();
+          return {
+            id: commitDoc.id,
+            versionId: versionDoc.id,
+            title: commitData.title,
+            description: commitData.description,
+            author: commitData.author,
+            commitDate: commitData.commitDate?.toDate?.() || new Date(),
+            category: commitData.category || 'feature',
+            createdAt: commitData.createdAt?.toDate?.() || new Date()
+          };
+        });
+
+        // Sort commits by date
+        commits.sort((a, b) => b.commitDate.getTime() - a.commitDate.getTime());
+
+        const version: Version = {
+          id: versionDoc.id,
+          version: data.version,
+          releaseDate: data.releaseDate?.toDate?.() || new Date(),
+          isCurrent: data.isCurrent || false,
+          notes: data.notes,
+          createdAt: data.createdAt?.toDate?.() || new Date(),
+          createdBy: data.createdBy || 'Unknown',
+          commits
+        };
+
+        versionsData.push(version);
+
+        if (version.isCurrent) {
+          setCurrentVersion(version);
+        }
+      }
+
+      // Sort versions by release date
+      versionsData.sort((a, b) => b.releaseDate.getTime() - a.releaseDate.getTime());
+
+      console.log('Successfully loaded', versionsData.length, 'versions');
+      setVersions(versionsData);
+      setLoading(false);
+    } catch (err: any) {
+      console.error('Error fetching versions:', err);
+      const errorMessage = err?.message || 'Unknown error occurred';
+      const errorDetails = `${errorMessage}${err?.code ? ` (${err.code})` : ''}`;
+      setError(`Failed to load version information: ${errorDetails}`);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVersions();
+  }, []);
+
+  const handleAddVersion = async () => {
+    if (!newVersion.version) return;
+
+    try {
+      setSaving(true);
+      const batch = writeBatch(db);
+
+      // Unset current version flags
+      const currentVersionsSnapshot = await getDocs(
+        query(collection(db, COLLECTIONS.VERSIONS), where('isCurrent', '==', true))
+      );
+      currentVersionsSnapshot.docs.forEach(docSnap => {
+        batch.update(doc(db, COLLECTIONS.VERSIONS, docSnap.id), { isCurrent: false });
+      });
+
+      // Add new version
+      const versionRef = doc(collection(db, COLLECTIONS.VERSIONS));
+      batch.set(versionRef, {
+        version: newVersion.version,
+        releaseDate: serverTimestamp(),
+        isCurrent: true,
+        notes: newVersion.notes || '',
+        createdAt: serverTimestamp(),
+        createdBy: user?.email || 'Unknown'
+      });
+
+      await batch.commit();
       setNewVersion({ version: '', notes: '' });
       setShowAddVersion(false);
+      await fetchVersions();
+      setSaving(false);
     } catch (err) {
-      console.error('Failed to add version:', err);
+      console.error('Error adding version:', err);
       alert('Failed to add version. Please try again.');
+      setSaving(false);
     }
   };
 
   const handleAddCommit = async (versionId: string) => {
+    if (!newCommit.title) return;
+
     try {
-      await addCommit(versionId, newCommit);
+      setSaving(true);
+      await addDoc(collection(db, COLLECTIONS.VERSION_COMMITS), {
+        versionId,
+        title: newCommit.title,
+        description: newCommit.description || '',
+        author: user?.email || 'Unknown',
+        commitDate: new Date(),
+        category: newCommit.category,
+        createdAt: serverTimestamp()
+      });
+
       setNewCommit({ title: '', description: '', category: 'feature' });
       setShowAddCommit(null);
+      await fetchVersions();
+      setSaving(false);
     } catch (err) {
-      console.error('Failed to add commit:', err);
+      console.error('Error adding commit:', err);
       alert('Failed to add commit. Please try again.');
+      setSaving(false);
     }
   };
 
@@ -114,19 +375,41 @@ export default function VersionInfo() {
     }
   };
 
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const formatDateTime = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader className="w-6 h-6 text-gray-400 animate-spin" />
+      <div className="flex flex-col items-center justify-center py-12 gap-3">
+        <Loader className="w-8 h-8 text-pink-600 animate-spin" />
+        <p className="text-gray-600">Loading version information...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
-        <AlertCircle className="w-5 h-5" />
-        <span>{error}</span>
+      <div className="max-w-md mx-auto">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Error</p>
+            <p className="text-sm mt-1">{error}</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -148,7 +431,7 @@ export default function VersionInfo() {
         {canManageVersions && (
           <button
             onClick={() => setShowAddVersion(!showAddVersion)}
-            className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
+            className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
             New Version
@@ -158,9 +441,17 @@ export default function VersionInfo() {
 
       {/* Add Version Form */}
       {showAddVersion && (
-        <div className="bg-white p-4 rounded-lg border space-y-4">
-          <h3 className="font-medium">Add New Version</h3>
-          <div className="grid gap-4 sm:grid-cols-2">
+        <div className="bg-white p-4 rounded-lg border shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium">Add New Version</h3>
+            <button
+              onClick={() => setShowAddVersion(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="grid gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Version Number
@@ -170,10 +461,10 @@ export default function VersionInfo() {
                 value={newVersion.version}
                 onChange={(e) => setNewVersion({ ...newVersion, version: e.target.value })}
                 placeholder="e.g., 1.1.0"
-                className="w-full p-2 border rounded-md"
+                className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-transparent"
               />
             </div>
-            <div className="sm:col-span-2">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Release Notes
               </label>
@@ -182,23 +473,34 @@ export default function VersionInfo() {
                 onChange={(e) => setNewVersion({ ...newVersion, notes: e.target.value })}
                 placeholder="Brief description of this release..."
                 rows={3}
-                className="w-full p-2 border rounded-md"
+                className="w-full p-2 border rounded-md focus:ring-2 focus:ring-pink-500 focus:border-transparent"
               />
             </div>
           </div>
           <div className="flex justify-end gap-2">
             <button
               onClick={() => setShowAddVersion(false)}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-md"
+              className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
+              disabled={saving}
             >
               Cancel
             </button>
             <button
               onClick={handleAddVersion}
-              disabled={!newVersion.version}
-              className="px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:opacity-50"
+              disabled={!newVersion.version || saving}
+              className="px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
-              Add Version
+              {saving ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  Add Version
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -213,7 +515,7 @@ export default function VersionInfo() {
               <div>
                 <h3 className="text-lg font-bold text-pink-900">Current Version</h3>
                 <p className="text-sm text-pink-700">
-                  Released {new Date(currentVersion.releaseDate).toLocaleDateString()}
+                  Released {formatDate(currentVersion.releaseDate)}
                 </p>
               </div>
             </div>
@@ -231,7 +533,10 @@ export default function VersionInfo() {
           {/* Current Version Commits */}
           {currentVersion.commits && currentVersion.commits.length > 0 && (
             <div className="space-y-2">
-              <h4 className="font-medium text-pink-900 text-sm">Changes in this version:</h4>
+              <h4 className="font-medium text-pink-900 text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                Changes in this version ({currentVersion.commits.length}):
+              </h4>
               <div className="space-y-2">
                 {currentVersion.commits.map(commit => (
                   <div
@@ -254,7 +559,7 @@ export default function VersionInfo() {
                     )}
                     <div className="flex justify-between text-xs text-gray-500">
                       <span>{commit.author}</span>
-                      <span>{new Date(commit.commitDate).toLocaleDateString()}</span>
+                      <span>{formatDateTime(commit.commitDate)}</span>
                     </div>
                   </div>
                 ))}
@@ -263,7 +568,7 @@ export default function VersionInfo() {
               {canManageVersions && (
                 <button
                   onClick={() => setShowAddCommit(currentVersion.id)}
-                  className="text-sm text-pink-600 hover:text-pink-700 flex items-center gap-1 mt-2"
+                  className="text-sm text-pink-600 hover:text-pink-700 flex items-center gap-1 mt-2 transition-colors"
                 >
                   <Plus className="w-3 h-3" />
                   Add change to this version
@@ -274,8 +579,16 @@ export default function VersionInfo() {
 
           {/* Add Commit Form */}
           {showAddCommit === currentVersion.id && (
-            <div className="bg-white p-4 rounded-md border space-y-3">
-              <h4 className="font-medium text-sm">Add Change</h4>
+            <div className="bg-white p-4 rounded-md border shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm">Add Change</h4>
+                <button
+                  onClick={() => setShowAddCommit(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -284,7 +597,7 @@ export default function VersionInfo() {
                   <select
                     value={newCommit.category}
                     onChange={(e) => setNewCommit({ ...newCommit, category: e.target.value as VersionCommit['category'] })}
-                    className="w-full p-2 border rounded-md text-sm"
+                    className="w-full p-2 border rounded-md text-sm focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                   >
                     <option value="feature">Feature</option>
                     <option value="bugfix">Bug Fix</option>
@@ -303,7 +616,7 @@ export default function VersionInfo() {
                     value={newCommit.title}
                     onChange={(e) => setNewCommit({ ...newCommit, title: e.target.value })}
                     placeholder="Brief description..."
-                    className="w-full p-2 border rounded-md text-sm"
+                    className="w-full p-2 border rounded-md text-sm focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                   />
                 </div>
                 <div>
@@ -315,23 +628,31 @@ export default function VersionInfo() {
                     onChange={(e) => setNewCommit({ ...newCommit, description: e.target.value })}
                     placeholder="Detailed description..."
                     rows={2}
-                    className="w-full p-2 border rounded-md text-sm"
+                    className="w-full p-2 border rounded-md text-sm focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                   />
                 </div>
               </div>
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setShowAddCommit(null)}
-                  className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 rounded-md"
+                  className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
+                  disabled={saving}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => handleAddCommit(currentVersion.id)}
-                  disabled={!newCommit.title}
-                  className="px-3 py-1 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:opacity-50"
+                  disabled={!newCommit.title || saving}
+                  className="px-3 py-1 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                 >
-                  Add Change
+                  {saving ? (
+                    <>
+                      <Loader className="w-3 h-3 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Add Change'
+                  )}
                 </button>
               </div>
             </div>
@@ -368,7 +689,7 @@ export default function VersionInfo() {
                   >
                     <button
                       onClick={() => toggleVersion(version.id)}
-                      className="w-full p-4 flex items-center justify-between hover:bg-gray-50"
+                      className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         {expandedVersions.has(version.id) ? (
@@ -379,7 +700,7 @@ export default function VersionInfo() {
                         <div className="text-left">
                           <div className="font-medium">v{version.version}</div>
                           <div className="text-sm text-gray-500">
-                            {new Date(version.releaseDate).toLocaleDateString()}
+                            {formatDate(version.releaseDate)}
                           </div>
                         </div>
                       </div>
@@ -421,7 +742,7 @@ export default function VersionInfo() {
                                 )}
                                 <div className="flex justify-between text-xs text-gray-500">
                                   <span>{commit.author}</span>
-                                  <span>{new Date(commit.commitDate).toLocaleDateString()}</span>
+                                  <span>{formatDateTime(commit.commitDate)}</span>
                                 </div>
                               </div>
                             ))}
@@ -439,10 +760,75 @@ export default function VersionInfo() {
       )}
 
       {/* System Information */}
-      <div className="bg-gray-50 p-4 rounded-lg border space-y-2 text-sm text-gray-600">
-        <p><span className="font-medium">Package Version:</span> {packageJson.version}</p>
-        <p><span className="font-medium">Environment:</span> {import.meta.env.MODE}</p>
-        <p><span className="font-medium">Node Engine:</span> {packageJson.engines.node}</p>
+      <div className="bg-white p-4 rounded-lg border">
+        <h3 className="font-medium mb-3 flex items-center gap-2">
+          <Info className="w-4 h-4 text-gray-600" />
+          System Information
+        </h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between py-2 border-b">
+            <span className="text-gray-600">Application Name:</span>
+            <span className="font-medium">{packageJson.name}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b">
+            <span className="text-gray-600">Package Version:</span>
+            <span className="font-medium">{packageJson.version}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b">
+            <span className="text-gray-600">Environment:</span>
+            <span className="font-medium capitalize">{import.meta.env.MODE}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b">
+            <span className="text-gray-600">Node Engine:</span>
+            <span className="font-medium">{packageJson.engines.node}</span>
+          </div>
+          <div className="flex justify-between py-2">
+            <span className="text-gray-600">Last Updated:</span>
+            <span className="font-medium">{new Date().toLocaleDateString()}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Feature Summary */}
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+        <h3 className="font-medium mb-3 text-blue-900 flex items-center gap-2">
+          <Package2 className="w-4 h-4" />
+          Key Features
+        </h3>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="flex items-center gap-2 text-blue-800">
+            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+            Order Management
+          </div>
+          <div className="flex items-center gap-2 text-blue-800">
+            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+            Product Catalog
+          </div>
+          <div className="flex items-center gap-2 text-blue-800">
+            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+            Recipe Management
+          </div>
+          <div className="flex items-center gap-2 text-blue-800">
+            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+            Stock Tracking
+          </div>
+          <div className="flex items-center gap-2 text-blue-800">
+            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+            Production Planning
+          </div>
+          <div className="flex items-center gap-2 text-blue-800">
+            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+            Activity Logging
+          </div>
+          <div className="flex items-center gap-2 text-blue-800">
+            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+            User Management
+          </div>
+          <div className="flex items-center gap-2 text-blue-800">
+            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+            R&D Products
+          </div>
+        </div>
       </div>
     </div>
   );
