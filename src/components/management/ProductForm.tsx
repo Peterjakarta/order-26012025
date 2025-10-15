@@ -88,7 +88,7 @@ export default function ProductForm({
 
     const productData: Omit<Product, 'id'> = {
       name,
-      category,
+      category: category || '',
       description,
       price,
       unit,
@@ -135,6 +135,12 @@ export default function ProductForm({
 
     // Include recipe data if ingredients are provided
     if (isAddingNew && recipeIngredients.length > 0 && recipeYieldUnit) {
+      // Recipes can only be added for products (not ingredients only)
+      if (itemType === 'ingredient') {
+        alert('Recipes cannot be added for "Ingredient Only" items. Please select "Product Only" or "Product & Ingredient" to add a recipe.');
+        return;
+      }
+
       submitData.recipe = {
         yield: recipeYield,
         yieldUnit: recipeYieldUnit,
@@ -276,7 +282,7 @@ export default function ProductForm({
         <ProductPricing product={product} />
       )}
 
-      {isAddingNew && (
+      {isAddingNew && itemType !== 'ingredient' && (
         <>
           <div className="border-t pt-6">
             <h3 className="font-medium text-gray-900 mb-4">Recipe Information (Optional)</h3>

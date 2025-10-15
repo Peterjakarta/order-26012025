@@ -19,10 +19,8 @@ import { getAuth } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
 import type { LogEntry } from '../types/types';
 
-// Enable more detailed logging in development
-if (import.meta.env.DEV) {
-  setLogLevel('debug');
-}
+// Disable Firebase debug logging to reduce console noise
+setLogLevel('silent');
 
 // Validate required environment variables
 const requiredEnvVars = [

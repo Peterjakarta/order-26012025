@@ -53,9 +53,10 @@ export default function RecipeManagement() {
         await addRecipe(data);
         setIsAddingRecipe(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving recipe:', error);
-      alert('Failed to save recipe. Please try again.');
+      const errorMessage = error?.message || 'Failed to save recipe. Please try again.';
+      alert(`Failed to save recipe: ${errorMessage}\n\nPlease check the browser console for more details.`);
     }
   };
 

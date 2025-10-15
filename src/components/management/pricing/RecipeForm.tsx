@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Copy, Beaker, Info, ArrowDown } from 'lucide-react';
-import type { Recipe, RecipeIngredient } from '../../../types/types';
+import type { Recipe, RecipeIngredient, Product } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
 import { formatIDR } from '../../../utils/currencyFormatter';
 import { calculateRecipeWeight, applyWeightBasedCosts, loadGlobalCostRates } from '../../../utils/recipeWeightCalculations';
@@ -118,41 +118,60 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    
-    // Get the selected product ID
-    const productId = formData.get('productId') as string;
-    if (!productId) {
-      alert('Please select a product for this recipe');
-      return;
-    }
+    e.stopPropagation();
 
-    // Validate and clean up the data
-    const category = (formData.get('category') as string).trim();
-    const yieldAmount = Math.max(1, parseInt(formData.get('yield') as string) || 0);
-    const yieldUnit = (formData.get('yieldUnit') as string).trim();
-    const description = (formData.get('description') as string)?.trim() || '';
-    const notes = (formData.get('notes') as string)?.trim() || '';
-    
+    console.log('Form submission started');
+
+    try {
+      const formData = new FormData(e.currentTarget);
+
+      // Validate and clean up the data
+      const category = (formData.get('category') as string)?.trim();
+      const productId = formData.get('productId') as string;
+      const yieldAmount = Math.max(1, parseInt(formData.get('yield') as string) || 0);
+      const yieldUnit = (formData.get('yieldUnit') as string)?.trim();
+      const description = (formData.get('description') as string)?.trim() || '';
+      const notes = (formData.get('notes') as string)?.trim() || '';
+
+      // Debug logging
+      console.log('Form validation:', {
+        category,
+        productId,
+        selectedProduct,
+        categoryProducts,
+        yieldUnit,
+        yieldAmount
+      });
+
+      // Validate required fields first
+      if (!category) {
+        alert('Please select a category');
+        return;
+      }
+
+      if (!productId || !selectedProduct) {
+        alert(`Please select a product for this recipe.\n\nDebug info:\nCategory: ${category}\nProduct ID: ${productId}\nSelected Product: ${selectedProduct?.name || 'None'}\nAvailable Products: ${categoryProducts.length}`);
+        return;
+      }
+
+      if (!yieldUnit) {
+        alert('Please enter a yield unit (e.g., pcs, kg)');
+        return;
+      }
+
     // Parse optional numeric fields
-    const laborCost = formData.get('laborCost') ? 
+    const laborCost = formData.get('laborCost') ?
       parseFloat(formData.get('laborCost') as string) : undefined;
-    const packagingCost = formData.get('packagingCost') ? 
+    const packagingCost = formData.get('packagingCost') ?
       parseFloat(formData.get('packagingCost') as string) : undefined;
-    const equipmentCost = formData.get('equipmentCost') ? 
+    const equipmentCost = formData.get('equipmentCost') ?
       parseFloat(formData.get('equipmentCost') as string) : undefined;
-    const rejectPercentage = formData.get('rejectPercentage') ? 
+    const rejectPercentage = formData.get('rejectPercentage') ?
       parseFloat(formData.get('rejectPercentage') as string) : undefined;
-    const taxPercentage = formData.get('taxPercentage') ? 
+    const taxPercentage = formData.get('taxPercentage') ?
       parseFloat(formData.get('taxPercentage') as string) : undefined;
-    const marginPercentage = formData.get('marginPercentage') ? 
+    const marginPercentage = formData.get('marginPercentage') ?
       parseFloat(formData.get('marginPercentage') as string) : undefined;
-
-    // Validate required fields
-    if (!category || !yieldUnit || !selectedProduct) {
-      alert('Please fill in all required fields');
-      return;
-    }
 
     // Clean up ingredients - remove any with empty IDs or 0 amounts
     const validIngredients = recipeIngredients.filter(
@@ -196,7 +215,7 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
       description,
       category,
       ingredients: validIngredients,
-      shellIngredients: validShellIngredients.length > 0 ? validShellIngredients : undefined,
+      shellIngredients: validShellIngredients,
       yield: yieldAmount,
       yieldUnit,
       notes,
@@ -223,7 +242,15 @@ export default function RecipeForm({ recipe, onSubmit, onCancel, isEditing }: Re
       recipeData.marginPercentage = marginPercentage;
     }
 
-    onSubmit(recipeData);
+      console.log('Calling onSubmit with recipeData:', recipeData);
+      await onSubmit(recipeData);
+      console.log('onSubmit completed successfully');
+    } catch (error: any) {
+      console.error('Error in handleSubmit:', error);
+      console.error('Error stack:', error?.stack);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      alert(`Failed to submit recipe: ${error?.message || 'Unknown error'}\n\nCheck browser console for details.`);
+    }
   };
 
   const addIngredient = () => {
