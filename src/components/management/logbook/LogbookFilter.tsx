@@ -3,7 +3,7 @@ import { Filter, Search } from 'lucide-react';
 
 interface LogbookFilterProps {
   onFilter: (filters: {
-    category?: 'auth' | 'feature' | 'system';
+    category?: 'products' | 'orders' | 'recipes' | 'ingredients' | 'categories' | 'users' | 'auth' | 'stock' | 'system';
     username?: string;
     startDate?: string;
     endDate?: string;
@@ -11,7 +11,7 @@ interface LogbookFilterProps {
 }
 
 export default function LogbookFilter({ onFilter }: LogbookFilterProps) {
-  const [category, setCategory] = useState<'auth' | 'feature' | 'system' | ''>('');
+  const [category, setCategory] = useState<'products' | 'orders' | 'recipes' | 'ingredients' | 'categories' | 'users' | 'auth' | 'stock' | 'system' | ''>('');
   const [username, setUsername] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -52,7 +52,13 @@ export default function LogbookFilter({ onFilter }: LogbookFilterProps) {
           >
             <option value="">All Categories</option>
             <option value="auth">Authentication</option>
-            <option value="feature">Feature Usage</option>
+            <option value="products">Products</option>
+            <option value="orders">Orders</option>
+            <option value="recipes">Recipes</option>
+            <option value="ingredients">Ingredients</option>
+            <option value="categories">Categories</option>
+            <option value="users">Users</option>
+            <option value="stock">Stock</option>
             <option value="system">System</option>
           </select>
         </div>

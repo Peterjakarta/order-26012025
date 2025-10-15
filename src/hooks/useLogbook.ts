@@ -91,7 +91,7 @@ export function useLogbook() {
   }, [lastEntry, hasMore]);
 
   const filterEntries = useCallback(async (
-    category?: 'auth' | 'feature' | 'system',
+    category?: 'products' | 'orders' | 'recipes' | 'ingredients' | 'categories' | 'users' | 'auth' | 'stock' | 'system',
     username?: string,
     startDate?: string,
     endDate?: string

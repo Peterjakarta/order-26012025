@@ -171,7 +171,10 @@ export const COLLECTIONS = {
   RD_CATEGORIES: 'rd_categories',
   RD_PRODUCTS: 'rd_products',
   // Add approval forms collection
-  APPROVAL_FORMS: 'approvalForms'
+  APPROVAL_FORMS: 'approvalForms',
+  // Version tracking
+  VERSIONS: 'versions',
+  VERSION_COMMITS: 'version_commits'
 } as const;
 
 // Helper function to create log entries

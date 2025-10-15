@@ -20,6 +20,21 @@ import { db, COLLECTIONS, getBatch, commitBatchIfNeeded, getNetworkStatus } from
 import { categories as initialCategories } from '../data/categories';
 import type { Product, ProductCategory, CategoryData, Ingredient, Recipe, StockLevel, StockHistory, StockCategory } from '../types/types';
 import { auth } from '../lib/firebase';
+import {
+  logProductCreate,
+  logProductUpdate,
+  logProductDelete,
+  logRecipeCreate,
+  logRecipeUpdate,
+  logRecipeDelete,
+  logIngredientCreate,
+  logIngredientUpdate,
+  logIngredientDelete,
+  logStockUpdate,
+  logCategoryCreate,
+  logCategoryUpdate,
+  logCategoryDelete
+} from '../utils/logger';
 
 async function ensureAllCategoriesExist() {
   try {
@@ -207,8 +222,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       };
 
       batch.set(historyRef, historyData);
-      
+
       await batch.commit();
+
+      const ingredient = state.ingredients.find(i => i.id === ingredientId);
+      if (ingredient) {
+        await logStockUpdate(ingredient.name, ingredientId, currentStock, newQuantity);
+      }
 
       if (data.changeType === 'reduction' || data.changeType === 'reversion') {
         await refreshStockHistory();
@@ -223,7 +243,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       throw error;
     }
-  }, [refreshStockHistory]);
+  }, [refreshStockHistory, state.ingredients]);
 
   const addProduct = useCallback(async (productData: Omit<Product, 'id'>) => {
     try {
@@ -235,14 +255,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         updatedAt: serverTimestamp()
       });
       console.log('Product added with ID:', docRef.id);
-      
-      // Return the document ID for immediate use
+
+      await logProductCreate(
+        validatedData.name,
+        docRef.id,
+        state.categories[validatedData.category]?.name
+      );
+
       return docRef.id;
     } catch (error) {
       console.error('Error adding product:', error);
       throw error;
     }
-  }, []);
+  }, [state.categories]);
 
   const updateProduct = useCallback(async (id: string, productData: Omit<Product, 'id'>) => {
     try {
@@ -252,6 +277,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ...validatedData,
         updatedAt: serverTimestamp()
       });
+
+      await logProductUpdate(validatedData.name, id);
     } catch (error) {
       console.error('Error updating product:', error);
       throw error;
@@ -260,12 +287,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteProduct = useCallback(async (id: string) => {
     try {
+      const product = state.products.find(p => p.id === id);
       await deleteDoc(doc(db, COLLECTIONS.PRODUCTS, id));
+
+      if (product) {
+        await logProductDelete(product.name, id);
+      }
     } catch (error) {
       console.error('Error deleting product:', error);
       throw error;
     }
-  }, []);
+  }, [state.products]);
 
   const addCategory = useCallback(async (id: string, data: CategoryData) => {
     try {
@@ -276,6 +308,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+
+      await logCategoryCreate(data.name, id);
     } catch (error) {
       console.error('Error adding category:', error);
       throw error;
@@ -288,6 +322,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         name: String(data.name || ''),
         updatedAt: serverTimestamp()
       });
+
+      await logCategoryUpdate(data.name, category);
     } catch (error) {
       console.error('Error updating category:', error);
       throw error;
@@ -296,25 +332,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteCategory = useCallback(async (category: ProductCategory) => {
     try {
+      const categoryName = state.categories[category]?.name || category;
       const batch = writeBatch(db);
-      
+
       batch.delete(doc(db, COLLECTIONS.CATEGORIES, category));
-      
+
       const productsQuery = query(
-        collection(db, COLLECTIONS.PRODUCTS), 
+        collection(db, COLLECTIONS.PRODUCTS),
         where('category', '==', category)
       );
       const productsSnapshot = await getDocs(productsQuery);
       productsSnapshot.forEach((doc) => {
         batch.delete(doc.ref);
       });
-      
+
       await batch.commit();
+
+      await logCategoryDelete(categoryName, category);
     } catch (error) {
       console.error('Error deleting category:', error);
       throw error;
     }
-  }, []);
+  }, [state.categories]);
 
   const reorderCategories = useCallback(async (newOrder: ProductCategory[]) => {
     try {
@@ -356,26 +395,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const addIngredient = useCallback(async (ingredientData: Omit<Ingredient, 'id'>): Promise<string> => {
     try {
-      // First check if an ingredient with the same name already exists
       const q = query(
         collection(db, COLLECTIONS.INGREDIENTS),
         where('name', '==', ingredientData.name)
       );
-      
+
       const snapshot = await getDocs(q);
-      
-      // If ingredient exists, return its ID
+
       if (!snapshot.empty) {
         return snapshot.docs[0].id;
       }
-      
-      // Otherwise create a new ingredient
+
       const docRef = await addDoc(collection(db, COLLECTIONS.INGREDIENTS), {
         ...ingredientData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      
+
+      await logIngredientCreate(ingredientData.name, docRef.id);
+
       return docRef.id;
     } catch (error) {
       console.error('Error adding ingredient:', error);
@@ -390,6 +428,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ...ingredientData,
         updatedAt: serverTimestamp()
       });
+
+      await logIngredientUpdate(ingredientData.name, id);
     } catch (error) {
       console.error('Error updating ingredient:', error);
       throw error;
@@ -398,12 +438,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteIngredient = useCallback(async (id: string) => {
     try {
+      const ingredient = state.ingredients.find(i => i.id === id);
       await deleteDoc(doc(db, COLLECTIONS.INGREDIENTS, id));
+
+      if (ingredient) {
+        await logIngredientDelete(ingredient.name, id);
+      }
     } catch (error) {
       console.error('Error deleting ingredient:', error);
       throw error;
     }
-  }, []);
+  }, [state.ingredients]);
 
   const updateIngredientCategories = useCallback(async (categoryId: string, ingredientIds: string[]) => {
     try {
@@ -496,11 +541,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const addRecipe = useCallback(async (recipeData: Omit<Recipe, 'id'>) => {
     try {
-      await addDoc(collection(db, COLLECTIONS.RECIPES), {
+      const docRef = await addDoc(collection(db, COLLECTIONS.RECIPES), {
         ...recipeData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+
+      await logRecipeCreate(recipeData.name, docRef.id);
     } catch (error) {
       console.error('Error adding recipe:', error);
       throw error;
@@ -514,6 +561,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ...recipeData,
         updatedAt: serverTimestamp()
       });
+
+      await logRecipeUpdate(recipeData.name, id);
     } catch (error) {
       console.error('Error updating recipe:', error);
       throw error;
@@ -522,12 +571,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteRecipe = useCallback(async (id: string) => {
     try {
+      const recipe = state.recipes.find(r => r.id === id);
       await deleteDoc(doc(db, COLLECTIONS.RECIPES, id));
+
+      if (recipe) {
+        await logRecipeDelete(recipe.name, id);
+      }
     } catch (error) {
       console.error('Error deleting recipe:', error);
       throw error;
     }
-  }, []);
+  }, [state.recipes]);
 
   // New function to find or create a recipe for an RD product
   const findOrCreateRecipeForRDProduct = useCallback(async (

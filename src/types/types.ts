@@ -36,7 +36,9 @@ export interface LogEntry {
   username: string;
   action: string;
   details?: string;
-  category: 'auth' | 'feature' | 'system';
+  category: 'products' | 'orders' | 'recipes' | 'ingredients' | 'categories' | 'users' | 'auth' | 'stock' | 'system';
+  itemId?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface StockCategory {

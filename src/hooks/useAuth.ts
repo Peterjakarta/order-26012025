@@ -13,13 +13,14 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db, auth, createLogEntry, COLLECTIONS } from '../lib/firebase';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  UserCredential, 
-  onAuthStateChanged 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  UserCredential,
+  onAuthStateChanged
 } from 'firebase/auth';
 import type { User } from '../types/types';
+import { logUserLogin, logUserLogout } from '../utils/logger';
 
 export function useAuth() {
   const [authState, setAuthState] = useState<{
@@ -143,13 +144,8 @@ export function useAuth() {
 
         setAuthState({ user, isAuthenticated: true });
         localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
-        
-        await createLogEntry({
-          userId: user.id,
-          username: user.email,
-          action: 'User Login',
-          category: 'auth'
-        });
+
+        await logUserLogin();
 
         return true;
       }
@@ -183,12 +179,7 @@ export function useAuth() {
         setAuthState({ user, isAuthenticated: true });
         localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
 
-        await createLogEntry({
-          userId: user.id,
-          username: user.email,
-          action: 'User Login',
-          category: 'auth'
-        });
+        await logUserLogin();
 
         return true;
       } catch (err: any) {
@@ -211,12 +202,7 @@ export function useAuth() {
 
   const logout = useCallback(() => {
     if (authState.user) {
-      createLogEntry({
-        userId: authState.user.id,
-        username: authState.user.email,
-        action: 'User Logout',
-        category: 'auth'
-      });
+      logUserLogout();
     }
 
     setAuthState({ user: null, isAuthenticated: false });

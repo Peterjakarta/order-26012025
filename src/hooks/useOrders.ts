@@ -18,6 +18,7 @@ import { db, COLLECTIONS } from '../lib/firebase';
 import { generateOrderNumber } from '../utils/orderUtils';
 import { branches } from '../data/branches';
 import type { Order, Recipe } from '../types/types';
+import { logOrderCreate, logOrderUpdate, logOrderComplete, logOrderCancel } from '../utils/logger';
 
 export function useOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -192,10 +193,12 @@ export function useOrders() {
       };
 
       await setDoc(doc(db, COLLECTIONS.ORDERS, orderId), order);
-      
-      // Force refresh after adding
+
+      const branchName = validBranch.name;
+      await logOrderCreate(orderNumber, orderId, branchName);
+
       setRefreshCounter(prev => prev + 1);
-      
+
       return {
         id: orderId,
         ...orderData,
@@ -292,8 +295,13 @@ export function useOrders() {
       }
 
       await updateDoc(orderRef, updateData);
-      
-      // Force refresh after updating status
+
+      if (status === 'completed') {
+        await logOrderComplete(orderDoc.orderNumber, orderId);
+      } else if (status === 'cancelled') {
+        await logOrderCancel(orderDoc.orderNumber, orderId);
+      }
+
       setRefreshCounter(prev => prev + 1);
     } catch (error) {
       console.error('Error updating order:', error);
