@@ -42,6 +42,20 @@ export function useVersions() {
       );
       const versionsSnapshot = await getDocs(versionsQuery);
 
+      // If no versions exist, create initial version
+      if (versionsSnapshot.empty) {
+        console.log('No versions found, creating initial version...');
+        await createInitialVersion();
+        // Retry fetching after creating initial version
+        const retrySnapshot = await getDocs(versionsQuery);
+        if (retrySnapshot.empty) {
+          setVersions([]);
+          setCurrentVersion(null);
+          setLoading(false);
+          return;
+        }
+      }
+
       const versionsData: Version[] = [];
 
       for (const versionDoc of versionsSnapshot.docs) {
@@ -95,6 +109,91 @@ export function useVersions() {
       setLoading(false);
     }
   }, []);
+
+  const createInitialVersion = async () => {
+    try {
+      const user = auth.currentUser;
+      const now = new Date();
+
+      // Create initial version
+      const versionRef = await addDoc(collection(db, COLLECTIONS.VERSIONS), {
+        version: '1.0.0',
+        releaseDate: serverTimestamp(),
+        isCurrent: true,
+        notes: 'Initial release with core features including order management, product catalog, recipe tracking, and stock management',
+        createdAt: serverTimestamp(),
+        createdBy: user?.email || 'System'
+      });
+
+      // Create initial commits
+      const commits = [
+        {
+          title: 'Order Management System',
+          description: 'Complete order management with create, update, and completion workflows',
+          category: 'feature',
+          commitDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        },
+        {
+          title: 'Product & Category Management',
+          description: 'Full product catalog with categories, pricing, and inventory tracking',
+          category: 'feature',
+          commitDate: new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000)
+        },
+        {
+          title: 'Recipe Management',
+          description: 'Recipe creation and management with ingredient tracking and cost calculations',
+          category: 'feature',
+          commitDate: new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000)
+        },
+        {
+          title: 'Stock Management',
+          description: 'Ingredient stock tracking with history, alerts, and automated deductions',
+          category: 'feature',
+          commitDate: new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000)
+        },
+        {
+          title: 'Production Planning',
+          description: 'Production scheduling and planning features with calendar view',
+          category: 'feature',
+          commitDate: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000)
+        },
+        {
+          title: 'Enhanced Logbook',
+          description: 'Comprehensive activity logging across all system operations',
+          category: 'feature',
+          commitDate: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000)
+        },
+        {
+          title: 'User Authentication & Permissions',
+          description: 'Secure authentication with role-based access control',
+          category: 'security',
+          commitDate: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+        },
+        {
+          title: 'Performance Improvements',
+          description: 'Optimized database queries and improved UI responsiveness',
+          category: 'performance',
+          commitDate: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)
+        }
+      ];
+
+      for (const commit of commits) {
+        await addDoc(collection(db, COLLECTIONS.VERSION_COMMITS), {
+          versionId: versionRef.id,
+          title: commit.title,
+          description: commit.description,
+          author: user?.email || 'System',
+          commitDate: commit.commitDate,
+          category: commit.category,
+          createdAt: serverTimestamp()
+        });
+      }
+
+      console.log('Initial version created successfully');
+    } catch (err) {
+      console.error('Error creating initial version:', err);
+    }
+  };
 
   useEffect(() => {
     fetchVersions();
