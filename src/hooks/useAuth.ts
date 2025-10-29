@@ -45,16 +45,39 @@ export function useAuth() {
         try {
           // Get user document from Firestore
           const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, firebaseUser.uid));
-          
+
           if (userDoc.exists()) {
-            const userData = userDoc.data();
+            let userData = userDoc.data();
+            console.log('Auth state listener - User data:', {
+              email: userData.email,
+              role: userData.role,
+              status: userData.status,
+              permissions: userData.permissions
+            });
+
+            // Check if user is pending and activate them
+            if (userData.status === 'pending' || !userData.status) {
+              console.log('Activating pending user in auth state listener...');
+              userData = {
+                ...userData,
+                status: 'active',
+                updated_at: serverTimestamp()
+              };
+              // Remove password field if it exists
+              delete userData.password;
+
+              // Update the document
+              await setDoc(doc(db, COLLECTIONS.USERS, firebaseUser.uid), userData);
+              console.log('User activated successfully - new status:', userData.status);
+            }
+
             const user = {
               id: firebaseUser.uid,
               email: firebaseUser.email || '',
               role: userData.role,
               permissions: userData.permissions
             };
-            
+
             setAuthState({ user, isAuthenticated: true });
             localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
           } else {
@@ -66,7 +89,7 @@ export function useAuth() {
                 role: 'admin',
                 permissions: ['manage_users', 'manage_orders', 'manage_products', 'create_orders']
               };
-              
+
               setAuthState({ user, isAuthenticated: true });
               localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
             } else {
@@ -75,17 +98,18 @@ export function useAuth() {
                 email: firebaseUser.email,
                 role: 'staff',
                 permissions: ['create_orders'],
+                status: 'active',
                 created_at: serverTimestamp(),
                 updated_at: serverTimestamp()
               });
-              
+
               const user = {
                 id: firebaseUser.uid,
                 email: firebaseUser.email || '',
                 role: 'staff',
                 permissions: ['create_orders']
               };
-              
+
               setAuthState({ user, isAuthenticated: true });
               localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
             }
@@ -220,14 +244,15 @@ export function useAuth() {
         const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
         console.log('User document exists:', userDoc.exists());
 
-        if (!userDoc.exists() || isPendingUser) {
-          console.log('Creating/updating user document...');
-          // Need to create/update the proper user document
-          let userData: any;
+        let userData: any;
+        let needsDocumentUpdate = false;
+
+        if (!userDoc.exists()) {
+          console.log('Creating user document...');
+          needsDocumentUpdate = true;
 
           if (pendingData) {
             console.log('Using pending user data');
-            // Use pending user data
             userData = {
               email,
               role: pendingData.role,
@@ -238,7 +263,6 @@ export function useAuth() {
             };
           } else {
             console.log('Creating default staff user');
-            // Create default staff user
             userData = {
               email,
               role: 'staff',
@@ -248,40 +272,50 @@ export function useAuth() {
               updated_at: serverTimestamp()
             };
           }
+        } else {
+          // Document exists - check if it's a pending status that needs activation
+          userData = userDoc.data();
+          console.log('Existing user document:', {
+            email: userData.email,
+            role: userData.role,
+            status: userData.status,
+            permissions: userData.permissions,
+            hasPassword: !!userData.password
+          });
 
+          if (userData.status === 'pending' || isPendingUser || !userData.status) {
+            console.log('Activating pending user...');
+            needsDocumentUpdate = true;
+            userData = {
+              ...userData,
+              status: 'active',
+              updated_at: serverTimestamp()
+            };
+            // Remove password field if it exists (from pending user)
+            delete userData.password;
+            console.log('User will be activated with status:', userData.status);
+          }
+        }
+
+        // Update/create the document if needed
+        if (needsDocumentUpdate) {
           console.log('Saving user document with UID:', userCredential.user.uid);
           await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), userData);
           console.log('User document saved successfully');
-
-          // Delete pending document if it exists
-          if (pendingDocRef) {
-            console.log('Deleting pending document...');
-            try {
-              await deleteDoc(pendingDocRef);
-              console.log('Pending document deleted');
-            } catch (deleteError) {
-              console.error('Error deleting pending doc:', deleteError);
-              // Continue anyway - not critical
-            }
-          }
-
-          const user = {
-            id: userCredential.user.uid,
-            email: userCredential.user.email || '',
-            role: userData.role,
-            permissions: userData.permissions
-          };
-
-          setAuthState({ user, isAuthenticated: true });
-          localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
-
-          await logUserLogin();
-
-          return true;
         }
 
-        // User document exists - use it
-        const userData = userDoc.data();
+        // Delete old pending document if it exists and is different from current UID
+        if (pendingDocRef && pendingDocRef.id !== userCredential.user.uid) {
+          console.log('Deleting old pending document...');
+          try {
+            await deleteDoc(pendingDocRef);
+            console.log('Pending document deleted');
+          } catch (deleteError) {
+            console.error('Error deleting pending doc:', deleteError);
+            // Continue anyway - not critical
+          }
+        }
+
         const user = {
           id: userCredential.user.uid,
           email: userCredential.user.email || '',
