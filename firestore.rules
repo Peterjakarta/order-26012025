@@ -27,10 +27,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated() && (isOwner(userId) || isAdmin() || hasPermission('manage_users'));
       allow list: if isAuthenticated() && (isAdmin() || hasPermission('manage_users'));
+      // Allow user to create their own document during first login (without trying to read non-existent doc)
+      // or if they're an admin/have manage_users permission
       allow create: if isAuthenticated() && (
-        isAdmin() ||
-        hasPermission('manage_users') ||
-        (isOwner(userId) && !(request.resource.data.role == 'admin'))
+        (isOwner(userId) && request.resource.data.role != 'admin') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (isAdmin() || hasPermission('manage_users')))
       );
       allow update: if isAuthenticated() && (
         isAdmin() ||
