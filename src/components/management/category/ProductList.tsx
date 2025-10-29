@@ -4,6 +4,24 @@ import type { Product } from '../../../types/types';
 import { useStore } from '../../../store/StoreContext';
 import ProductForm from '../ProductForm';
 
+interface ProductFormData {
+  product: Omit<Product, 'id'>;
+  recipe?: {
+    yield: number;
+    yieldUnit: string;
+    ingredients: any[];
+    shellIngredients: any[];
+  };
+  addAsIngredient: boolean;
+  addAsProduct: boolean;
+  ingredientData?: {
+    usageUnit: string;
+    packageSize: number;
+    packageUnit: string;
+    price: number;
+  };
+}
+
 interface ProductListProps {
   products: Product[];
 }
@@ -38,10 +56,10 @@ export default function ProductList({ products }: ProductListProps) {
     setDraggedProduct(null);
   };
 
-  const handleSubmit = async (data: Omit<Product, 'id'>) => {
+  const handleSubmit = async (data: ProductFormData) => {
     try {
       if (editingProduct) {
-        await updateProduct(editingProduct.id, data);
+        await updateProduct(editingProduct.id, data.product);
         setEditingProduct(null);
       }
     } catch (error) {

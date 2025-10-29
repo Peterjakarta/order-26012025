@@ -152,23 +152,136 @@ export function useAuth() {
 
       // Regular user login
       try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        
-        // Get user document
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
-        
-        // If user document doesn't exist, create it with default staff permissions
-        if (!userDoc.exists()) {
-          await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
-            email,
-            role: 'staff',
-            permissions: ['create_orders'],
-            created_at: serverTimestamp(),
-            updated_at: serverTimestamp()
-          });
+        console.log('Starting regular user login for:', email);
+        // First, try to sign in with Firebase Auth
+        let userCredential: UserCredential;
+        let isPendingUser = false;
+        let pendingData: any = null;
+        let pendingDocRef: any = null;
+
+        try {
+          console.log('Attempting Firebase Auth sign in...');
+          userCredential = await signInWithEmailAndPassword(auth, email, password);
+          console.log('Firebase Auth sign in successful:', userCredential.user.uid);
+        } catch (authError: any) {
+          console.log('Firebase Auth failed:', authError.code, authError.message);
+          // If auth fails, check if this is a pending user
+          if (authError.code === 'auth/user-not-found' || authError.code === 'auth/invalid-credential' || authError.code === 'auth/wrong-password') {
+            console.log('Checking for pending user...');
+            const usersRef = collection(db, COLLECTIONS.USERS);
+            const pendingQuery = query(usersRef, where('email', '==', email), where('status', '==', 'pending'));
+            const pendingSnapshot = await getDocs(pendingQuery);
+            console.log('Pending user check result:', !pendingSnapshot.empty);
+
+            if (!pendingSnapshot.empty) {
+              console.log('Found pending user document');
+              // This is a pending user - check password
+              pendingDocRef = pendingSnapshot.docs[0].ref;
+              pendingData = pendingSnapshot.docs[0].data();
+              console.log('Pending user data:', { email: pendingData.email, role: pendingData.role, permissions: pendingData.permissions });
+
+              if (pendingData.password !== password) {
+                console.log('Password mismatch for pending user');
+                throw new Error('Invalid email or password. Please try again.');
+              }
+
+              console.log('Password matches, creating Firebase Auth account...');
+              // Create Firebase Auth account
+              try {
+                userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                console.log('Firebase Auth account created:', userCredential.user.uid);
+                isPendingUser = true;
+              } catch (createError: any) {
+                console.log('Error creating Firebase Auth account:', createError.code);
+                if (createError.code === 'auth/email-already-in-use') {
+                  console.log('Account already exists, signing in...');
+                  // Account exists but we don't have proper Firestore doc - try signing in again
+                  userCredential = await signInWithEmailAndPassword(auth, email, password);
+                  console.log('Signed in to existing account:', userCredential.user.uid);
+                  isPendingUser = true;
+                } else {
+                  throw createError;
+                }
+              }
+            } else {
+              console.log('No pending user found, auth failed');
+              // Not a pending user and auth failed
+              throw authError;
+            }
+          } else {
+            console.log('Auth error not handled:', authError.code);
+            throw authError;
+          }
         }
 
-        const userData = userDoc.exists() ? userDoc.data() : { role: 'staff', permissions: ['create_orders'] };
+        console.log('Checking user document in Firestore...');
+        // At this point, we have a valid userCredential
+        // Get or create user document
+        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
+        console.log('User document exists:', userDoc.exists());
+
+        if (!userDoc.exists() || isPendingUser) {
+          console.log('Creating/updating user document...');
+          // Need to create/update the proper user document
+          let userData: any;
+
+          if (pendingData) {
+            console.log('Using pending user data');
+            // Use pending user data
+            userData = {
+              email,
+              role: pendingData.role,
+              permissions: pendingData.permissions,
+              status: 'active',
+              created_at: pendingData.created_at || serverTimestamp(),
+              updated_at: serverTimestamp()
+            };
+          } else {
+            console.log('Creating default staff user');
+            // Create default staff user
+            userData = {
+              email,
+              role: 'staff',
+              permissions: ['create_orders'],
+              status: 'active',
+              created_at: serverTimestamp(),
+              updated_at: serverTimestamp()
+            };
+          }
+
+          console.log('Saving user document with UID:', userCredential.user.uid);
+          await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), userData);
+          console.log('User document saved successfully');
+
+          // Delete pending document if it exists
+          if (pendingDocRef) {
+            console.log('Deleting pending document...');
+            try {
+              await deleteDoc(pendingDocRef);
+              console.log('Pending document deleted');
+            } catch (deleteError) {
+              console.error('Error deleting pending doc:', deleteError);
+              // Continue anyway - not critical
+            }
+          }
+
+          const user = {
+            id: userCredential.user.uid,
+            email: userCredential.user.email || '',
+            role: userData.role,
+            permissions: userData.permissions
+          };
+
+          setAuthState({ user, isAuthenticated: true });
+          localStorage.setItem('auth', JSON.stringify({ user, isAuthenticated: true }));
+
+          await logUserLogin();
+
+          return true;
+        }
+
+        // User document exists - use it
+        const userData = userDoc.data();
         const user = {
           id: userCredential.user.uid,
           email: userCredential.user.email || '',
@@ -191,6 +304,8 @@ export function useAuth() {
           throw new Error('Incorrect password.');
         } else if (err.code === 'auth/too-many-requests') {
           throw new Error('Too many failed attempts. Please try again later.');
+        } else if (err.message) {
+          throw new Error(err.message);
         }
         throw err;
       }
@@ -221,14 +336,14 @@ export function useAuth() {
       }
 
       const usersRef = collection(db, COLLECTIONS.USERS);
-      const q = query(usersRef, orderBy('email'));
-      const snapshot = await getDocs(q);
+      const snapshot = await getDocs(usersRef);
 
       return snapshot.docs.map(doc => ({
         email: doc.data().email,
         role: doc.data().role,
-        permissions: doc.data().permissions
-      }));
+        permissions: doc.data().permissions,
+        status: doc.data().status || 'active'
+      })).sort((a, b) => a.email.localeCompare(b.email));
     } catch (error) {
       console.error('Error getting users:', error);
       throw error;
@@ -250,20 +365,33 @@ export function useAuth() {
         throw new Error('Password must be at least 8 characters');
       }
 
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Check if user already exists in Firestore
+      const usersRef = collection(db, COLLECTIONS.USERS);
+      const q = query(usersRef, where('email', '==', email));
+      const existingUser = await getDocs(q);
 
-      await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
+      if (!existingUser.empty) {
+        throw new Error('A user with this email already exists');
+      }
+
+      // Create a pending user document with the password stored securely
+      // The user will be created in Firebase Auth when they first login
+      const userDocId = `pending_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+      await setDoc(doc(db, COLLECTIONS.USERS, userDocId), {
         email,
+        password, // Store password temporarily - will be removed on first login
         role,
         permissions,
+        status: 'pending',
         created_at: serverTimestamp(),
         updated_at: serverTimestamp()
       });
 
       await createLogEntry({
-        userId: userCredential.user.uid,
-        username: email,
-        action: 'User Created',
+        userId: authState.user?.id || 'system',
+        username: authState.user?.email || 'system',
+        action: `User Created: ${email}`,
         category: 'auth'
       });
 
@@ -272,7 +400,7 @@ export function useAuth() {
       console.error('Add user error:', error);
       throw error;
     }
-  }, []);
+  }, [authState.user]);
 
   const updateUser = useCallback(async (
     email: string,

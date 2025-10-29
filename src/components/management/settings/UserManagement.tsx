@@ -167,6 +167,7 @@ export default function UserManagement() {
     email: string;
     role: 'admin' | 'staff';
     permissions: string[];
+    status?: string;
   }>>([]);
   const [loading, setLoading] = useState(true);
   const [hasPermission, setHasPermission] = useState(false);
@@ -312,7 +313,14 @@ export default function UserManagement() {
         {users.map(user => (
           <div key={user.email} className="p-4 flex justify-between items-center">
             <div>
-              <h3 className="font-medium">{user.email}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium">{user.email}</h3>
+                {user.status === 'pending' && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    Pending First Login
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-gray-600">
                 Role: {user.role}
               </p>
@@ -320,7 +328,7 @@ export default function UserManagement() {
                 {user.permissions.map(permission => {
                   const permissionInfo = AVAILABLE_PERMISSIONS.find(p => p.id === permission);
                   return (
-                    <span 
+                    <span
                       key={permission}
                       className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
                     >

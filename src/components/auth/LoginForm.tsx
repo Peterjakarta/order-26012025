@@ -19,7 +19,9 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
+      console.log('Attempting login for:', email);
       const success = await login(email, password);
+      console.log('Login result:', success);
       if (success) {
         // Navigate to the originally requested URL or default page
         const from = location.state?.from?.pathname || '/';
@@ -29,6 +31,10 @@ export default function LoginForm() {
       }
     } catch (err) {
       const error = err as Error;
+      console.error('Login error caught:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+
       if (error.message.includes('auth/user-not-found')) {
         setError('No account found with this email.');
       } else if (error.message.includes('auth/wrong-password')) {
@@ -36,7 +42,7 @@ export default function LoginForm() {
       } else if (error.message.includes('auth/invalid-email')) {
         setError('Please enter a valid email address.');
       } else {
-        setError('An error occurred. Please try again.');
+        setError(error.message || 'An error occurred. Please try again.');
       }
     } finally {
       setLoading(false);
