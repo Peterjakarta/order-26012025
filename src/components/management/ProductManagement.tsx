@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Package, Plus, Edit2, Trash2, Copy, Upload, FileSpreadsheet } from 'lucide-react';
+import { Package, Plus, Edit2, Trash2, Copy, Upload, FileSpreadsheet, Layers, FileText } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import ProductForm from './ProductForm';
 import BulkProductImport from './product-form/BulkProductImport';
+import BatchHACCPEdit from './product-form/BatchHACCPEdit';
+import BatchInternalCodeEdit from './product-form/BatchInternalCodeEdit';
 import type { Product, Recipe } from '../../types/types';
 import { generateProductsExcel, saveWorkbook } from '../../utils/excelGenerator';
 
@@ -13,11 +15,16 @@ export default function ProductManagement() {
   const [copyingProduct, setCopyingProduct] = useState<Product | null>(null);
   const [justCopied, setJustCopied] = useState<string | null>(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showBatchHACCP, setShowBatchHACCP] = useState(false);
+  const [showBatchInternalCode, setShowBatchInternalCode] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
 
   const handleSubmit = async (formData: any) => {
     try {
+      console.log('handleSubmit called with formData:', formData);
+
       if (editingProduct) {
+        console.log('Updating product:', editingProduct.id, 'with data:', formData.product);
         await updateProduct(editingProduct.id, formData.product);
         setEditingProduct(null);
       } else if (copyingProduct) {
@@ -94,7 +101,9 @@ export default function ProductManagement() {
       }
     } catch (error) {
       console.error('Error saving product:', error);
-      alert('Failed to save product. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error details:', errorMessage);
+      alert(`Failed to save product. Error: ${errorMessage}`);
     }
   };
 
@@ -167,6 +176,20 @@ export default function ProductManagement() {
             Bulk Import
           </button>
           <button
+            onClick={() => setShowBatchInternalCode(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-blue-300 text-blue-600 rounded-md hover:bg-blue-50"
+          >
+            <FileText className="w-4 h-4" />
+            Batch Edit Codes
+          </button>
+          <button
+            onClick={() => setShowBatchHACCP(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-pink-300 text-pink-600 rounded-md hover:bg-pink-50"
+          >
+            <Layers className="w-4 h-4" />
+            Batch Edit HACCP
+          </button>
+          <button
             onClick={() => setIsAddingProduct(true)}
             className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700"
           >
@@ -180,6 +203,14 @@ export default function ProductManagement() {
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <BulkProductImport onComplete={() => setShowBulkImport(false)} />
         </div>
+      )}
+
+      {showBatchHACCP && (
+        <BatchHACCPEdit onClose={() => setShowBatchHACCP(false)} />
+      )}
+
+      {showBatchInternalCode && (
+        <BatchInternalCodeEdit onClose={() => setShowBatchInternalCode(false)} />
       )}
 
       {isAddingProduct && (

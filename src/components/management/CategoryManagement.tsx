@@ -6,17 +6,19 @@ import CategoryForm from './CategoryForm';
 import AddCategoryForm from './AddCategoryForm';
 import CategoryProducts from './category/CategoryProducts';
 import BulkCategoryImport from './category/BulkCategoryImport';
+import CategoryExportOptionsDialog, { CategoryExportOptions } from './CategoryExportOptionsDialog';
 import type { ProductCategory } from '../../types/types';
 import { generateCategoriesExcel, saveWorkbook } from '../../utils/excelGenerator';
 
 export default function CategoryManagement() {
   const { categories, updateCategory, deleteCategory } = useCategories();
-  const { categoryOrder, reorderCategories, products } = useStore();
+  const { categoryOrder, reorderCategories, products, ingredients } = useStore();
   const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [isBulkImporting, setIsBulkImporting] = useState(false);
   const [draggedCategory, setDraggedCategory] = useState<string | null>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   const handleDragStart = (category: string, e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move';
@@ -58,17 +60,40 @@ export default function CategoryManagement() {
     setDraggedCategory(null);
   };
   
-  const handleExportToExcel = () => {
+  const handleExportToExcel = (options: CategoryExportOptions) => {
     try {
+      // Determine which categories to export
+      const categoriesToExport = options.selectedCategories.length > 0
+        ? options.selectedCategories
+        : categoryOrder;
+
       // Count products in each category
       const productsCount: Record<string, number> = {};
-      categoryOrder.forEach(categoryId => {
+      categoriesToExport.forEach(categoryId => {
         productsCount[categoryId] = products.filter(p => p.category === categoryId).length;
       });
-      
-      // Pass all products to include detailed product information
-      const wb = generateCategoriesExcel(categories, categoryOrder, productsCount, products);
-      saveWorkbook(wb, 'categories-with-products.xlsx');
+
+      // Filter products if needed
+      const productsToExport = options.includeProducts
+        ? products.filter(p => categoriesToExport.includes(p.category))
+        : [];
+
+      // Pass products based on options
+      const wb = generateCategoriesExcel(
+        categories,
+        categoriesToExport,
+        productsCount,
+        options.includeProductDetails ? productsToExport : [],
+        ingredients,
+        options.includeHACCP
+      );
+
+      const filename = options.selectedCategories.length > 0
+        ? `categories-${options.selectedCategories.length}.xlsx`
+        : 'all-categories.xlsx';
+
+      saveWorkbook(wb, filename);
+      setShowExportDialog(false);
     } catch (error) {
       console.error('Error exporting categories:', error);
       alert('Failed to export categories. Please try again.');
@@ -84,7 +109,7 @@ export default function CategoryManagement() {
         </h2>
         <div className="flex gap-2">
           <button
-            onClick={handleExportToExcel}
+            onClick={() => setShowExportDialog(true)}
             className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -180,6 +205,14 @@ export default function CategoryManagement() {
           );
         })}
       </div>
+
+      <CategoryExportOptionsDialog
+        isOpen={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        onExport={handleExportToExcel}
+        categories={categories}
+        categoryOrder={categoryOrder}
+      />
     </div>
   );
 }

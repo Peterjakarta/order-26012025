@@ -364,7 +364,7 @@ export function generateProductsExcel(products: Product[], categories: Record<st
 }
 
 // Function to generate Excel for categories list
-export function generateCategoriesExcel(categories: Record<string, { name: string }>, categoryOrder: string[], productsCount: Record<string, number>, allProducts: Product[] = []) {
+export function generateCategoriesExcel(categories: Record<string, { name: string }>, categoryOrder: string[], productsCount: Record<string, number>, allProducts: Product[] = [], ingredients: Ingredient[] = [], includeHACCP: boolean = false) {
   // Create workbook
   const wb = utils.book_new();
   
@@ -400,77 +400,188 @@ export function generateCategoriesExcel(categories: Record<string, { name: strin
   // Add categories worksheet to workbook
   utils.book_append_sheet(wb, wsCategories, sanitizeSheetName('Categories'));
   
-  // Create product worksheet for each category with products
+  // Create a separate worksheet for each individual product
   categoryOrder.forEach((categoryId) => {
     const categoryName = categories[categoryId]?.name || categoryId;
     const categoryProducts = allProducts.filter(p => p.category === categoryId);
-    
-    if (categoryProducts.length > 0) {
-      // Create product list header
-      const productHeaderRows = [
-        [`${categoryName} Products`],
+
+    categoryProducts.forEach((product) => {
+      // Create product detail header
+      const productDetailRows: any[] = [
+        ['Product Details'],
+        ['Category:', categoryName],
         ['Generated on:', new Date().toLocaleString()],
         [''],
-        ['Product Name', 'Description', 'Unit', 'Min Order', 'Price', 'Quantity Step']
+        ['Field', 'Value'],
+        ['Product Name', product.name],
+        ['Description', product.description || ''],
+        ['Unit', product.unit || ''],
+        ['Min Order', product.minOrder || ''],
+        ['Price', product.price !== undefined ? product.price.toFixed(2) : ''],
+        ['Quantity Step', product.quantityStep || ''],
+        ['Show Price', product.showPrice ? 'Yes' : 'No'],
+        ['Show Description', product.showDescription ? 'Yes' : 'No'],
+        ['Show Min Order', product.showMinOrder ? 'Yes' : 'No'],
+        ['Show Unit', product.showUnit ? 'Yes' : 'No']
       ];
-      
-      // Create product rows for this category
-      const productRows = categoryProducts.map(product => [
-        product.name,
-        product.description || '',
-        product.unit || '',
-        product.minOrder || '',
-        product.price !== undefined ? product.price.toFixed(2) : '',
-        product.quantityStep || ''
-      ]);
-      
-      // Combine rows
-      const allProductRows = [...productHeaderRows, ...productRows];
-      const wsProducts = utils.aoa_to_sheet(allProductRows);
-      
+
+      // Add HACCP information if requested and available
+      if (includeHACCP && product.haccp) {
+        productDetailRows.push([''], ['HACCP Information', '']);
+
+        if (product.haccp.internalProductionCode) {
+          productDetailRows.push(['Internal Production Code', product.haccp.internalProductionCode]);
+        }
+
+        if (product.haccp.productCategories) {
+          const categoryName = categories[product.haccp.productCategories]?.name || product.haccp.productCategories;
+          productDetailRows.push(['Product Categories', categoryName]);
+        }
+
+        if (product.haccp.productDescription) {
+          productDetailRows.push(['Product Description', product.haccp.productDescription]);
+        }
+
+        if (product.haccp.ingredients && product.haccp.ingredients.length > 0) {
+          const ingredientNames = product.haccp.ingredients
+            .map(id => ingredients.find(i => i.id === id)?.name || id)
+            .join(', ');
+          productDetailRows.push(['Ingredients', ingredientNames]);
+        }
+
+        if (product.haccp.shelfLifeWeeks) {
+          productDetailRows.push(['Shelf Life', `${product.haccp.shelfLifeWeeks} ${product.haccp.shelfLifeWeeks === 1 ? 'week' : 'weeks'}`]);
+        }
+
+        if (product.haccp.awValue) {
+          productDetailRows.push(['AW Value', product.haccp.awValue]);
+        }
+
+        if (product.haccp.storageTemperature) {
+          productDetailRows.push(['Storage Temperature', product.haccp.storageTemperature]);
+        }
+
+        if (product.haccp.storageHumidity) {
+          productDetailRows.push(['Storage Humidity', product.haccp.storageHumidity]);
+        }
+
+        if (product.haccp.allergens && product.haccp.allergens.length > 0) {
+          productDetailRows.push(['Allergens', product.haccp.allergens.join(', ')]);
+        }
+
+        productDetailRows.push([''], ['Packing Information', '']);
+
+        if (product.haccp.innerPackingId) {
+          const packingName = ingredients.find(i => i.id === product.haccp.innerPackingId)?.name || product.haccp.innerPackingId;
+          productDetailRows.push(['Inner Packing', packingName]);
+        }
+
+        if (product.haccp.outerPackingId) {
+          const packingName = ingredients.find(i => i.id === product.haccp.outerPackingId)?.name || product.haccp.outerPackingId;
+          productDetailRows.push(['Outer Packing', packingName]);
+        }
+
+        if (product.haccp.shippingPackingId) {
+          const packingName = ingredients.find(i => i.id === product.haccp.shippingPackingId)?.name || product.haccp.shippingPackingId;
+          productDetailRows.push(['Shipping Packing', packingName]);
+        }
+      }
+
+      const wsProduct = utils.aoa_to_sheet(productDetailRows);
+
       // Set column widths for better readability
       const productColWidths = [
-        { wch: 40 }, // Product Name
-        { wch: 60 }, // Description
-        { wch: 15 }, // Unit
-        { wch: 15 }, // Min Order
-        { wch: 15 }, // Price
-        { wch: 15 }  // Quantity Step
+        { wch: 20 }, // Field
+        { wch: 60 }  // Value
       ];
-      wsProducts['!cols'] = productColWidths;
-      
-      // Add worksheet to workbook - use safe sheet name
-      const safeCategoryName = sanitizeSheetName(categoryName);
-      
-      utils.book_append_sheet(wb, wsProducts, safeCategoryName);
-    }
+      wsProduct['!cols'] = productColWidths;
+
+      // Create a safe sheet name from product name
+      // Limit to 31 characters for Excel compatibility
+      let safeProductName = sanitizeSheetName(product.name);
+      if (safeProductName.length > 31) {
+        safeProductName = safeProductName.substring(0, 28) + '...';
+      }
+
+      utils.book_append_sheet(wb, wsProduct, safeProductName);
+    });
   });
   
   // Create a full products list worksheet
+  const productHeaderRow = ['Product Name', 'Category', 'Description', 'Unit', 'Min Order', 'Price', 'Quantity Step'];
+
+  if (includeHACCP) {
+    productHeaderRow.push(
+      'Internal Code',
+      'Product Categories',
+      'Product Description',
+      'Ingredients',
+      'Shelf Life (weeks)',
+      'AW Value',
+      'Storage Temp',
+      'Storage Humidity',
+      'Allergens',
+      'Inner Packing',
+      'Outer Packing',
+      'Shipping Packing'
+    );
+  }
+
   const productHeaderRows = [
     ['All Products'],
     ['Generated on:', new Date().toLocaleString()],
     [''],
-    ['Product Name', 'Category', 'Description', 'Unit', 'Min Order', 'Price', 'Quantity Step']
+    productHeaderRow
   ];
-  
+
   // Create product rows for all products
-  const productRows = allProducts.map(product => [
-    product.name,
-    categories[product.category]?.name || product.category,
-    product.description || '',
-    product.unit || '',
-    product.minOrder || '',
-    product.price !== undefined ? product.price.toFixed(2) : '',
-    product.quantityStep || ''
-  ]);
-  
+  const productRows = allProducts.map(product => {
+    const baseRow = [
+      product.name,
+      categories[product.category]?.name || product.category,
+      product.description || '',
+      product.unit || '',
+      product.minOrder || '',
+      product.price !== undefined ? product.price.toFixed(2) : '',
+      product.quantityStep || ''
+    ];
+
+    if (includeHACCP) {
+      const productCategoryName = product.haccp?.productCategories
+        ? (categories[product.haccp.productCategories]?.name || product.haccp.productCategories)
+        : '';
+
+      const ingredientNames = product.haccp?.ingredients && product.haccp.ingredients.length > 0
+        ? product.haccp.ingredients
+            .map(id => ingredients.find(i => i.id === id)?.name || id)
+            .join(', ')
+        : '';
+
+      baseRow.push(
+        product.haccp?.internalProductionCode || '',
+        productCategoryName,
+        product.haccp?.productDescription || '',
+        ingredientNames,
+        product.haccp?.shelfLifeWeeks || '',
+        product.haccp?.awValue || '',
+        product.haccp?.storageTemperature || '',
+        product.haccp?.storageHumidity || '',
+        product.haccp?.allergens?.join(', ') || '',
+        product.haccp?.innerPackingId ? (ingredients.find(i => i.id === product.haccp.innerPackingId)?.name || '') : '',
+        product.haccp?.outerPackingId ? (ingredients.find(i => i.id === product.haccp.outerPackingId)?.name || '') : '',
+        product.haccp?.shippingPackingId ? (ingredients.find(i => i.id === product.haccp.shippingPackingId)?.name || '') : ''
+      );
+    }
+
+    return baseRow;
+  });
+
   // Combine rows
   const allProductRows = [...productHeaderRows, ...productRows];
   const wsAllProducts = utils.aoa_to_sheet(allProductRows);
-  
+
   // Set column widths for better readability
-  const productColWidths = [
+  const productColWidths: any[] = [
     { wch: 40 }, // Product Name
     { wch: 25 }, // Category
     { wch: 60 }, // Description
@@ -479,6 +590,24 @@ export function generateCategoriesExcel(categories: Record<string, { name: strin
     { wch: 15 }, // Price
     { wch: 15 }  // Quantity Step
   ];
+
+  if (includeHACCP) {
+    productColWidths.push(
+      { wch: 20 }, // Internal Code
+      { wch: 25 }, // Product Categories
+      { wch: 50 }, // Product Description
+      { wch: 60 }, // Ingredients
+      { wch: 15 }, // Shelf Life
+      { wch: 12 }, // AW Value
+      { wch: 20 }, // Storage Temp
+      { wch: 20 }, // Storage Humidity
+      { wch: 40 }, // Allergens
+      { wch: 25 }, // Inner Packing
+      { wch: 25 }, // Outer Packing
+      { wch: 25 }  // Shipping Packing
+    );
+  }
+
   wsAllProducts['!cols'] = productColWidths;
   
   // Add worksheet to workbook

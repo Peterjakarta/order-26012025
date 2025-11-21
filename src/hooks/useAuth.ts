@@ -239,10 +239,12 @@ export function useAuth() {
         }
 
         console.log('Checking user document in Firestore...');
+        console.log('CODE VERSION: 2025-10-29-v2 - WITH STATUS FIX');
         // At this point, we have a valid userCredential
         // Get or create user document
         const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid));
         console.log('User document exists:', userDoc.exists());
+        console.log('User UID:', userCredential.user.uid);
 
         let userData: any;
         let needsDocumentUpdate = false;

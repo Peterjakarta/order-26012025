@@ -5,6 +5,7 @@ import { useStore } from '../../store/StoreContext';
 import ProductBasicInfo from './product-form/ProductBasicInfo';
 import ProductPricing from './product-form/ProductPricing';
 import ProductCategory from './product-form/ProductCategory';
+import ProductHACCP from './product-form/ProductHACCP';
 import type { Product, RecipeIngredient } from '../../types/types';
 
 interface ProductFormData {
@@ -86,6 +87,28 @@ export default function ProductForm({
       return;
     }
 
+    // Parse HACCP data
+    const haccpData = {
+      internalProductionCode: formData.get('haccp_internalProductionCode') as string || undefined,
+      productCategories: formData.get('haccp_productCategories') as string || undefined,
+      productDescription: formData.get('haccp_productDescription') as string || undefined,
+      ingredients: formData.get('haccp_ingredients') ? JSON.parse(formData.get('haccp_ingredients') as string) : undefined,
+      shelfLifeWeeks: formData.get('haccp_shelfLifeWeeks') ? parseInt(formData.get('haccp_shelfLifeWeeks') as string, 10) : undefined,
+      awValue: formData.get('haccp_awValue') as string || undefined,
+      storageTemperature: formData.get('haccp_storageTemperature') as string || undefined,
+      storageHumidity: formData.get('haccp_storageHumidity') as string || undefined,
+      allergens: formData.get('haccp_allergens') ? JSON.parse(formData.get('haccp_allergens') as string) : undefined,
+      innerPackingId: formData.get('haccp_innerPackingId') as string || undefined,
+      innerPackingHasDoc: formData.get('haccp_innerPackingHasDoc') === 'on',
+      outerPackingId: formData.get('haccp_outerPackingId') as string || undefined,
+      outerPackingHasDoc: formData.get('haccp_outerPackingHasDoc') === 'on',
+      shippingPackingId: formData.get('haccp_shippingPackingId') as string || undefined,
+      shippingPackingHasDoc: formData.get('haccp_shippingPackingHasDoc') === 'on',
+    };
+
+    // Only include HACCP if at least one field has a value
+    const hasHaccpData = Object.values(haccpData).some(val => val !== undefined && val !== '');
+
     const productData: Omit<Product, 'id'> = {
       name,
       category: category || '',
@@ -97,7 +120,8 @@ export default function ProductForm({
       showPrice,
       showDescription,
       showMinOrder,
-      showUnit
+      showUnit,
+      haccp: hasHaccpData ? haccpData : undefined
     };
 
     const submitData: ProductFormData = {
@@ -280,6 +304,15 @@ export default function ProductForm({
       )}
       {(itemType === 'product' || itemType === 'both' || (product && !isCopying)) && (
         <ProductPricing product={product} />
+      )}
+
+      {(itemType === 'product' || itemType === 'both' || (product && !isCopying)) && (
+        <div className="border-t pt-6">
+          <ProductHACCP
+            product={product}
+            selectedCategory={initialCategory || product?.category || ''}
+          />
+        </div>
       )}
 
       {isAddingNew && itemType !== 'ingredient' && (

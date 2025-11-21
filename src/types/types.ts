@@ -79,6 +79,24 @@ export interface Product {
   showDescription: boolean;
   showMinOrder: boolean;
   showUnit: boolean;
+  // HACCP Information
+  haccp?: {
+    internalProductionCode?: string;
+    productCategories?: string; // Reference to category ID
+    productDescription?: string;
+    ingredients?: string[]; // Array of ingredient IDs from recipe
+    shelfLifeWeeks?: number; // 1-20 weeks, or 26, 52, 78, 104 for months
+    awValue?: string;
+    storageTemperature?: string;
+    storageHumidity?: string;
+    innerPackingId?: string; // Reference to ingredient ID
+    innerPackingHasDoc?: boolean; // Whether inner packing has documentation
+    outerPackingId?: string; // Reference to ingredient ID
+    outerPackingHasDoc?: boolean; // Whether outer packing has documentation
+    shippingPackingId?: string; // Reference to ingredient ID
+    shippingPackingHasDoc?: boolean; // Whether shipping packing has documentation
+    allergens?: string[]; // Array of allergen types
+  };
 }
 
 export interface Order {

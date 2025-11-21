@@ -115,8 +115,38 @@ interface StoreContextType extends StoreState {
 
 const StoreContext = createContext<StoreContextType | null>(null);
 
+function removeUndefinedFields(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return undefined;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj;
+  }
+
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const key in obj) {
+      const value = obj[key];
+      if (value !== undefined) {
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          const cleanedNested = removeUndefinedFields(value);
+          if (cleanedNested !== undefined && Object.keys(cleanedNested).length > 0) {
+            cleaned[key] = cleanedNested;
+          }
+        } else {
+          cleaned[key] = value;
+        }
+      }
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  }
+
+  return obj;
+}
+
 function validateProduct(data: any): Omit<Product, 'id'> {
-  return {
+  const product: any = {
     name: String(data.name || ''),
     category: String(data.category || ''),
     description: String(data.description || ''),
@@ -129,6 +159,15 @@ function validateProduct(data: any): Omit<Product, 'id'> {
     showUnit: Boolean(data.showUnit),
     showMinOrder: Boolean(data.showMinOrder)
   };
+
+  if (data.haccp) {
+    const cleanedHaccp = removeUndefinedFields(data.haccp);
+    if (cleanedHaccp && Object.keys(cleanedHaccp).length > 0) {
+      product.haccp = cleanedHaccp;
+    }
+  }
+
+  return product;
 }
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
@@ -271,16 +310,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateProduct = useCallback(async (id: string, productData: Omit<Product, 'id'>) => {
     try {
+      console.log('updateProduct called with:', { id, productData });
       const validatedData = validateProduct(productData);
+      console.log('After validation:', validatedData);
+
       const productRef = doc(db, COLLECTIONS.PRODUCTS, id);
-      await updateDoc(productRef, {
+      const dataToUpdate = {
         ...validatedData,
         updatedAt: serverTimestamp()
-      });
+      };
+
+      console.log('Updating Firestore with:', dataToUpdate);
+      await updateDoc(productRef, dataToUpdate);
+      console.log('Successfully updated product in Firestore');
 
       await logProductUpdate(validatedData.name, id);
     } catch (error) {
-      console.error('Error updating product:', error);
+      console.error('Error updating product in StoreContext:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       throw error;
     }
   }, []);
