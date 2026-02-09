@@ -18,7 +18,7 @@ interface MenuItem {
   label: string;
   icon?: React.ReactNode;
   requiredPermissions: string[];
-  element: React.ReactNode;
+  element: () => React.ReactNode;
 }
 
 export default function Management() {
@@ -31,54 +31,54 @@ export default function Management() {
       label: "Orders",
       icon: <Package2 className="w-4 h-4" />,
       requiredPermissions: ['manage_orders'],
-      element: <OrderList filter="pending" />
+      element: () => <OrderList />
     },
     {
       path: "/management/completed",
       label: "Completed",
       icon: <CheckCircle2 className="w-4 h-4" />,
       requiredPermissions: ['manage_orders'],
-      element: <CompletedOrders />
+      element: () => <CompletedOrders />
     },
     {
       path: "/management/production",
       label: "Production",
       icon: <Calendar className="w-4 h-4" />,
       requiredPermissions: ['manage_orders'],
-      element: <ProductionSchedule />
+      element: () => <ProductionSchedule />
     },
     {
       path: "/management/products",
       label: "Products",
       requiredPermissions: ['manage_products'],
-      element: <ProductManagement />
+      element: () => <ProductManagement />
     },
     {
       path: "/management/categories",
       label: "Categories",
       requiredPermissions: ['manage_products'],
-      element: <CategoryManagement />
+      element: () => <CategoryManagement />
     },
     {
       path: "/management/pricing",
       label: "Pricing",
       icon: <Calculator className="w-4 h-4" />,
       requiredPermissions: ['manage_products'],
-      element: <PricingDashboard />
+      element: () => <PricingDashboard />
     },
     {
       path: "/management/logbook",
       label: "Logbook",
       icon: <ClipboardList className="w-4 h-4" />,
       requiredPermissions: ['manage_users'],
-      element: <Logbook />
+      element: () => <Logbook />
     },
     {
       path: "/management/settings",
       label: "Settings",
       icon: <Settings className="w-4 h-4" />,
       requiredPermissions: [], // Empty array means all authenticated users can access
-      element: <SettingsPage />
+      element: () => <SettingsPage />
     }
   ];
 
@@ -117,12 +117,12 @@ export default function Management() {
       </nav>
 
       <div className="bg-white rounded-xl shadow-sm p-6">
-        <Routes>
+        <Routes key={location.pathname}>
           {authorizedMenuItems.map(item => (
-            <Route 
+            <Route
               key={item.path}
-              path={item.path === "/management/orders" ? "" : item.path.replace("/management/", "")} 
-              element={item.element} 
+              path={item.path === "/management/orders" ? "" : item.path.replace("/management/", "")}
+              element={item.element()}
             />
           ))}
           {/* Special route for production with ID */}
@@ -138,9 +138,9 @@ export default function Management() {
             </>
           )}
           {/* Redirect to first authorized menu item if no match */}
-          <Route 
-            path="*" 
-            element={<Navigate to={authorizedMenuItems[0].path} replace />} 
+          <Route
+            path="*"
+            element={<Navigate to={authorizedMenuItems[0].path} replace />}
           />
         </Routes>
       </div>

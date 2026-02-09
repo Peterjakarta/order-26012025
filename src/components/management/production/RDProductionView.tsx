@@ -3,6 +3,7 @@ import { Beaker, Eye, Calendar, FileDown, Edit2, Trash2, ChevronRight, ChevronDo
 import { Order } from '../../../types/types';
 import RDProductDetailsPopup from './RDProductDetailsPopup';
 import { useOrders } from '../../../hooks/useOrders';
+import { useStore } from '../../../store/StoreContext';
 import { getBranchStyles } from '../../../utils/branchStyles';
 import { generateOrderExcel, saveWorkbook } from '../../../utils/excelGenerator';
 import { generateOrderPDF } from '../../../utils/pdfGenerator';
@@ -16,6 +17,7 @@ interface RDProductionViewProps {
 
 export default function RDProductionView({ rdOrders, onRefresh }: RDProductionViewProps) {
   const { updateOrderStatus, removeOrder, updateOrderProduction } = useOrders();
+  const { products } = useStore();
   const [viewingProduct, setViewingProduct] = useState<any>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [completingOrder, setCompletingOrder] = useState<Order | null>(null);
@@ -88,7 +90,7 @@ export default function RDProductionView({ rdOrders, onRefresh }: RDProductionVi
 
   const handleDownloadExcel = (order: Order) => {
     try {
-      const wb = generateOrderExcel(order, []);
+      const wb = generateOrderExcel(order, products);
       saveWorkbook(wb, `rd-production-${order.id.slice(0, 8)}.xlsx`);
     } catch (error) {
       console.error('Error generating Excel:', error);
@@ -97,7 +99,7 @@ export default function RDProductionView({ rdOrders, onRefresh }: RDProductionVi
 
   const handleDownloadPDF = (order: Order) => {
     try {
-      const doc = generateOrderPDF(order, []);
+      const doc = generateOrderPDF(order, products);
       doc.save(`rd-production-${order.id.slice(0, 8)}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);

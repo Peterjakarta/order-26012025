@@ -3,6 +3,7 @@ import { Package2, AlertCircle, Calendar, FileDown, RefreshCw, Beaker } from 'lu
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '../../hooks/useOrders';
 import { useBranches } from '../../hooks/useBranches';
+import { useStore } from '../../store/StoreContext';
 import OrderItem from './order/OrderItem';
 import { useOrderActions } from '../../hooks/useOrderActions';
 import { generateOrderExcel, saveWorkbook } from '../../utils/excelGenerator';
@@ -14,29 +15,34 @@ import RDProductDetailsPopup from './production/RDProductDetailsPopup';
 export default function OrderList() {
   const { orders, loading, error, removeOrder, updateOrderStatus, refreshOrders } = useOrders();
   const { branches } = useBranches();
+  const { products } = useStore();
   const { downloadPDF } = useOrderActions();
   const navigate = useNavigate();
   const location = useLocation();
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [viewingRDProduct, setViewingRDProduct] = useState<any>(null);
+  const [hasInitialized, setHasInitialized] = useState(false);
+
+  // Initialize data on first mount
+  useEffect(() => {
+    const initializeData = async () => {
+      if (!hasInitialized) {
+        setIsRefreshing(true);
+        await refreshOrders();
+        setIsRefreshing(false);
+        setHasInitialized(true);
+      }
+    };
+
+    initializeData();
+  }, [refreshOrders, hasInitialized]);
 
   // Reset selected orders when orders change
   useEffect(() => {
     setSelectedOrders(new Set());
   }, [orders]);
 
-  // Refresh orders when navigating to this page
-  useEffect(() => {
-    const refresh = async () => {
-      setIsRefreshing(true);
-      await refreshOrders();
-      setIsRefreshing(false);
-    };
-    
-    refresh();
-  }, [refreshOrders, location.pathname]);
-  
   // Manual refresh handler
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -88,7 +94,7 @@ export default function OrderList() {
 
   const handleDownloadExcel = (order: Order) => {
     try {
-      const wb = generateOrderExcel(order, orders);
+      const wb = generateOrderExcel(order, products);
       saveWorkbook(wb, `order-${order.id.slice(0, 8)}.xlsx`);
     } catch (err) {
       console.error('Error generating Excel:', err);
@@ -97,7 +103,7 @@ export default function OrderList() {
 
   const handleDownloadPDF = (order: Order) => {
     try {
-      const doc = generateOrderPDF(order, orders);
+      const doc = generateOrderPDF(order, products);
       doc.save(`order-${order.id.slice(0, 8)}.pdf`);
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -218,12 +224,10 @@ export default function OrderList() {
                   />
                 </div>
                 <div className="pl-12">
-                  <OrderItem 
-                    order={order} 
+                  <OrderItem
+                    order={order}
                     onRemove={() => removeOrder(order.id)}
                     onUpdateStatus={handleUpdateStatus}
-                    onDownloadExcel={handleDownloadExcel}
-                    onDownloadPDF={handleDownloadPDF}
                     onReopen={() => handleReopenOrder(order.id)}
                     selected={selectedOrders.has(order.id)}
                     extraActions={(order) => (

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, FileDown, FileSpreadsheet, Scale, ChevronLeft, Trash2, Eye } from 'lucide-react';
+import { ChevronDown, ChevronRight, Scale, ChevronLeft, Trash2, Eye } from 'lucide-react';
 import type { Order } from '../../../types/types';
 import OrderDetails from './OrderDetails';
 import OrderProducts from './OrderProducts';
@@ -14,22 +14,18 @@ interface OrderItemProps {
   selected?: boolean;
   onSelect?: () => void;
   extraActions?: (order: Order) => React.ReactNode;
-  onDownloadExcel?: (order: Order) => void;
-  onDownloadPDF?: (order: Order) => void;
   onReopen?: (order: Order) => void;
   onViewDetails?: (order: Order) => void;
 }
 
-export default function OrderItem({ 
-  order, 
+export default function OrderItem({
+  order,
   onRemove,
   onUpdateStatus,
   onToggleStock,
   selected,
   onSelect,
   extraActions,
-  onDownloadExcel,
-  onDownloadPDF,
   onReopen,
   onViewDetails
 }: OrderItemProps) {
@@ -107,22 +103,6 @@ export default function OrderItem({
                 title="View order details"
               >
                 <Eye className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={(e) => handleButtonClick(e, () => onDownloadExcel?.(order))}
-                className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm bg-indigo-500 hover:bg-indigo-600 text-white rounded-md"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                Excel
-              </button>
-
-              <button
-                onClick={(e) => handleButtonClick(e, () => onDownloadPDF?.(order))}
-                className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-500 hover:bg-purple-600 text-white rounded-md"
-              >
-                <FileDown className="w-4 h-4" />
-                PDF
               </button>
 
               <button

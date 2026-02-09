@@ -272,13 +272,14 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
       '', // Ready
       '', // Shell
       '', // Ganache
-      ''  // Closed
+      '', // Closed
+      ''  // AW
     ];
   });
 
   autoTable(doc, {
     startY: 45,
-    head: [['Product', 'Ordered', 'Mould', 'Produced', 'Rejected', 'Spray', 'Ready', 'Shell', 'Ganache', 'Closed']],
+    head: [['Product', 'Ordered', 'Mould', 'Produced', 'Rejected', 'Spray', 'Ready', 'Shell', 'Ganache', 'Closed', 'AW']],
     body: tableData,
     theme: 'striped',
     headStyles: {
@@ -289,16 +290,17 @@ export function generateProductionChecklistPDF(order: Order, products: Product[]
       cellPadding: 4
     },
     columnStyles: {
-      0: { cellWidth: 27 },  // Product
-      1: { cellWidth: 27 },  // Ordered
-      2: { cellWidth: 27 },  // Mould
-      3: { cellWidth: 27 },  // Produced  
-      4: { cellWidth: 27 },  // Rejected
-      5: { cellWidth: 27 },  // Spray
-      6: { cellWidth: 27 },  // Ready
-      7: { cellWidth: 27 },  // Shell
-      8: { cellWidth: 27 },  // Ganache
-      9: { cellWidth: 27 }   // Closed
+      0: { cellWidth: 25 },  // Product
+      1: { cellWidth: 25 },  // Ordered
+      2: { cellWidth: 25 },  // Mould
+      3: { cellWidth: 25 },  // Produced
+      4: { cellWidth: 25 },  // Rejected
+      5: { cellWidth: 25 },  // Spray
+      6: { cellWidth: 25 },  // Ready
+      7: { cellWidth: 25 },  // Shell
+      8: { cellWidth: 25 },  // Ganache
+      9: { cellWidth: 25 },  // Closed
+      10: { cellWidth: 25 }  // AW
     },
     styles: {
       fontSize: 9,
