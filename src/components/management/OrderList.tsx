@@ -94,19 +94,31 @@ export default function OrderList() {
 
   const handleDownloadExcel = (order: Order) => {
     try {
+      if (!products || products.length === 0) {
+        console.error('Products not loaded');
+        alert('Unable to generate Excel. Product data is not loaded. Please refresh the page.');
+        return;
+      }
       const wb = generateOrderExcel(order, products);
       saveWorkbook(wb, `order-${order.id.slice(0, 8)}.xlsx`);
     } catch (err) {
       console.error('Error generating Excel:', err);
+      alert('Failed to generate Excel file. Please try again.');
     }
   };
 
   const handleDownloadPDF = (order: Order) => {
     try {
+      if (!products || products.length === 0) {
+        console.error('Products not loaded');
+        alert('Unable to generate PDF. Product data is not loaded. Please refresh the page.');
+        return;
+      }
       const doc = generateOrderPDF(order, products);
       doc.save(`order-${order.id.slice(0, 8)}.pdf`);
     } catch (err) {
       console.error('Error generating PDF:', err);
+      alert('Failed to generate PDF file. Please try again.');
     }
   };
 
@@ -228,6 +240,8 @@ export default function OrderList() {
                     order={order}
                     onRemove={() => removeOrder(order.id)}
                     onUpdateStatus={handleUpdateStatus}
+                    onDownloadExcel={handleDownloadExcel}
+                    onDownloadPDF={handleDownloadPDF}
                     onReopen={() => handleReopenOrder(order.id)}
                     selected={selectedOrders.has(order.id)}
                     extraActions={(order) => (

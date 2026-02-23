@@ -168,6 +168,11 @@ export default function CompletedOrders() {
 
   const handleDownloadExcel = (order: Order) => {
     try {
+      if (!products || products.length === 0) {
+        console.error('Products not loaded');
+        setError('Unable to generate Excel. Product data is not loaded. Please refresh the page.');
+        return;
+      }
       const wb = generateOrderExcel(order, products, order.poNumber || poNumber);
       saveWorkbook(wb, `order-${order.orderNumber || order.id.slice(0, 8)}.xlsx`);
     } catch (err) {
@@ -178,6 +183,11 @@ export default function CompletedOrders() {
 
   const handleDownloadPDF = (order: Order) => {
     try {
+      if (!products || products.length === 0) {
+        console.error('Products not loaded');
+        setError('Unable to generate PDF. Product data is not loaded. Please refresh the page.');
+        return;
+      }
       const doc = generateOrderPDF(order, products, order.poNumber || poNumber);
       doc.save(`order-${order.orderNumber || order.id.slice(0, 8)}.pdf`);
     } catch (err) {
@@ -640,8 +650,8 @@ export default function CompletedOrders() {
                         />
                       </div>
                       <div className="pl-12">
-                        <OrderItem 
-                          order={order} 
+                        <OrderItem
+                          order={order}
                           onRemove={() => removeOrder(order.id)}
                           onUpdateStatus={handleUpdateStatus}
                           onDownloadExcel={handleDownloadExcel}

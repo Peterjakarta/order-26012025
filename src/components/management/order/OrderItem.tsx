@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Scale, ChevronLeft, Trash2, Eye } from 'lucide-react';
+import { ChevronDown, ChevronRight, Scale, ChevronLeft, Trash2, Eye, FileSpreadsheet, FileText } from 'lucide-react';
 import type { Order } from '../../../types/types';
 import OrderDetails from './OrderDetails';
 import OrderProducts from './OrderProducts';
@@ -16,6 +16,8 @@ interface OrderItemProps {
   extraActions?: (order: Order) => React.ReactNode;
   onReopen?: (order: Order) => void;
   onViewDetails?: (order: Order) => void;
+  onDownloadExcel?: (order: Order) => void;
+  onDownloadPDF?: (order: Order) => void;
 }
 
 export default function OrderItem({
@@ -27,7 +29,9 @@ export default function OrderItem({
   onSelect,
   extraActions,
   onReopen,
-  onViewDetails
+  onViewDetails,
+  onDownloadExcel,
+  onDownloadPDF
 }: OrderItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const styles = getBranchStyles(order.branchId);
@@ -97,6 +101,26 @@ export default function OrderItem({
             )}
 
             <div className="flex items-center gap-2">
+              {onDownloadExcel && (
+                <button
+                  onClick={(e) => handleButtonClick(e, () => onDownloadExcel(order))}
+                  className="p-1.5 text-green-600 hover:text-green-700 rounded-full hover:bg-green-50"
+                  title="Download Excel"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                </button>
+              )}
+
+              {onDownloadPDF && (
+                <button
+                  onClick={(e) => handleButtonClick(e, () => onDownloadPDF(order))}
+                  className="p-1.5 text-red-600 hover:text-red-700 rounded-full hover:bg-red-50"
+                  title="Download PDF"
+                >
+                  <FileText className="w-4 h-4" />
+                </button>
+              )}
+
               <button
                 onClick={(e) => handleButtonClick(e, () => onViewDetails?.(order))}
                 className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"

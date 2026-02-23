@@ -24,9 +24,28 @@ function sanitizeSheetName(name: string): string {
 
 // Function to generate Excel for orders
 export function generateOrderExcel(order: Order, products: Product[], poNumber?: string) {
+  // Validate inputs
+  if (!order) {
+    console.error('generateOrderExcel: order is null or undefined');
+    throw new Error('Order data is required');
+  }
+
+  if (!products || products.length === 0) {
+    console.error('generateOrderExcel: products array is empty or undefined');
+    throw new Error('Products data is required');
+  }
+
+  if (!order.products || order.products.length === 0) {
+    console.error('generateOrderExcel: order has no products');
+    throw new Error('Order has no products');
+  }
+
+  console.log('Generating Excel for order:', order.id, 'with', order.products.length, 'products');
+  console.log('Available products:', products.length);
+
   // Get branch name using helper function
   const branchName = getBranchName(order.branchId);
-  
+
   // Prepare header rows
   const headerRows = [
     ['Order Details'],
@@ -39,10 +58,27 @@ export function generateOrderExcel(order: Order, products: Product[], poNumber?:
     ['Product', 'Ordered', 'Produced', 'Stock', 'Reject', 'Reject Notes', 'Production Date', 'Expiry Date', 'Mould']
   ];
 
+  // Debug: Log all product IDs in the order
+  console.log('Order product IDs:', order.products.map(p => p.productId));
+
+  // Debug: Log all available product IDs
+  console.log('Available product IDs:', products.map(p => p.id));
+
   // Prepare product rows
-  const productRows = order.products.map(item => {
+  const productRows = order.products.map((item, index) => {
+    console.log(`Processing order item ${index + 1}:`, {
+      productId: item.productId,
+      quantity: item.quantity
+    });
+
     const product = products.find(p => p.id === item.productId);
-    if (!product) return [];
+    if (!product) {
+      console.error('❌ Product not found for ID:', item.productId);
+      console.error('Available products:', products.map(p => ({ id: p.id, name: p.name })));
+      return [];
+    }
+
+    console.log('✓ Found product:', product.name);
 
     const mouldInfo = calculateMouldCount(product.category, item.quantity);
     const showMould = isBonBonCategory(product.category) || isPralinesCategory(product.category);
@@ -59,7 +95,14 @@ export function generateOrderExcel(order: Order, products: Product[], poNumber?:
       expiryDate ? expiryDate.toLocaleDateString() : '-',
       showMould ? mouldInfo : '-'
     ];
-  });
+  }).filter(row => row.length > 0); // Filter out empty rows
+
+  console.log('Generated', productRows.length, 'product rows');
+
+  if (productRows.length === 0) {
+    console.error('⚠️ WARNING: No product rows were generated!');
+    console.error('This means no matching products were found for the order items.');
+  }
 
   // Add notes if present
   const notesRows = order.notes ? [

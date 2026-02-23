@@ -5,6 +5,7 @@ import UserManagement from './UserManagement';
 import BackupRestore from './BackupRestore';
 import DataMigration from './DataMigration';
 import VersionInfo from './VersionInfo';
+import BranchManagement from '../branch/BranchManagement';
 import { useAuth } from '../../../hooks/useAuth';
 
 export default function Settings() {
@@ -23,9 +24,8 @@ export default function Settings() {
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="migration">Data Migration</TabsTrigger>
           <TabsTrigger value="version">Version Info</TabsTrigger>
-          {canManageUsers && (
-            <TabsTrigger value="users">User Management</TabsTrigger>
-          )}
+          {canManageUsers && <TabsTrigger value="branches">Branch Management</TabsTrigger>}
+          {canManageUsers && <TabsTrigger value="users">User Management</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="password">
@@ -51,6 +51,14 @@ export default function Settings() {
             <VersionInfo />
           </div>
         </TabsContent>
+
+        {canManageUsers && (
+          <TabsContent value="branches">
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <BranchManagement />
+            </div>
+          </TabsContent>
+        )}
 
         {canManageUsers && (
           <TabsContent value="users">
