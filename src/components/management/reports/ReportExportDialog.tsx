@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, FileDown, FileSpreadsheet, File as FilePdf, AlertCircle, Check, BookOpen } from 'lucide-react';
+import { X, FileDown, FileSpreadsheet, File as FilePdf, AlertCircle, Check, BookOpen, Calendar } from 'lucide-react';
 import { Order, Product, Recipe, Ingredient } from '../../../types/types';
 
 export interface ReportExportOptions {
@@ -12,7 +12,7 @@ export interface ReportExportOptions {
     qualityControl: boolean;
     notes: boolean;
   };
-  organization: 'individual' | 'consolidated';
+  organization: 'individual' | 'consolidated' | 'monthly';
   format: 'detailed' | 'summary' | 'custom';
   fileType: 'excel' | 'pdf';
 }
@@ -285,10 +285,10 @@ export default function ReportExportDialog({
           <div className="p-6 space-y-6">
             <div>
               <h3 className="font-medium text-gray-700 mb-4">Report Organization</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <label className={`flex flex-col items-center p-4 rounded-lg border cursor-pointer transition-colors ${
-                  options.organization === 'individual' 
-                    ? 'bg-pink-50 border-pink-300' 
+                  options.organization === 'individual'
+                    ? 'bg-pink-50 border-pink-300'
                     : 'hover:bg-gray-50 border-gray-200'
                 }`}>
                   <input
@@ -306,8 +306,27 @@ export default function ReportExportDialog({
                 </label>
 
                 <label className={`flex flex-col items-center p-4 rounded-lg border cursor-pointer transition-colors ${
-                  options.organization === 'consolidated' 
-                    ? 'bg-pink-50 border-pink-300' 
+                  options.organization === 'monthly'
+                    ? 'bg-pink-50 border-pink-300'
+                    : 'hover:bg-gray-50 border-gray-200'
+                }`}>
+                  <input
+                    type="radio"
+                    name="organization"
+                    checked={options.organization === 'monthly'}
+                    onChange={() => setOptions(prev => ({ ...prev, organization: 'monthly' }))}
+                    className="sr-only"
+                  />
+                  <div className="h-20 w-20 mb-4 flex items-center justify-center bg-pink-100 rounded-lg">
+                    <Calendar className="w-10 h-10 text-pink-500" />
+                  </div>
+                  <span className="font-medium">Monthly Reports</span>
+                  <p className="text-xs text-center text-gray-500 mt-2">Separate tab for each month in date range</p>
+                </label>
+
+                <label className={`flex flex-col items-center p-4 rounded-lg border cursor-pointer transition-colors ${
+                  options.organization === 'consolidated'
+                    ? 'bg-pink-50 border-pink-300'
                     : 'hover:bg-gray-50 border-gray-200'
                 }`}>
                   <input
@@ -474,9 +493,11 @@ export default function ReportExportDialog({
                 <div>
                   <h3 className="font-medium text-gray-700 mb-2">Organization</h3>
                   <p className="text-sm">
-                    {options.organization === 'individual' 
-                      ? 'Individual Orders (Separate)' 
-                      : 'Consolidated Summary (Combined)'}
+                    {options.organization === 'individual'
+                      ? 'Individual Orders (Separate)'
+                      : options.organization === 'monthly'
+                        ? 'Monthly Reports (By Month)'
+                        : 'Consolidated Summary (Combined)'}
                   </p>
                 </div>
                 

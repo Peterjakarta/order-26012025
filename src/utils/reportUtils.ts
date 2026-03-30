@@ -291,11 +291,178 @@ export function generateReportExcel(
   const ws = utils.aoa_to_sheet(summaryData);
   utils.book_append_sheet(wb, ws, 'Report Summary');
 
+  // If 'monthly' organization is selected, create a sheet for each month
+  if (options.organization === 'monthly') {
+    // Group orders by month
+    const ordersByMonth = orders.reduce((acc, order) => {
+      const completedDate = new Date(order.completedAt || order.updatedAt);
+      const monthKey = `${completedDate.getFullYear()}-${String(completedDate.getMonth() + 1).padStart(2, '0')}`;
+      const monthName = completedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      if (!acc[monthKey]) {
+        acc[monthKey] = {
+          monthName,
+          orders: []
+        };
+      }
+
+      acc[monthKey].orders.push(order);
+      return acc;
+    }, {} as Record<string, { monthName: string; orders: Order[] }>);
+
+    // Create a sheet for each month
+    Object.entries(ordersByMonth)
+      .sort((a, b) => b[0].localeCompare(a[0])) // Sort by month (newest first)
+      .forEach(([monthKey, { monthName, orders: monthOrders }]) => {
+        // Generate report data for this month
+        const monthReportData = generateReport(monthOrders, products, recipes, ingredients);
+
+        // Build monthly sheet data
+        const monthData: any[][] = [
+          [`${monthName} Production Report`],
+          ['Generated on:', new Date().toLocaleString()],
+          ['']
+        ];
+
+        // Key Metrics
+        monthData.push(['Key Metrics']);
+
+        if (options.content.materialCosts || options.content.productionCosts || options.content.overheadCosts) {
+          const costRows = [];
+
+          if (options.content.materialCosts) {
+            costRows.push(['Material Costs:', formatIDR(monthReportData.materialCost)]);
+          }
+
+          if (options.content.productionCosts) {
+            costRows.push(['Production Costs:', formatIDR(monthReportData.productionCost)]);
+          }
+
+          if (options.content.overheadCosts) {
+            costRows.push(['Overhead Costs:', formatIDR(monthReportData.overheadCost)]);
+          }
+
+          costRows.push(['Total Cost:', formatIDR(monthReportData.totalCost)]);
+          monthData.push(...costRows);
+        }
+
+        if (options.content.qualityControl) {
+          monthData.push(
+            ['Total Rejects:', monthReportData.totalRejects],
+            ['Reject Rate:', `${monthReportData.rejectRate.toFixed(2)}%`],
+            ['Production Efficiency:', `${monthReportData.productionEfficiency.toFixed(2)}%`]
+          );
+        }
+
+        monthData.push(['']);
+
+        // Product Summary
+        if (options.content.products) {
+          monthData.push(['Product Summary']);
+
+          const productHeaderRow = ['Product', 'Quantity Produced'];
+          if (options.content.qualityControl) productHeaderRow.push('Rejects');
+          productHeaderRow.push('Unit');
+
+          monthData.push(productHeaderRow);
+
+          Object.entries(monthReportData.totalProducts).forEach(([productId, quantity]) => {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+
+            const productRow = [
+              product.name,
+              quantity
+            ];
+
+            if (options.content.qualityControl) {
+              productRow.push(monthReportData.rejectsByProduct[productId]?.quantity || 0);
+            }
+
+            productRow.push(product.unit || 'pcs');
+
+            monthData.push(productRow);
+          });
+
+          monthData.push(['']);
+        }
+
+        // Ingredient Usage
+        if (options.content.ingredients) {
+          monthData.push(['Ingredient Usage']);
+
+          const ingredientHeaderRow = ['Ingredient', 'Amount Used', 'Unit'];
+          if (options.content.materialCosts) ingredientHeaderRow.push('Cost');
+
+          monthData.push(ingredientHeaderRow);
+
+          Object.entries(monthReportData.totalIngredients).forEach(([ingredientId, amount]) => {
+            const ingredient = ingredients.find(i => i.id === ingredientId);
+            if (!ingredient) return;
+
+            const ingredientRow = [
+              ingredient.name,
+              amount,
+              ingredient.unit
+            ];
+
+            if (options.content.materialCosts) {
+              const unitPrice = ingredient.price / ingredient.packageSize;
+              ingredientRow.push(formatIDR(unitPrice * amount));
+            }
+
+            monthData.push(ingredientRow);
+          });
+
+          monthData.push(['']);
+        }
+
+        // Reject Details
+        if (options.content.qualityControl && Object.keys(monthReportData.rejectsByProduct).length > 0) {
+          monthData.push(['Reject Details']);
+          monthData.push(['Product', 'Reject Quantity', 'Notes']);
+
+          Object.entries(monthReportData.rejectsByProduct).forEach(([productId, data]) => {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+
+            monthData.push([
+              product.name,
+              data.quantity,
+              data.notes.join('; ')
+            ]);
+          });
+
+          monthData.push(['']);
+        }
+
+        // Order Notes
+        if (options.content.notes && Object.keys(monthReportData.orderNotes).length > 0) {
+          monthData.push(['Order Notes']);
+          monthData.push(['Order ID', 'Notes']);
+
+          Object.entries(monthReportData.orderNotes).forEach(([orderId, notes]) => {
+            monthData.push([
+              orderId.slice(0, 8),
+              notes
+            ]);
+          });
+        }
+
+        // Create worksheet for this month
+        const wsMonth = utils.aoa_to_sheet(monthData);
+
+        // Sanitize month name for Excel sheet name (max 31 chars)
+        const safeMonthName = monthName.substring(0, 31).replace(/[\[\]\*\/\\\?:]/g, '-');
+
+        utils.book_append_sheet(wb, wsMonth, safeMonthName);
+      });
+  }
   // If 'individual' organization is selected, create a sheet for each order
-  if (options.organization === 'individual' && options.format !== 'summary') {
+  else if (options.organization === 'individual' && options.format !== 'summary') {
     // Keep track of worksheet names to avoid duplicates
     const usedSheetNames = new Set<string>();
-    
+
     orders.forEach((order, index) => {
       const orderData: any[][] = [
         [`Order #${order.id.slice(0, 8)}`],

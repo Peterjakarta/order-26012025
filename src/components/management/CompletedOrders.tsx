@@ -1,26 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Package2, 
-  AlertCircle, 
-  Calendar, 
-  FileDown, 
-  RefreshCw, 
-  Edit2, 
-  X, 
-  ChevronDown, 
-  ChevronRight, 
-  ClipboardCheck, 
-  FileSpreadsheet, 
-  Check,
-  CheckCircle2,
-  Scale,
-  ClipboardList,
-  Upload,
-  FileText,
-  Printer,
-  Mail,
-  Save
-} from 'lucide-react';
+import { Package2, AlertCircle, Calendar, FileDown, RefreshCw, CreditCard as Edit2, X, ChevronDown, ChevronRight, ClipboardCheck, FileSpreadsheet, Check, CheckCircle2, Scale, ClipboardList, Upload, FileText, Printer, Mail, Save } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '../../hooks/useOrders';
 import { useStore } from '../../store/StoreContext';
@@ -232,6 +211,31 @@ export default function CompletedOrders() {
     });
   };
 
+  const handleSelectAllInMonth = (monthOrders: Order[]) => {
+    setSelectedOrders(prev => {
+      const next = new Set(prev);
+      monthOrders.forEach(order => next.add(order.id));
+      return next;
+    });
+  };
+
+  const handleDeselectAllInMonth = (monthOrders: Order[]) => {
+    setSelectedOrders(prev => {
+      const next = new Set(prev);
+      monthOrders.forEach(order => next.delete(order.id));
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    const completedOrders = orders.filter(order => order.status === 'completed');
+    setSelectedOrders(new Set(completedOrders.map(order => order.id)));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedOrders(new Set());
+  };
+
   // Update order date
   const handleUpdateOrderDate = async (orderId: string, newDate: string) => {
     try {
@@ -296,10 +300,10 @@ export default function CompletedOrders() {
   };
 
   const handleOpenReportDialog = () => {
-    if (startDate && endDate) {
+    if ((startDate && endDate) || selectedOrders.size > 0) {
       setShowReportDialog(true);
     } else {
-      setError('Please select a date range for the report');
+      setError('Please select a date range or select specific orders for the report');
       setTimeout(() => setError(null), 3000);
     }
   };
@@ -307,18 +311,17 @@ export default function CompletedOrders() {
   const handleGenerateReport = (options: ReportExportOptions) => {
     try {
       let filteredOrders = orders.filter(order => order.status === 'completed');
-      
-      // Apply date filter
-      if (startDate && endDate) {
+
+      // If specific orders are selected, use only those (overrides date range)
+      if (selectedOrders.size > 0) {
+        filteredOrders = filteredOrders.filter(order => selectedOrders.has(order.id));
+      }
+      // Otherwise, apply date filter if provided
+      else if (startDate && endDate) {
         filteredOrders = filteredOrders.filter(order => {
           const orderDate = new Date(order.completedAt || order.updatedAt);
           return orderDate >= new Date(startDate) && orderDate <= new Date(endDate);
         });
-      }
-      
-      // Filter for selected orders if any are selected
-      if (selectedOrders.size > 0) {
-        filteredOrders = filteredOrders.filter(order => selectedOrders.has(order.id));
       }
 
       const reportData = generateReport(filteredOrders, products, recipes, ingredients);
@@ -547,6 +550,7 @@ export default function CompletedOrders() {
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="flex-1 px-3 py-1.5 border rounded-md text-sm"
+                placeholder="Start date"
               />
               <span className="text-gray-500">to</span>
               <input
@@ -554,8 +558,14 @@ export default function CompletedOrders() {
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="flex-1 px-3 py-1.5 border rounded-md text-sm"
+                placeholder="End date"
               />
             </div>
+            {selectedOrders.size > 0 && (
+              <p className="text-xs text-blue-600">
+                Date range is optional when orders are selected
+              </p>
+            )}
           </div>
 
           <div className="bg-gray-50 p-4 rounded-lg space-y-2">
@@ -574,11 +584,17 @@ export default function CompletedOrders() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleOpenReportDialog}
-                disabled={!startDate || !endDate}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:opacity-50"
+                disabled={(!startDate || !endDate) && selectedOrders.size === 0}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={selectedOrders.size > 0 ? `Generate report for ${selectedOrders.size} selected orders` : 'Generate report for date range'}
               >
                 <FileDown className="w-4 h-4" />
                 Generate Report
+                {selectedOrders.size > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 bg-pink-700 rounded-full text-xs">
+                    {selectedOrders.size}
+                  </span>
+                )}
               </button>
               {selectedOrders.size > 0 && (
                 <button
@@ -587,6 +603,28 @@ export default function CompletedOrders() {
                 >
                   <Calculator className="w-4 h-4" />
                   Calculate ({selectedOrders.size})
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-lg space-y-2 col-span-full">
+            <h3 className="text-sm font-medium text-gray-700">Selection</h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleSelectAll}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Select All Orders
+              </button>
+              {selectedOrders.size > 0 && (
+                <button
+                  onClick={handleClearSelection}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-100"
+                >
+                  <X className="w-4 h-4" />
+                  Clear Selection ({selectedOrders.size})
                 </button>
               )}
             </div>
@@ -611,14 +649,16 @@ export default function CompletedOrders() {
       <div className="space-y-2">
         {ordersByMonth.map(monthGroup => {
           const isExpanded = expandedCategory === monthGroup.monthKey;
-          
+          const allMonthOrdersSelected = monthGroup.orders.every(order => selectedOrders.has(order.id));
+          const someMonthOrdersSelected = monthGroup.orders.some(order => selectedOrders.has(order.id));
+
           return (
             <div key={monthGroup.monthKey} className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <button
-                onClick={() => setExpandedCategory(isExpanded ? null : monthGroup.monthKey)}
-                className="w-full px-4 py-3 bg-white flex items-center justify-between hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
+              <div className="w-full px-4 py-3 bg-white flex items-center justify-between hover:bg-gray-50 transition-colors">
+                <button
+                  onClick={() => setExpandedCategory(isExpanded ? null : monthGroup.monthKey)}
+                  className="flex items-center gap-3 flex-1"
+                >
                   {isExpanded ? (
                     <ChevronDown className="w-5 h-5 text-gray-500" />
                   ) : (
@@ -628,11 +668,43 @@ export default function CompletedOrders() {
                     <Calendar className="w-5 h-5 text-pink-600" />
                     <span className="font-medium text-lg">{monthGroup.monthName}</span>
                   </div>
+                </button>
+                <div className="flex items-center gap-2">
+                  {allMonthOrdersSelected ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeselectAllInMonth(monthGroup.orders);
+                      }}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-100 flex items-center gap-1"
+                      title="Deselect all orders in this month"
+                    >
+                      <X className="w-3 h-3" />
+                      Deselect All
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectAllInMonth(monthGroup.orders);
+                      }}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-1"
+                      title="Select all orders in this month"
+                    >
+                      <Check className="w-3 h-3" />
+                      Select All
+                    </button>
+                  )}
+                  <div className="px-3 py-1 bg-pink-100 text-pink-800 rounded-full font-medium">
+                    {someMonthOrdersSelected && !allMonthOrdersSelected && (
+                      <span className="text-blue-600 mr-1">
+                        ({monthGroup.orders.filter(o => selectedOrders.has(o.id)).length})
+                      </span>
+                    )}
+                    {monthGroup.orders.length} order{monthGroup.orders.length !== 1 ? 's' : ''}
+                  </div>
                 </div>
-                <div className="px-3 py-1 bg-pink-100 text-pink-800 rounded-full font-medium">
-                  {monthGroup.orders.length} order{monthGroup.orders.length !== 1 ? 's' : ''}
-                </div>
-              </button>
+              </div>
               
               {isExpanded && (
                 <div className="border-t">
