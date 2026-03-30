@@ -15,70 +15,48 @@ export interface Version {
 
 export const versions: Version[] = [
   {
-    version: '1.0.0',
-    releaseDate: '2025-01-24',
-    isCurrent: true,
-    notes: 'Initial release with comprehensive order management, product catalog, recipe tracking, and stock management features',
-    commits: [
+    "version": "1.0.0",
+    "releaseDate": "2026-03-30",
+    "isCurrent": true,
+    "notes": "Release 1.0.0: 1 documentation, 1 performance, 1 bugfix, 1 feature",
+    "commits": [
       {
-        title: 'Order Management System',
-        description: 'Complete order management with create, update, and completion workflows',
-        category: 'feature',
-        date: '2024-12-15'
+        "title": "Added automatic version tracking documentation",
+        "description": "",
+        "category": "documentation",
+        "date": "2026-03-30"
       },
       {
-        title: 'Product & Category Management',
-        description: 'Full product catalog with categories, pricing, and inventory tracking',
-        category: 'feature',
-        date: '2024-12-20'
+        "title": "Optimized version history display",
+        "description": "",
+        "category": "performance",
+        "date": "2026-03-30"
       },
       {
-        title: 'Recipe Management',
-        description: 'Recipe creation and management with ingredient tracking and cost calculations',
-        category: 'feature',
-        date: '2024-12-25'
+        "title": "Resolved Firebase permissions error in version tracking",
+        "description": "",
+        "category": "bugfix",
+        "date": "2026-03-30"
       },
       {
-        title: 'Stock Management',
-        description: 'Ingredient stock tracking with history, alerts, and automated deductions',
-        category: 'feature',
-        date: '2025-01-01'
-      },
+        "title": "Rebuilt version tracking system with automatic git commit tracking",
+        "description": "",
+        "category": "feature",
+        "date": "2026-03-30"
+      }
+    ]
+  },
+  {
+    "version": "1.0.0",
+    "releaseDate": "2026-03-30",
+    "isCurrent": false,
+    "notes": "Current version",
+    "commits": [
       {
-        title: 'Production Planning',
-        description: 'Production scheduling and planning features with calendar view',
-        category: 'feature',
-        date: '2025-01-05'
-      },
-      {
-        title: 'Enhanced Logbook',
-        description: 'Comprehensive activity logging across all system operations',
-        category: 'feature',
-        date: '2025-01-10'
-      },
-      {
-        title: 'User Authentication & Permissions',
-        description: 'Secure authentication with role-based access control',
-        category: 'security',
-        date: '2025-01-12'
-      },
-      {
-        title: 'Reporting & Export Features',
-        description: 'Generate detailed reports with PDF and Excel export capabilities',
-        category: 'feature',
-        date: '2025-01-15'
-      },
-      {
-        title: 'Performance Improvements',
-        description: 'Optimized database queries and improved UI responsiveness',
-        category: 'performance',
-        date: '2025-01-20'
-      },
-      {
-        title: 'R&D Product Management',
-        description: 'Research and development product tracking with approval workflows',
-        category: 'feature',
-        date: '2025-01-22'
+        "title": "Initial setup",
+        "description": "Application initialized",
+        "category": "feature",
+        "date": "2026-03-30"
       }
     ]
   }

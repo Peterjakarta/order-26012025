@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node scripts/update-version.js && tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "update-version": "node scripts/update-version.js"
