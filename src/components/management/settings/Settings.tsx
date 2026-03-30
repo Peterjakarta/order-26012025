@@ -6,6 +6,7 @@ import BackupRestore from './BackupRestore';
 import DataMigration from './DataMigration';
 import VersionInfo from './VersionInfo';
 import BranchManagement from '../branch/BranchManagement';
+import GitHubIntegration from './GitHubIntegration';
 import { useAuth } from '../../../hooks/useAuth';
 
 export default function Settings() {
@@ -22,6 +23,7 @@ export default function Settings() {
         <TabsList>
           <TabsTrigger value="password">Change Password</TabsTrigger>
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
+          <TabsTrigger value="github">GitHub Backup</TabsTrigger>
           <TabsTrigger value="migration">Data Migration</TabsTrigger>
           <TabsTrigger value="version">Version Info</TabsTrigger>
           {canManageUsers && <TabsTrigger value="branches">Branch Management</TabsTrigger>}
@@ -37,6 +39,12 @@ export default function Settings() {
         <TabsContent value="backup">
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <BackupRestore />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="github">
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            <GitHubIntegration />
           </div>
         </TabsContent>
 

@@ -148,21 +148,41 @@ export async function validateBackupData(backupData: BackupData): Promise<string
 
 export async function exportCurrentData(): Promise<BackupData> {
   const backup: BackupData = {};
-  
+
   try {
     // Export each collection
     for (const collectionName of Object.values(COLLECTIONS)) {
-      console.log(`Exporting ${collectionName}...`);
-      
-      const q = query(collection(db, collectionName), orderBy('createdAt', 'asc'));
-      const snapshot = await getDocs(q);
-      
-      backup[collectionName] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      try {
+        console.log(`Exporting ${collectionName}...`);
+
+        const collectionRef = collection(db, collectionName);
+
+        // Try to query with ordering first
+        let snapshot;
+        try {
+          const q = query(collectionRef, orderBy('createdAt', 'asc'));
+          snapshot = await getDocs(q);
+        } catch (orderError: any) {
+          // If ordering fails (missing index or field), query without ordering
+          console.warn(`Could not order ${collectionName} by createdAt, fetching without ordering:`, orderError.message);
+          snapshot = await getDocs(collectionRef);
+        }
+
+        const documents = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        backup[collectionName] = documents;
+        console.log(`Successfully exported ${documents.length} documents from ${collectionName}`);
+      } catch (collectionError: any) {
+        console.error(`Error exporting collection ${collectionName}:`, collectionError);
+        // Continue with other collections even if one fails
+        backup[collectionName] = [];
+      }
     }
 
+    console.log('Export completed successfully');
     return backup;
   } catch (error) {
     console.error('Error exporting data:', error);

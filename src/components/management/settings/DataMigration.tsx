@@ -60,9 +60,20 @@ export default function DataMigration() {
     try {
       setLoading(true);
       setError(null);
+      setSuccess(null);
 
+      console.log('Starting data export...');
       const data = await exportCurrentData();
-      
+
+      // Check if any data was exported
+      const totalDocs = Object.values(data).reduce((sum, docs) => sum + (docs?.length || 0), 0);
+      console.log(`Total documents exported: ${totalDocs}`);
+
+      if (totalDocs === 0) {
+        setError('No data found to export. Your database might be empty or there might be a connection issue.');
+        return;
+      }
+
       // Create and download the JSON file
       const json = JSON.stringify(data, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
@@ -75,9 +86,10 @@ export default function DataMigration() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setSuccess('Data exported successfully!');
-    } catch (err) {
-      setError('Failed to export data');
+      setSuccess(`Data exported successfully! ${totalDocs} documents exported.`);
+    } catch (err: any) {
+      const errorMessage = err?.message || 'Unknown error';
+      setError(`Failed to export data: ${errorMessage}`);
       console.error('Export error:', err);
     } finally {
       setLoading(false);
