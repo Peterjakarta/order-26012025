@@ -1,16 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Validate required environment variables
-const requiredEnvVars = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'];
-const missingEnvVars = requiredEnvVars.filter(varName => !import.meta.env[varName]);
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-if (missingEnvVars.length > 0) {
-  console.error('Missing required Supabase environment variables:', missingEnvVars);
-  throw new Error(`Missing required Supabase environment variables: ${missingEnvVars.join(', ')}`);
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Missing Supabase environment variables. Database features will be unavailable.');
 }
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

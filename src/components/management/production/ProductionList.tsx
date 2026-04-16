@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, FileDown, CheckCircle2, Edit2, X, ChevronDown, ChevronRight, ClipboardCheck, FileSpreadsheet, AlertCircle, Eye } from 'lucide-react';
+import { Calendar, FileDown, CheckCircle2, CreditCard as Edit2, X, ChevronDown, ChevronRight, ClipboardCheck, FileSpreadsheet, AlertCircle, Eye, Tablet, BookOpen } from 'lucide-react';
 import type { Order, Product } from '../../../types/types';
 import { useBranches } from '../../../hooks/useBranches';
 import { useStore } from '../../../store/StoreContext';
@@ -11,6 +11,8 @@ import { generateExcelData, saveWorkbook } from '../../../utils/excelGenerator';
 import OrderCompletion from '../order/OrderCompletion';
 import Beaker from '../../common/BeakerIcon';
 import RDProductDetailsPopup from './RDProductDetailsPopup';
+import ProductionIPadChecklist from './ProductionIPadChecklist';
+import ProductionIPadRecipes from './ProductionIPadRecipes';
 
 interface ProductionListProps {
   startDate: string;
@@ -49,6 +51,8 @@ export default function ProductionList({
   const [dateErrors, setDateErrors] = useState<Record<string, string>>({});
   const [viewingRDProduct, setViewingRDProduct] = useState<any>(null);
   const [processedOrderIds, setProcessedOrderIds] = useState<Set<string>>(new Set());
+  const [ipadChecklistOrder, setIpadChecklistOrder] = useState<Order | null>(null);
+  const [ipadRecipesOrder, setIpadRecipesOrder] = useState<Order | null>(null);
 
   // Separate orders into regular orders and R&D products
   const regularOrders = orders.filter(order => !order.isRDProduct);
@@ -598,11 +602,25 @@ export default function ProductionList({
                         List
                       </button>
                       <button
+                        onClick={() => setIpadChecklistOrder(order)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-teal-600 text-white rounded-md hover:bg-teal-700"
+                      >
+                        <Tablet className="w-4 h-4 mr-1" />
+                        iPad List
+                      </button>
+                      <button
                         onClick={() => handleDownloadRecipes(order)}
                         className="inline-flex items-center px-3 py-1.5 text-sm bg-violet-500 text-white rounded-md hover:bg-violet-600"
                       >
                         <FileDown className="w-4 h-4 mr-1" />
                         Recipe
+                      </button>
+                      <button
+                        onClick={() => setIpadRecipesOrder(order)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-orange-500 text-white rounded-md hover:bg-orange-600"
+                      >
+                        <BookOpen className="w-4 h-4 mr-1" />
+                        iPad Recipe
                       </button>
                       <button
                         onClick={() => setCompletingOrder(order)}
@@ -678,6 +696,26 @@ export default function ProductionList({
         <RDProductDetailsPopup
           product={viewingRDProduct}
           onClose={() => setViewingRDProduct(null)}
+        />
+      )}
+
+      {/* iPad Checklist */}
+      {ipadChecklistOrder && (
+        <ProductionIPadChecklist
+          order={ipadChecklistOrder}
+          products={products}
+          onClose={() => setIpadChecklistOrder(null)}
+        />
+      )}
+
+      {/* iPad Recipes */}
+      {ipadRecipesOrder && (
+        <ProductionIPadRecipes
+          order={ipadRecipesOrder}
+          products={products}
+          recipes={recipes}
+          ingredients={ingredients}
+          onClose={() => setIpadRecipesOrder(null)}
         />
       )}
     </div>
