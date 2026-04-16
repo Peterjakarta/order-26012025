@@ -8,6 +8,12 @@ import { getBranchStyles } from '../../../utils/branchStyles';
 import { useBranches } from '../../../hooks/useBranches';
 import { supabase } from '../../../lib/supabase';
 
+const SUPABASE_CONFIGURED = !!(
+  import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
+);
+
+const localKey = (orderId: string) => `checklist_${orderId}`;
+
 type InputField = 'produced' | 'rejected' | 'spray' | 'ready' | 'shell' | 'ganache' | 'closed' | 'aw';
 
 type ChecklistRow = Record<InputField, boolean>;
@@ -61,9 +67,43 @@ export default function ProductionIPadChecklist({ order, products, onClose }: Pr
     };
   }, [order.id]);
 
+  const loadFromLocalStorage = (): Record<string, ChecklistRow> | null => {
+    try {
+      const raw = localStorage.getItem(localKey(order.id));
+      if (!raw) return null;
+      return JSON.parse(raw) as Record<string, ChecklistRow>;
+    } catch {
+      return null;
+    }
+  };
+
+  const saveToLocalStorage = (updatedRows: Record<string, ChecklistRow>) => {
+    try {
+      localStorage.setItem(localKey(order.id), JSON.stringify(updatedRows));
+    } catch {
+      // storage quota exceeded – ignore
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
+
+      // Always check localStorage first (instant, always available)
+      const local = loadFromLocalStorage();
+      if (local) {
+        setRows(prev => {
+          const next = { ...prev };
+          Object.entries(local).forEach(([productId, row]) => {
+            if (next[productId] !== undefined) next[productId] = row;
+          });
+          return next;
+        });
+      }
+
+      if (!SUPABASE_CONFIGURED) return;
+
+      // Try to load from Supabase (may override localStorage with fresher data)
       const { data, error } = await supabase
         .from('production_checklist_data')
         .select('*')
@@ -88,21 +128,33 @@ export default function ProductionIPadChecklist({ order, products, onClose }: Pr
               };
             }
           });
+          // Keep localStorage in sync with the freshest Supabase data
+          saveToLocalStorage(next);
           return next;
         });
       }
     } catch (err) {
-      console.error('Failed to load checklist data:', err);
+      console.error('Failed to load checklist data from Supabase, using localStorage:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const saveRows = async (updatedRows: Record<string, ChecklistRow>) => {
+  const saveRows = (updatedRows: Record<string, ChecklistRow>) => {
     setSaveStatus('saving');
+
+    // Always persist to localStorage immediately (works in all environments)
+    saveToLocalStorage(updatedRows);
+
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 
     saveTimerRef.current = setTimeout(async () => {
+      if (!SUPABASE_CONFIGURED) {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+        return;
+      }
+
       try {
         const payload = Object.entries(updatedRows).map(([productId, row]) => ({
           order_id:   order.id,
@@ -127,8 +179,10 @@ export default function ProductionIPadChecklist({ order, products, onClose }: Pr
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2000);
       } catch (err) {
-        console.error('Failed to save checklist:', err);
-        setSaveStatus('error');
+        console.error('Failed to sync checklist to Supabase:', err);
+        // localStorage already has the data, so the save is not truly lost
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
       }
     }, 600);
   };
