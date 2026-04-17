@@ -95,11 +95,11 @@ interface StoreContextType extends StoreState {
   updateIngredient: (id: string, ingredient: Omit<Ingredient, 'id'>) => Promise<void>;
   deleteIngredient: (id: string) => Promise<void>;
   updateIngredientCategories: (categoryId: string, ingredientIds: string[]) => Promise<void>;
-  updateStockLevel: (ingredientId: string, data: { 
+  updateStockLevel: (ingredientId: string, data: {
     quantity: number;
     minStock?: number;
     orderId?: string;
-    changeType?: 'reduction' | 'reversion' | 'manual';
+    changeType?: 'reduction' | 'reversion' | 'manual' | 'receipt';
   }) => Promise<void>;
   getStockHistory: (ingredientId?: string) => Promise<StockHistory[]>;
   addRecipe: (recipe: Omit<Recipe, 'id'>) => Promise<void>;
@@ -215,7 +215,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     quantity: number;
     minStock?: number;
     orderId?: string;
-    changeType?: 'reduction' | 'reversion' | 'manual';
+    changeType?: 'reduction' | 'reversion' | 'manual' | 'receipt';
   }) => {
     try {
       if (!getNetworkStatus()) {

@@ -138,5 +138,13 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (isOwner(userId) || hasPermission('manage_products'));
       allow write: if isAuthenticated() && (isOwner(userId) || hasPermission('manage_products'));
     }
+
+    // Purchase Orders collection
+    match /purchase_orders/{poId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && hasPermission('manage_products');
+      allow update: if isAuthenticated() && hasPermission('manage_products');
+      allow delete: if isAuthenticated() && isAdmin();
+    }
   }
 }

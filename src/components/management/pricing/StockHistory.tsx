@@ -19,7 +19,7 @@ export default function StockHistory({ ingredientId, onClose }: StockHistoryProp
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
-    changeType: '' as '' | 'reduction' | 'reversion' | 'manual'
+    changeType: '' as '' | 'reduction' | 'reversion' | 'manual' | 'receipt'
   });
 
   // Load history on mount
@@ -61,6 +61,7 @@ export default function StockHistory({ ingredientId, onClose }: StockHistoryProp
       case 'reduction': return 'Stock Reduction';
       case 'reversion': return 'Stock Reversion';
       case 'manual': return 'Manual Update';
+      case 'receipt': return 'Stock Received';
       default: return type;
     }
   };
@@ -69,6 +70,7 @@ export default function StockHistory({ ingredientId, onClose }: StockHistoryProp
     switch (type) {
       case 'reduction': return 'text-red-600 bg-red-50';
       case 'reversion': return 'text-blue-600 bg-blue-50';
+      case 'receipt': return 'text-emerald-600 bg-emerald-50';
       case 'manual': return 'text-purple-600 bg-purple-50';
       default: return 'text-gray-600 bg-gray-50';
     }
@@ -177,6 +179,7 @@ export default function StockHistory({ ingredientId, onClose }: StockHistoryProp
               <option value="reduction">Stock Reduction</option>
               <option value="reversion">Stock Reversion</option>
               <option value="manual">Manual Update</option>
+              <option value="receipt">Stock Received</option>
             </select>
           </div>
 

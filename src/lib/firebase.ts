@@ -176,7 +176,9 @@ export const COLLECTIONS = {
   VERSIONS: 'versions',
   VERSION_COMMITS: 'version_commits',
   // HACCP
-  BATCH_NUMBERS: 'batch_numbers'
+  BATCH_NUMBERS: 'batch_numbers',
+  // Purchase Orders
+  PURCHASE_ORDERS: 'purchase_orders'
 } as const;
 
 // Helper function to create log entries

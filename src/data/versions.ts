@@ -16,7 +16,7 @@ export interface Version {
 export const versions: Version[] = [
   {
     version: "1.0.0",
-    releaseDate: "2026-04-16",
+    releaseDate: "2026-04-17",
     isCurrent: true,
     notes: "Current version",
     commits: [
@@ -24,7 +24,7 @@ export const versions: Version[] = [
         title: "Initial setup",
         description: "Application initialized",
         category: "feature",
-        date: "2026-04-16"
+        date: "2026-04-17"
       }
     ]
   }

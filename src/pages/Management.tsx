@@ -9,6 +9,9 @@ import ProductionSchedule from '../components/management/production/ProductionSc
 import IngredientManagement from '../components/management/pricing/IngredientManagement';
 import RecipeManagement from '../components/management/pricing/RecipeManagement';
 import IngredientStock from '../components/management/pricing/IngredientStock';
+import PurchaseOrderList from '../components/management/purchasing/PurchaseOrderList';
+import PurchaseOrderForm from '../components/management/purchasing/PurchaseOrderForm';
+import PurchaseOrderDetail from '../components/management/purchasing/PurchaseOrderDetail';
 import SettingsPage from '../components/management/settings/Settings';
 import Logbook from '../components/management/logbook/Logbook';
 import { useAuth } from '../hooks/useAuth';
@@ -135,6 +138,9 @@ export default function Management() {
               <Route path="pricing/ingredients" element={<IngredientManagement />} />
               <Route path="pricing/stock" element={<IngredientStock />} />
               <Route path="pricing/recipes" element={<RecipeManagement />} />
+              <Route path="pricing/purchase-orders" element={<PurchaseOrderList />} />
+              <Route path="pricing/purchase-orders/new" element={<PurchaseOrderForm />} />
+              <Route path="pricing/purchase-orders/:id" element={<PurchaseOrderDetail />} />
             </>
           )}
           {/* Redirect to first authorized menu item if no match */}
@@ -151,34 +157,44 @@ export default function Management() {
 function PricingDashboard() {
   return (
     <div className="space-y-8">
-      <div className="grid gap-6 sm:grid-cols-3">
-        <Link 
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <Link
           to="/management/pricing/ingredients"
-          className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
+          className="p-6 bg-gradient-to-br from-blue-50 to-sky-50 border border-blue-100 rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all"
         >
-          <h3 className="text-lg font-semibold mb-2">Ingredients</h3>
-          <p className="text-gray-600">
-            Manage ingredients, their costs, and packaging information
+          <h3 className="text-base font-semibold text-blue-900 mb-1.5">Ingredients</h3>
+          <p className="text-sm text-blue-700/70">
+            Manage ingredients, costs, and packaging details
           </p>
         </Link>
 
-        <Link 
+        <Link
           to="/management/pricing/stock"
-          className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
+          className="p-6 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all"
         >
-          <h3 className="text-lg font-semibold mb-2">Stock Management</h3>
-          <p className="text-gray-600">
+          <h3 className="text-base font-semibold text-amber-900 mb-1.5">Stock Management</h3>
+          <p className="text-sm text-amber-700/70">
             Track and update ingredient stock levels
           </p>
         </Link>
 
-        <Link 
-          to="/management/pricing/recipes"
-          className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
+        <Link
+          to="/management/pricing/purchase-orders"
+          className="p-6 bg-gradient-to-br from-sky-50 to-cyan-50 border border-sky-100 rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all"
         >
-          <h3 className="text-lg font-semibold mb-2">Recipes</h3>
-          <p className="text-gray-600">
-            Create and manage recipes, calculate costs and ingredient usage
+          <h3 className="text-base font-semibold text-sky-900 mb-1.5">Purchase Orders</h3>
+          <p className="text-sm text-sky-700/70">
+            Order ingredients from suppliers and track deliveries
+          </p>
+        </Link>
+
+        <Link
+          to="/management/pricing/recipes"
+          className="p-6 bg-gradient-to-br from-pink-50 to-rose-50 border border-pink-100 rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all"
+        >
+          <h3 className="text-base font-semibold text-pink-900 mb-1.5">Recipes</h3>
+          <p className="text-sm text-pink-700/70">
+            Create and manage recipes, calculate costs and usage
           </p>
         </Link>
       </div>

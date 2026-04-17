@@ -19,7 +19,7 @@ export interface StockHistory {
   previousQuantity: number;
   newQuantity: number;
   changeAmount: number;
-  changeType: 'reduction' | 'reversion' | 'manual';
+  changeType: 'reduction' | 'reversion' | 'manual' | 'receipt';
   timestamp: string;
   userId: string;
 }
@@ -168,6 +168,33 @@ export interface Recipe {
 export interface RecipeIngredient {
   ingredientId: string;
   amount: number;
+}
+
+export type PurchaseOrderStatus = 'draft' | 'ordered' | 'partial' | 'received' | 'cancelled';
+
+export interface PurchaseOrderItem {
+  id: string;
+  ingredientId: string;
+  ingredientName: string;
+  unit: string;
+  packageSize: number;
+  packageUnit: string;
+  quantityOrdered: number;
+  quantityReceived: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  reference: string;
+  supplier: string;
+  orderDate: string;
+  expectedDate?: string;
+  notes?: string;
+  status: PurchaseOrderStatus;
+  items: PurchaseOrderItem[];
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string;
 }
 
 // New type for the approval forms
